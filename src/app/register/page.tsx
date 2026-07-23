@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { PasswordField } from "@/components/password-field";
 
 export default function RegisterPage() {
   const { register, user, ready } = useAuth();
@@ -99,24 +100,20 @@ export default function RegisterPage() {
               placeholder="0000-0000-0000-0000"
             />
           </label>
-          <label className="field">
-            <span>Password</span>
-            <input
-              type="password"
-              required
-              value={form.password}
-              onChange={(e) => update("password", e.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Confirm password</span>
-            <input
-              type="password"
-              required
-              value={form.confirm}
-              onChange={(e) => update("confirm", e.target.value)}
-            />
-          </label>
+          <PasswordField
+            label="Password"
+            required
+            value={form.password}
+            onChange={(e) => update("password", e.target.value)}
+            autoComplete="new-password"
+          />
+          <PasswordField
+            label="Confirm password"
+            required
+            value={form.confirm}
+            onChange={(e) => update("confirm", e.target.value)}
+            autoComplete="new-password"
+          />
 
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">

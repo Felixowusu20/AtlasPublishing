@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useAdminAuth } from "@/components/admin-auth-provider";
+import { PasswordField } from "@/components/password-field";
 
 export default function AdminRegisterPage() {
   const { register, user, ready } = useAdminAuth();
@@ -58,33 +59,55 @@ export default function AdminRegisterPage() {
           to add sub-admins.
         </p>
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
-          {(
-            [
-              ["name", "Full name"],
-              ["email", "Email"],
-              ["institution", "Institution"],
-              ["password", "Password"],
-              ["confirm", "Confirm password"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key} className="field">
-              <span>{label}</span>
-              <input
-                type={
-                  key === "password" || key === "confirm"
-                    ? "password"
-                    : key === "email"
-                      ? "email"
-                      : "text"
-                }
-                required
-                value={form[key]}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, [key]: e.target.value }))
-                }
-              />
-            </label>
-          ))}
+          <label className="field">
+            <span>Full name</span>
+            <input
+              required
+              value={form.name}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, name: e.target.value }))
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Email</span>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, email: e.target.value }))
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Institution</span>
+            <input
+              required
+              value={form.institution}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, institution: e.target.value }))
+              }
+            />
+          </label>
+          <PasswordField
+            label="Password"
+            required
+            value={form.password}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, password: e.target.value }))
+            }
+            autoComplete="new-password"
+          />
+          <PasswordField
+            label="Confirm password"
+            required
+            value={form.confirm}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, confirm: e.target.value }))
+            }
+            autoComplete="new-password"
+          />
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
               {error}

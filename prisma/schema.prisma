@@ -48,11 +48,25 @@ model User {
   reviewsAssigned   Submission[] @relation("ReviewerSubmissions")
   feedbackGiven     ReviewFeedback[]
   notifications     Notification[]
+  passwordResets    PasswordResetToken[]
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   @@index([role])
   @@index([email])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model HeroSlide {

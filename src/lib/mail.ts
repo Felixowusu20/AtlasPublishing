@@ -101,3 +101,17 @@ export function reviewerInviteEmailHtml(opts: {
     <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/admin/login" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open admin panel</a></p>
   </div>`;
 }
+
+export function passwordResetEmailHtml(opts: {
+  name: string;
+  resetUrl: string;
+}) {
+  return `
+  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
+    <h1 style="font-size:22px">Reset your Atlas password</h1>
+    <p>Hi ${opts.name},</p>
+    <p>We received a request to reset the password for your author account. Click the button below to choose a new password. This link expires in 1 hour.</p>
+    <p><a href="${opts.resetUrl}" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Reset password</a></p>
+    <p style="color:#5b6b7c;font-size:13px">If you did not request this, you can ignore this email. Your password will stay the same.</p>
+  </div>`;
+}

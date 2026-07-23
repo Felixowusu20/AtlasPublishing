@@ -22,7 +22,17 @@ type Journal = {
 export default function JournalsCmsPage() {
   const { user } = useAdminAuth();
   const [journals, setJournals] = useState<Journal[]>([]);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    title: string;
+    shortTitle: string;
+    description: string;
+    subjects: string;
+    editorInChief: string;
+    frequency: string;
+    reviewType: string;
+    apc: string;
+    coverColor: string;
+  }>({
     title: "",
     shortTitle: "",
     description: "",

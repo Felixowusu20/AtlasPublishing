@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useAdminAuth } from "@/components/admin-auth-provider";
+import { PasswordField } from "@/components/password-field";
 
 type Reviewer = {
   id: string;
@@ -104,26 +105,45 @@ export default function ReviewersPage() {
       >
         <h2 className="text-sm font-semibold">Create reviewer</h2>
         <div className="mt-4 space-y-3">
-          {(
-            [
-              ["name", "Full name"],
-              ["email", "Email"],
-              ["institution", "Institution"],
-              ["password", "Temporary password"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key} className="field">
-              <span>{label}</span>
-              <input
-                type={key === "password" ? "password" : key === "email" ? "email" : "text"}
-                required={key !== "institution"}
-                value={form[key]}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, [key]: e.target.value }))
-                }
-              />
-            </label>
-          ))}
+          <label className="field">
+            <span>Full name</span>
+            <input
+              required
+              value={form.name}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, name: e.target.value }))
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Email</span>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, email: e.target.value }))
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Institution</span>
+            <input
+              value={form.institution}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, institution: e.target.value }))
+              }
+            />
+          </label>
+          <PasswordField
+            label="Temporary password"
+            required
+            value={form.password}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, password: e.target.value }))
+            }
+            autoComplete="new-password"
+          />
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
               {error}

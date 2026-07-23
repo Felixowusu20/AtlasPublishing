@@ -36,11 +36,13 @@ npm run dev
 
 ## Roles & URLs
 
-- **Authors**: `/register`, `/login`, `/dashboard`, `/submissions/new`
+- **Authors**: `/register`, `/login`, `/forgot-password`, `/reset-password`, `/dashboard`, `/submissions/new`
 - **Super admin bootstrap**: `/admin/register` (only when no super admin exists)
 - **Admin / reviewers**: `/admin/login` → `/admin`
   - Super admin: Hero CMS, Latest articles, Announcements, Journals, Reviewers, Submission inbox
   - Reviewers: Submission inbox + send feedback (email + author dashboard progress)
+
+Authors can use **Forgot password** on `/login`. A reset email is sent (Google SMTP); the link opens `/reset-password?token=…` and expires after 1 hour.
 
 ## Review flow
 

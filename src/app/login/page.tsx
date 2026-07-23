@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { PasswordField } from "@/components/password-field";
 
 function LoginForm() {
   const { login, user, ready } = useAuth();
@@ -60,16 +61,22 @@ function LoginForm() {
               autoComplete="email"
             />
           </label>
-          <label className="field">
-            <span>Password</span>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </label>
+          <PasswordField
+            label="Password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-xs font-semibold text-[var(--accent)] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
 
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">

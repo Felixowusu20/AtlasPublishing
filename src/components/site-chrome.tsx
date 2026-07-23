@@ -227,13 +227,6 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/submissions/new"
-            className="hidden rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0c5756] sm:inline-flex"
-          >
-            Submit
-          </Link>
-
           {!ready ? (
             <div className="h-9 w-20 animate-pulse rounded-lg bg-[var(--surface)]" />
           ) : user ? (
