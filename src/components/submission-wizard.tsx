@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { articleTypes, submissionSteps } from "@/data/mock";
 import { useAuth } from "@/components/auth-provider";
 import type { ArticleType } from "@/lib/types";
@@ -40,8 +41,13 @@ const emptyForm: FormState = {
 
 export function SubmissionWizard() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const preselectedJournal = searchParams.get("journal") ?? "";
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>({
+    ...emptyForm,
+    journalId: preselectedJournal,
+  });
   const [journals, setJournals] = useState<JournalOption[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
@@ -52,8 +58,18 @@ export function SubmissionWizard() {
   useEffect(() => {
     void fetch("/api/cms/journals")
       .then((r) => r.json())
-      .then((data) => setJournals(data.journals ?? []));
-  }, []);
+      .then((data) => {
+        const list = (data.journals ?? []) as JournalOption[];
+        setJournals(list);
+        if (preselectedJournal) {
+          setForm((prev) =>
+            prev.journalId
+              ? prev
+              : { ...prev, journalId: preselectedJournal },
+          );
+        }
+      });
+  }, [preselectedJournal]);
 
   useEffect(() => {
     if (!user) return;
