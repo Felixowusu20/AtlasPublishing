@@ -114,12 +114,15 @@ export function SiteHeader() {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
+  if (pathname.startsWith("/admin")) return null;
+
   function handleSignOut() {
-    logout();
-    setAccountOpen(false);
-    setMobileOpen(false);
-    setOpen(null);
-    router.replace("/login");
+    void logout().then(() => {
+      setAccountOpen(false);
+      setMobileOpen(false);
+      setOpen(null);
+      router.replace("/login");
+    });
   }
 
   return (
@@ -224,13 +227,6 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/submissions/new"
-            className="hidden rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0c5756] sm:inline-flex"
-          >
-            Submit
-          </Link>
-
           {!ready ? (
             <div className="h-9 w-20 animate-pulse rounded-lg bg-[var(--surface)]" />
           ) : user ? (
@@ -384,6 +380,9 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 export function SiteFooter() {
+  const pathname = usePathname();
+  if (pathname.startsWith("/admin")) return null;
+
   return (
     <footer className="mt-auto border-t border-[var(--line)] bg-[var(--ink)] text-slate-300">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">

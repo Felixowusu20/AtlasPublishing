@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  AUTHOR
+  REVIEWER
+  SUPER_ADMIN
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  TECHNICAL_CHECK
+  UNDER_REVIEW
+  MAJOR_REVISION
+  MINOR_REVISION
+  ACCEPTED
+  REJECTED
+  IN_PRODUCTION
+  PUBLISHED
+}
+
+enum ReviewType {
+  SINGLE_BLIND
+  DOUBLE_BLIND
+  OPEN_REVIEW
+}
+
+model User {
+  id                String   @id @default(cuid())
+  name              String
+  email             String   @unique
+  passwordHash      String
+  role              Role     @default(AUTHOR)
+  institution       String?
+  orcid             String?
+  researchInterests String[] @default([])
+  createdById       String?
+  createdBy         User?    @relation("AdminCreated", fields: [createdById], references: [id])
+  createdAdmins     User[]   @relation("AdminCreated")
+  submissions       Submission[] @relation("AuthorSubmissions")
+  reviewsAssigned   Submission[] @relation("ReviewerSubmissions")
+  feedbackGiven     ReviewFeedback[]
+  notifications     Notification[]
+  passwordResets    PasswordResetToken[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([role])
+  @@index([email])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model HeroSlide {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  imageUrl  String
+  imagePublicId String?
+  alt       String?
+  ctaLabel  String?
+  ctaHref   String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  summary   String
+  href      String?
+  publishedAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publishedAt])
+}
+
+model Journal {
+  id             String     @id @default(cuid())
+  slug           String     @unique
+  title          String
+  shortTitle     String
+  issn           String?
+  eIssn          String?
+  doiPrefix      String?
+  frequency      String?
+  reviewType     ReviewType @default(DOUBLE_BLIND)
+  description    String
+  aims           String?
+  subjects       String[]   @default([])
+  impactFactor   String?
+  acceptanceRate String?
+  avgReviewDays  Int?
+  openAccess     Boolean    @default(true)
+  apc            String?
+  editorInChief  String?
+  coverColor     String     @default("#0B3A53")
+  coverImageUrl  String?
+  coverImagePublicId String?
+  indexedIn      String[]   @default([])
+  foundedYear    Int?
+  isActive       Boolean    @default(true)
+  sortOrder      Int        @default(0)
+  submissions    Submission[]
+  articles       PublishedArticle[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([slug])
+  @@index([sortOrder])
+}
+
+model PublishedArticle {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  doi           String?
+  title         String
+  authors       String[] @default([])
+  affiliations  String[] @default([])
+  journalId     String
+  journal       Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  publishedAt   DateTime @default(now())
+  receivedAt    DateTime?
+  acceptedAt    DateTime?
+  volume        String?
+  issue         String?
+  pages         String?
+  articleType   String
+  openAccess    Boolean  @default(true)
+  license       String?
+  abstract      String
+  keywords      String[] @default([])
+  coverImageUrl String?
+  coverImagePublicId String?
+  citations     Int      @default(0)
+  downloads     Int      @default(0)
+  views         Int      @default(0)
+  isFeatured    Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([publishedAt])
+  @@index([journalId])
+  @@index([isFeatured])
+}
+
+model Submission {
+  id                 String           @id @default(cuid())
+  manuscriptId       String           @unique
+  title              String
+  abstract           String
+  keywords           String[]         @default([])
+  articleType        String
+  journalId          String
+  journal            Journal          @relation(fields: [journalId], references: [id])
+  authorId           String
+  author             User             @relation("AuthorSubmissions", fields: [authorId], references: [id])
+  reviewerId         String?
+  reviewer           User?            @relation("ReviewerSubmissions", fields: [reviewerId], references: [id])
+  status             SubmissionStatus @default(SUBMITTED)
+  progress           Int              @default(20)
+  coverLetter        String?
+  funding            String?
+  conflictOfInterest String?
+  ethicsStatement    String?
+  manuscriptUrl      String?
+  manuscriptPublicId String?
+  actionRequired     String?
+  authorsJson        Json?
+  submittedAt        DateTime         @default(now())
+  feedback           ReviewFeedback[]
+  notifications      Notification[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([authorId])
+  @@index([reviewerId])
+  @@index([status])
+  @@index([journalId])
+}
+
+model ReviewFeedback {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewerId   String
+  reviewer     User       @relation(fields: [reviewerId], references: [id])
+  status       SubmissionStatus
+  message      String
+  privateNotes String?
+  createdAt    DateTime   @default(now())
+
+  @@index([submissionId])
+  @@index([reviewerId])
+}
+
+model Notification {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submissionId String?
+  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  title        String
+  body         String
+  unread       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([userId, unread])
+}

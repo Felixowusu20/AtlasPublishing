@@ -4,14 +4,15 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { PasswordField } from "@/components/password-field";
 
 function LoginForm() {
   const { login, user, ready } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/dashboard";
-  const [email, setEmail] = useState("amara.okonkwo@university.edu");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -19,11 +20,11 @@ function LoginForm() {
     if (ready && user) router.replace(next);
   }, [ready, user, router, next]);
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const result = login(email, password);
+    const result = await login(email, password);
     setLoading(false);
     if (!result.ok) {
       setError(result.error ?? "Login failed");
@@ -41,6 +42,13 @@ function LoginForm() {
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
           Welcome back
         </h1>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Author accounts only. Reviewers and admins use the{" "}
+          <Link href="/admin/login" className="font-semibold text-[var(--accent)]">
+            admin panel
+          </Link>
+          .
+        </p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <label className="field">
@@ -53,16 +61,22 @@ function LoginForm() {
               autoComplete="email"
             />
           </label>
-          <label className="field">
-            <span>Password</span>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </label>
+          <PasswordField
+            label="Password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-xs font-semibold text-[var(--accent)] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
 
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -75,15 +89,10 @@ function LoginForm() {
           </button>
         </form>
 
-        <div className="mt-6 rounded-xl bg-[var(--surface)] p-3 text-xs text-[var(--muted)]">
-          <p className="font-medium text-[var(--ink)]">Demo account</p>
-          <p className="mt-2">amara.okonkwo@university.edu / demo1234</p>
-        </div>
-
         <p className="mt-6 text-center text-sm text-[var(--muted)]">
-          No account?{" "}
+          New author?{" "}
           <Link href="/register" className="font-semibold text-[var(--accent)]">
-            Register
+            Create an account
           </Link>
         </p>
       </div>
@@ -93,13 +102,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="py-20 text-center text-sm text-[var(--muted)]">
-          Loading…
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="p-12 text-center text-sm">Loading…</div>}>
       <LoginForm />
     </Suspense>
   );

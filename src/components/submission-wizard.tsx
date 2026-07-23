@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { articleTypes, journals, submissionSteps } from "@/data/mock";
+import { articleTypes, submissionSteps } from "@/data/mock";
+import { useAuth } from "@/components/auth-provider";
 import type { ArticleType } from "@/lib/types";
+
+type JournalOption = { id: string; title: string; shortTitle: string };
 
 type FormState = {
   journalId: string;
@@ -18,33 +21,53 @@ type FormState = {
   conflictOfInterest: string;
   ethicsStatement: string;
   coverLetter: string;
-  manuscriptFile: string;
 };
 
-const initial: FormState = {
+const emptyForm: FormState = {
   journalId: "",
   articleType: "",
   title: "",
   abstract: "",
   keywords: "",
-  authorName: "Dr. Amara Okonkwo",
-  authorEmail: "amara.okonkwo@university.edu",
-  affiliation: "University of Lagos",
+  authorName: "",
+  authorEmail: "",
+  affiliation: "",
   funding: "",
   conflictOfInterest: "The authors declare no conflict of interest.",
   ethicsStatement: "",
   coverLetter: "",
-  manuscriptFile: "",
 };
 
 export function SubmissionWizard() {
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormState>(initial);
-  const [submitted, setSubmitted] = useState(false);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [journals, setJournals] = useState<JournalOption[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [manuscriptId, setManuscriptId] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/cms/journals")
+      .then((r) => r.json())
+      .then((data) => setJournals(data.journals ?? []));
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    setForm((prev) => ({
+      ...prev,
+      authorName: prev.authorName || user.name,
+      authorEmail: prev.authorEmail || user.email,
+      affiliation: prev.affiliation || user.institution,
+    }));
+  }, [user]);
 
   const selectedJournal = useMemo(
     () => journals.find((j) => j.id === form.journalId),
-    [form.journalId],
+    [journals, form.journalId],
   );
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -60,7 +83,7 @@ export function SubmissionWizard() {
         form.authorName.trim() && form.authorEmail.trim() && form.affiliation.trim(),
       );
     if (step === 4) return Boolean(form.conflictOfInterest.trim());
-    if (step === 5) return Boolean(form.manuscriptFile);
+    if (step === 5) return Boolean(file);
     return true;
   }
 
@@ -72,11 +95,59 @@ export function SubmissionWizard() {
     if (step > 1) setStep((s) => s - 1);
   }
 
-  function finish() {
-    setSubmitted(true);
+  async function finish() {
+    if (!file) return;
+    setLoading(true);
+    setError("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "atlas/manuscripts");
+      fd.append("resourceType", "auto");
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.error ?? "Upload failed");
+
+      const res = await fetch("/api/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          journalId: form.journalId,
+          articleType: form.articleType,
+          title: form.title,
+          abstract: form.abstract,
+          keywords: form.keywords
+            .split(",")
+            .map((k) => k.trim())
+            .filter(Boolean),
+          coverLetter: form.coverLetter,
+          funding: form.funding,
+          conflictOfInterest: form.conflictOfInterest,
+          ethicsStatement: form.ethicsStatement,
+          manuscriptUrl: uploadData.url,
+          manuscriptPublicId: uploadData.publicId,
+          authors: [
+            {
+              name: form.authorName,
+              email: form.authorEmail,
+              affiliation: form.affiliation,
+              isCorresponding: true,
+            },
+          ],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Submission failed");
+      setSubmittedId(data.submission.id);
+      setManuscriptId(data.submission.manuscriptId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Submission failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  if (submitted) {
+  if (submittedId) {
     return (
       <div className="rounded-2xl border border-[var(--line)] bg-white p-8 text-center shadow-sm sm:p-12">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700">
@@ -86,25 +157,18 @@ export function SubmissionWizard() {
           Submission received
         </h2>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[var(--muted)]">
-          Your manuscript has been queued for technical check. Manuscript ID{" "}
-          <span className="font-medium text-[var(--ink)]">AJS-2026-0199</span>{" "}
-          (mock). You can track progress from your dashboard.
+          Your manuscript is in the reviewer inbox for technical check. Manuscript
+          ID{" "}
+          <span className="font-medium text-[var(--ink)]">{manuscriptId}</span>.
+          Track progress from your dashboard.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link href="/dashboard" className="btn-primary">
             Go to dashboard
           </Link>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => {
-              setSubmitted(false);
-              setStep(1);
-              setForm(initial);
-            }}
-          >
-            Start another
-          </button>
+          <Link href={`/submissions/${submittedId}`} className="btn-secondary">
+            View submission
+          </Link>
         </div>
       </div>
     );
@@ -182,6 +246,11 @@ export function SubmissionWizard() {
                 ))}
               </select>
             </label>
+            {journals.length === 0 && (
+              <p className="text-xs text-amber-800">
+                No journals yet. Ask an admin to add journals in the CMS.
+              </p>
+            )}
             <label className="field">
               <span>Article type</span>
               <select
@@ -190,7 +259,7 @@ export function SubmissionWizard() {
                   update("articleType", e.target.value as ArticleType | "")
                 }
               >
-                <option value="">Select article type</option>
+                <option value="">Select type</option>
                 {articleTypes.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -198,30 +267,16 @@ export function SubmissionWizard() {
                 ))}
               </select>
             </label>
-            {selectedJournal && (
-              <div className="rounded-xl bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
-                <p>
-                  <span className="font-medium text-[var(--ink)]">Review:</span>{" "}
-                  {selectedJournal.reviewType}
-                </p>
-                <p className="mt-1">
-                  <span className="font-medium text-[var(--ink)]">Avg. review:</span>{" "}
-                  {selectedJournal.avgReviewDays} days, APC{" "}
-                  {selectedJournal.apc}
-                </p>
-              </div>
-            )}
           </div>
         )}
 
         {step === 2 && (
           <div className="space-y-5">
             <label className="field">
-              <span>Manuscript title</span>
+              <span>Title</span>
               <input
                 value={form.title}
                 onChange={(e) => update("title", e.target.value)}
-                placeholder="Enter the full title"
               />
             </label>
             <label className="field">
@@ -230,15 +285,13 @@ export function SubmissionWizard() {
                 rows={6}
                 value={form.abstract}
                 onChange={(e) => update("abstract", e.target.value)}
-                placeholder="250 to 300 words recommended"
               />
             </label>
             <label className="field">
-              <span>Keywords</span>
+              <span>Keywords (comma-separated)</span>
               <input
                 value={form.keywords}
                 onChange={(e) => update("keywords", e.target.value)}
-                placeholder="Comma-separated keywords"
               />
             </label>
           </div>
@@ -268,10 +321,6 @@ export function SubmissionWizard() {
                 onChange={(e) => update("affiliation", e.target.value)}
               />
             </label>
-            <p className="text-xs text-[var(--muted)]">
-              Co-authors can be added later. This mock form keeps a single author for
-              simplicity.
-            </p>
           </div>
         )}
 
@@ -282,7 +331,6 @@ export function SubmissionWizard() {
               <input
                 value={form.funding}
                 onChange={(e) => update("funding", e.target.value)}
-                placeholder="Grant name / number (optional)"
               />
             </label>
             <label className="field">
@@ -299,7 +347,6 @@ export function SubmissionWizard() {
                 rows={3}
                 value={form.ethicsStatement}
                 onChange={(e) => update("ethicsStatement", e.target.value)}
-                placeholder="IRB / ethics approval details if applicable"
               />
             </label>
             <label className="field">
@@ -308,7 +355,6 @@ export function SubmissionWizard() {
                 rows={4}
                 value={form.coverLetter}
                 onChange={(e) => update("coverLetter", e.target.value)}
-                placeholder="Optional message to the editor"
               />
             </label>
           </div>
@@ -317,86 +363,76 @@ export function SubmissionWizard() {
         {step === 5 && (
           <div className="space-y-5">
             <label className="field">
-              <span>Manuscript file (mock)</span>
-              <select
-                value={form.manuscriptFile}
-                onChange={(e) => update("manuscriptFile", e.target.value)}
-              >
-                <option value="">Select uploaded file</option>
-                <option value="manuscript.docx">manuscript.docx</option>
-                <option value="manuscript.pdf">manuscript.pdf</option>
-                <option value="manuscript-latex.zip">manuscript-latex.zip</option>
-              </select>
+              <span>Manuscript file (PDF/DOCX)</span>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
             </label>
-            <div className="rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)] p-8 text-center">
-              <p className="text-sm font-medium text-[var(--ink)]">
-                File upload is mocked for now
-              </p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Later: Cloudinary, PDF / DOCX / LaTeX ZIP, virus scan
-              </p>
-            </div>
+            {file && (
+              <p className="text-xs text-[var(--muted)]">Selected: {file.name}</p>
+            )}
           </div>
         )}
 
         {step === 6 && (
-          <div className="space-y-4 text-sm">
-            <ReviewRow label="Journal" value={selectedJournal?.title ?? "N/A"} />
-            <ReviewRow label="Article type" value={form.articleType || "N/A"} />
-            <ReviewRow label="Title" value={form.title || "N/A"} />
-            <ReviewRow label="Keywords" value={form.keywords || "N/A"} />
-            <ReviewRow
-              label="Author"
-              value={`${form.authorName}, ${form.affiliation}`}
-            />
-            <ReviewRow label="Manuscript" value={form.manuscriptFile || "N/A"} />
-            <div className="rounded-xl bg-[var(--surface)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-                Abstract
-              </p>
-              <p className="mt-2 leading-relaxed text-[var(--ink)]">
-                {form.abstract || "N/A"}
-              </p>
-            </div>
+          <div className="space-y-3 text-sm">
+            <p>
+              <span className="font-semibold">Journal:</span>{" "}
+              {selectedJournal?.title}
+            </p>
+            <p>
+              <span className="font-semibold">Type:</span> {form.articleType}
+            </p>
+            <p>
+              <span className="font-semibold">Title:</span> {form.title}
+            </p>
+            <p>
+              <span className="font-semibold">Author:</span> {form.authorName}
+            </p>
+            <p>
+              <span className="font-semibold">File:</span> {file?.name}
+            </p>
           </div>
         )}
 
-        <div className="mt-8 flex items-center justify-between border-t border-[var(--line)] pt-6">
+        {error && (
+          <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-8 flex flex-wrap justify-between gap-3">
           <button
             type="button"
+            className="btn-secondary"
             onClick={back}
-            disabled={step === 1}
-            className="btn-secondary disabled:opacity-40"
+            disabled={step === 1 || loading}
           >
             Back
           </button>
           {step < 6 ? (
             <button
               type="button"
+              className="btn-primary"
               onClick={next}
               disabled={!canContinue()}
-              className="btn-primary disabled:opacity-40"
             >
               Continue
             </button>
           ) : (
-            <button type="button" onClick={finish} className="btn-primary">
-              Submit manuscript
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => void finish()}
+              disabled={loading}
+            >
+              {loading ? "Submitting…" : "Submit manuscript"}
             </button>
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function ReviewRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1 border-b border-[var(--line)] pb-3 sm:flex-row sm:justify-between">
-      <span className="text-[var(--muted)]">{label}</span>
-      <span className="font-medium text-[var(--ink)] sm:max-w-[65%] sm:text-right">
-        {value}
-      </span>
     </div>
   );
 }

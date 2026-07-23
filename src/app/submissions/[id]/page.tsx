@@ -1,193 +1,161 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { use, useEffect, useState } from "react";
 import { StatusBadge } from "@/components/status-badge";
-import { getSubmissionById, submissionSteps } from "@/data/mock";
+import { RequireAuth } from "@/components/require-auth";
+import { ManuscriptViewer } from "@/components/manuscript-viewer";
+import { uiStatus } from "@/lib/submission-utils";
 
-const workflow = [
-  "Submission",
-  "Technical Check",
-  "Editor Assignment",
-  "Peer Review",
-  "Decision",
-  "Revision",
-  "Production",
-  "Publication",
-];
+type Feedback = {
+  id: string;
+  message: string;
+  status: string;
+  createdAt: string;
+  reviewer: { name: string };
+};
 
-function workflowIndex(status: string) {
-  const map: Record<string, number> = {
-    Draft: 0,
-    Submitted: 0,
-    "Technical Check": 1,
-    "Under Review": 3,
-    "Major Revision": 5,
-    "Minor Revision": 5,
-    Accepted: 6,
-    Rejected: 4,
-    "In Production": 6,
-    Published: 7,
-  };
-  return map[status] ?? 0;
+type Submission = {
+  id: string;
+  manuscriptId: string;
+  title: string;
+  abstract: string;
+  keywords: string[];
+  articleType: string;
+  status: string;
+  progress: number;
+  actionRequired?: string | null;
+  manuscriptUrl?: string | null;
+  journal: { title: string };
+  feedback: Feedback[];
+  updatedAt: string;
+  submittedAt?: string | null;
+};
+
+function Detail({ id }: { id: string }) {
+  const [sub, setSub] = useState<Submission | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void fetch(`/api/submissions/${id}`)
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Not found");
+        setSub(data.submission);
+      })
+      .catch((err) => setError(err.message));
+  }, [id]);
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <p className="text-sm text-rose-700">{error}</p>
+        <Link href="/dashboard" className="btn-primary mt-4 inline-flex">
+          Back to dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  if (!sub) {
+    return (
+      <p className="p-10 text-center text-sm text-[var(--muted)]">Loading…</p>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+      <Link href="/dashboard" className="text-xs font-semibold text-[var(--accent)]">
+        ← Dashboard
+      </Link>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <StatusBadge status={uiStatus(sub.status as Parameters<typeof uiStatus>[0])} />
+        <span className="text-xs text-[var(--muted)]">{sub.manuscriptId}</span>
+      </div>
+      <h1 className="mt-3 font-[family-name:var(--font-display)] text-3xl text-[var(--ink)]">
+        {sub.title}
+      </h1>
+      <p className="mt-2 text-sm text-[var(--muted)]">
+        {sub.journal.title} · {sub.articleType}
+      </p>
+
+      <div className="mt-6">
+        <div className="mb-1.5 flex justify-between text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">
+          <span>Editorial progress</span>
+          <span>{sub.progress}%</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-[var(--surface)]">
+          <div
+            className="h-full rounded-full bg-[var(--accent)] transition-all"
+            style={{ width: `${sub.progress}%` }}
+          />
+        </div>
+      </div>
+
+      {sub.actionRequired && (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          {sub.actionRequired}
+        </div>
+      )}
+
+      <section className="mt-8 card p-5">
+        <h2 className="text-sm font-semibold">Abstract</h2>
+        <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
+          {sub.abstract}
+        </p>
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          Keywords: {sub.keywords.join(", ")}
+        </p>
+      </section>
+
+      {sub.manuscriptUrl && (
+        <section className="mt-8">
+          <ManuscriptViewer
+            url={sub.manuscriptUrl}
+            title={`${sub.manuscriptId} — your manuscript`}
+          />
+        </section>
+      )}
+
+      <section className="mt-8">
+        <h2 className="font-[family-name:var(--font-display)] text-xl">
+          Reviewer feedback
+        </h2>
+        <div className="mt-4 space-y-3">
+          {sub.feedback.length === 0 && (
+            <p className="text-sm text-[var(--muted)]">
+              No reviewer messages yet. You will also get an email when feedback
+              arrives.
+            </p>
+          )}
+          {sub.feedback.map((f) => (
+            <article
+              key={f.id}
+              className="rounded-xl border border-[var(--line)] bg-white p-4"
+            >
+              <p className="text-xs text-[var(--muted)]">
+                {f.reviewer.name} ·{" "}
+                {uiStatus(f.status as Parameters<typeof uiStatus>[0])} ·{" "}
+                {new Date(f.createdAt).toLocaleString()}
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm">{f.message}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }
 
-export default async function SubmissionDetailPage({
+export default function SubmissionDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
-  const sub = getSubmissionById(id);
-  if (!sub) notFound();
-
-  const current = workflowIndex(sub.status);
-
+  const { id } = use(params);
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <Link
-        href="/dashboard"
-        className="text-sm font-medium text-[var(--accent)] hover:underline"
-      >
-        ← Dashboard
-      </Link>
-
-      <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusBadge status={sub.status} />
-            <span className="text-sm text-[var(--muted)]">{sub.manuscriptId}</span>
-          </div>
-          <h1 className="mt-3 max-w-3xl font-[family-name:var(--font-display)] text-3xl text-[var(--ink)]">
-            {sub.title}
-          </h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            {sub.journalTitle}, {sub.articleType}
-          </p>
-        </div>
-        {sub.status === "Draft" && (
-          <Link href="/submissions/new" className="btn-primary w-fit">
-            Resume submission
-          </Link>
-        )}
-      </div>
-
-      <section className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-          Editorial progress
-        </h2>
-        <ol className="mt-5 grid gap-3 sm:grid-cols-4 lg:grid-cols-8">
-          {workflow.map((stage, index) => {
-            const done = index <= current;
-            const active = index === current;
-            return (
-              <li key={stage} className="text-center">
-                <div
-                  className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
-                    active
-                      ? "bg-[var(--accent)] text-white"
-                      : done
-                        ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "bg-slate-100 text-slate-400"
-                  }`}
-                >
-                  {index + 1}
-                </div>
-                <p
-                  className={`mt-2 text-xs ${active ? "font-semibold text-[var(--ink)]" : "text-[var(--muted)]"}`}
-                >
-                  {stage}
-                </p>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <section className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-sm lg:col-span-2">
-          <h2 className="font-semibold text-[var(--ink)]">Abstract</h2>
-          <p className="mt-3 text-sm leading-relaxed text-[var(--muted)]">
-            {sub.abstract}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {sub.keywords.map((k) => (
-              <span
-                key={k}
-                className="rounded-full bg-[var(--surface)] px-2.5 py-0.5 text-xs text-[var(--muted)]"
-              >
-                {k}
-              </span>
-            ))}
-          </div>
-
-          {(sub.funding || sub.conflictOfInterest || sub.ethicsStatement) && (
-            <div className="mt-6 space-y-4 border-t border-[var(--line)] pt-6 text-sm">
-              {sub.funding && (
-                <div>
-                  <p className="font-medium text-[var(--ink)]">Funding</p>
-                  <p className="mt-1 text-[var(--muted)]">{sub.funding}</p>
-                </div>
-              )}
-              {sub.conflictOfInterest && (
-                <div>
-                  <p className="font-medium text-[var(--ink)]">
-                    Conflict of interest
-                  </p>
-                  <p className="mt-1 text-[var(--muted)]">
-                    {sub.conflictOfInterest}
-                  </p>
-                </div>
-              )}
-              {sub.ethicsStatement && (
-                <div>
-                  <p className="font-medium text-[var(--ink)]">Ethics</p>
-                  <p className="mt-1 text-[var(--muted)]">{sub.ethicsStatement}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        <aside className="space-y-6">
-          <div className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-sm">
-            <h2 className="font-semibold text-[var(--ink)]">Authors</h2>
-            <ul className="mt-4 space-y-3">
-              {sub.authors.map((author) => (
-                <li key={author.id} className="text-sm">
-                  <p className="font-medium text-[var(--ink)]">
-                    {author.name}
-                    {author.isCorresponding && (
-                      <span className="ml-2 text-xs text-[var(--accent)]">
-                        corresponding
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-[var(--muted)]">{author.affiliation}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-sm">
-            <h2 className="font-semibold text-[var(--ink)]">Timeline</h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-[var(--muted)]">Submitted</dt>
-                <dd>{sub.submittedAt ?? "Not submitted"}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-[var(--muted)]">Last update</dt>
-                <dd>{sub.updatedAt}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-[var(--muted)]">Wizard step</dt>
-                <dd>
-                  {sub.progressStep} / {submissionSteps.length}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </aside>
-      </div>
-    </div>
+    <RequireAuth>
+      <Detail id={id} />
+    </RequireAuth>
   );
 }
