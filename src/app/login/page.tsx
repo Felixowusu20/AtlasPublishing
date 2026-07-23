@@ -43,11 +43,7 @@ function LoginForm() {
           Welcome back
         </h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Author accounts only. Reviewers and admins use the{" "}
-          <Link href="/admin/login" className="font-semibold text-[var(--accent)]">
-            admin panel
-          </Link>
-          .
+          Sign in with your author account to manage submissions.
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">

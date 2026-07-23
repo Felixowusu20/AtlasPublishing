@@ -21,6 +21,10 @@ export function ResubmitPanel({ submissionId, manuscriptId, onDone }: Props) {
       setError("Upload your revised manuscript file (PDF preferred).");
       return;
     }
+    if (!response.trim()) {
+      setError("Add a short message for the reviewer.");
+      return;
+    }
     setLoading(true);
     setError("");
     setOk("");
@@ -28,7 +32,6 @@ export function ResubmitPanel({ submissionId, manuscriptId, onDone }: Props) {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("folder", "atlas/manuscripts");
-      // raw avoids Cloudinary image/PDF ACL blocks on many accounts
       fd.append("resourceType", "raw");
       const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
       const uploadData = await uploadRes.json();
@@ -51,7 +54,7 @@ export function ResubmitPanel({ submissionId, manuscriptId, onDone }: Props) {
       setFile(null);
       setResponse("");
       setOk(
-        `${manuscriptId} resubmitted. It is back under review — progress will update on your dashboard.`,
+        `${manuscriptId} resubmitted. It is back under review.`,
       );
       onDone?.();
     } catch (err) {
@@ -64,29 +67,20 @@ export function ResubmitPanel({ submissionId, manuscriptId, onDone }: Props) {
   return (
     <form
       onSubmit={onSubmit}
-      className="mt-4 space-y-3 rounded-xl border border-amber-300 bg-white p-4 shadow-sm"
+      className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-white p-4"
     >
-      <div>
-        <p className="text-sm font-semibold text-amber-950">
-          Resubmit revised manuscript
-        </p>
-        <p className="mt-1 text-xs text-amber-900/80">
-          Add a short message for the reviewer and upload only the corrected
-          file, then click <span className="font-semibold">Resubmit for review</span>.
-        </p>
-      </div>
       <label className="field">
-        <span>Response to reviewers</span>
+        <span>Message to reviewer</span>
         <textarea
           required
-          rows={4}
+          rows={3}
           value={response}
           onChange={(e) => setResponse(e.target.value)}
-          placeholder="Explain how you addressed each comment…"
+          placeholder="Brief note on what you corrected…"
         />
       </label>
       <label className="field">
-        <span>Revised file (PDF preferred)</span>
+        <span>Revised file only (PDF preferred)</span>
         <input
           type="file"
           accept=".pdf,.doc,.docx"
@@ -104,7 +98,7 @@ export function ResubmitPanel({ submissionId, manuscriptId, onDone }: Props) {
           {ok}
         </p>
       )}
-      <button type="submit" className="btn-primary w-full sm:w-auto" disabled={loading}>
+      <button type="submit" className="btn-primary" disabled={loading}>
         {loading ? "Resubmitting…" : "Resubmit for review"}
       </button>
     </form>
