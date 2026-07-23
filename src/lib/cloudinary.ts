@@ -24,6 +24,8 @@ export async function uploadToCloudinary(
   } = {},
 ): Promise<UploadResult> {
   const folder = options.folder ?? "atlas";
+  // Prefer explicit type. "auto" often stores PDFs as image, and many
+  // Cloudinary accounts block public image/PDF delivery (ACL 401).
   const resourceType = options.resourceType ?? "auto";
 
   let buffer: Buffer;
@@ -63,6 +65,25 @@ export async function uploadToCloudinary(
     );
     stream.end(buffer);
   });
+}
+
+/** Authenticated download URL — works when public PDF delivery is ACL-blocked. */
+export function cloudinaryAdminDownloadUrl(
+  publicId: string,
+  options: {
+    resourceType?: "image" | "raw" | "video";
+    format?: string;
+  } = {},
+) {
+  return cloudinary.utils.private_download_url(
+    publicId,
+    options.format ?? "",
+    {
+      resource_type: options.resourceType ?? "image",
+      type: "upload",
+      attachment: false,
+    },
+  );
 }
 
 export async function destroyCloudinaryAsset(

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { articleTypes, submissionSteps } from "@/data/mock";
 import { useAuth } from "@/components/auth-provider";
 import type { ArticleType } from "@/lib/types";
@@ -40,8 +41,13 @@ const emptyForm: FormState = {
 
 export function SubmissionWizard() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const preselectedJournal = searchParams.get("journal") ?? "";
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>({
+    ...emptyForm,
+    journalId: preselectedJournal,
+  });
   const [journals, setJournals] = useState<JournalOption[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
@@ -52,8 +58,18 @@ export function SubmissionWizard() {
   useEffect(() => {
     void fetch("/api/cms/journals")
       .then((r) => r.json())
-      .then((data) => setJournals(data.journals ?? []));
-  }, []);
+      .then((data) => {
+        const list = (data.journals ?? []) as JournalOption[];
+        setJournals(list);
+        if (preselectedJournal) {
+          setForm((prev) =>
+            prev.journalId
+              ? prev
+              : { ...prev, journalId: preselectedJournal },
+          );
+        }
+      });
+  }, [preselectedJournal]);
 
   useEffect(() => {
     if (!user) return;
@@ -103,7 +119,7 @@ export function SubmissionWizard() {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("folder", "atlas/manuscripts");
-      fd.append("resourceType", "auto");
+      fd.append("resourceType", "raw");
       const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
       const uploadData = await uploadRes.json();
       if (!uploadRes.ok) throw new Error(uploadData.error ?? "Upload failed");
@@ -363,13 +379,17 @@ export function SubmissionWizard() {
         {step === 5 && (
           <div className="space-y-5">
             <label className="field">
-              <span>Manuscript file (PDF/DOCX)</span>
+              <span>Manuscript file (PDF preferred)</span>
               <input
                 type="file"
                 accept=".pdf,.doc,.docx"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
             </label>
+            <p className="text-xs text-[var(--muted)]">
+              PDF opens best in the admin reader. Word files can still be opened
+              from the inbox.
+            </p>
             {file && (
               <p className="text-xs text-[var(--muted)]">Selected: {file.name}</p>
             )}

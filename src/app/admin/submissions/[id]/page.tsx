@@ -34,6 +34,7 @@ type Submission = {
   status: (typeof statuses)[number] | "SUBMITTED" | "DRAFT";
   progress: number;
   manuscriptUrl?: string | null;
+  manuscriptPublicId?: string | null;
   coverLetter?: string | null;
   author: { name: string; email: string; institution?: string | null };
   journal: { title: string };
@@ -52,6 +53,7 @@ export default function AdminSubmissionDetailPage({
   const [actionRequired, setActionRequired] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState("");
 
   async function load() {
     const res = await fetch(`/api/admin/submissions/${id}`);
@@ -76,6 +78,7 @@ export default function AdminSubmissionDetailPage({
     e.preventDefault();
     setLoading(true);
     setError("");
+    setSuccess("");
     const res = await fetch(`/api/admin/submissions/${id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -95,6 +98,11 @@ export default function AdminSubmissionDetailPage({
     setMessage("");
     setActionRequired("");
     setSubmission(data.submission);
+    setSuccess(
+      data.emailSent
+        ? "Feedback saved and emailed to the author."
+        : "Feedback saved. Email was not sent — check SMTP settings in .env.",
+    );
   }
 
   if (!submission) {
@@ -152,6 +160,7 @@ export default function AdminSubmissionDetailPage({
             <section className="mt-6">
               <ManuscriptViewer
                 url={submission.manuscriptUrl}
+                publicId={submission.manuscriptPublicId}
                 title={`${submission.manuscriptId} — manuscript`}
               />
             </section>
@@ -226,9 +235,18 @@ export default function AdminSubmissionDetailPage({
               {error}
             </p>
           )}
+          {success && (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              {success}
+            </p>
+          )}
           <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading ? "Sending…" : "Send feedback"}
           </button>
+          <p className="text-[11px] text-[var(--muted)]">
+            Feedback is saved to the author dashboard and emailed to the author
+            immediately.
+          </p>
         </form>
       </div>
     </div>
