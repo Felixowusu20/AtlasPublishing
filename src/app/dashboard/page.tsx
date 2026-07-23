@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
+import { ResubmitPanel } from "@/components/resubmit-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { initials } from "@/lib/auth";
-import { uiStatus } from "@/lib/submission-utils";
+import { canAuthorResubmit, uiStatus } from "@/lib/submission-utils";
 import type { SubmissionStatus as UiSubmissionStatus } from "@/lib/types";
 
 type FilterKey = "all" | "action" | "active" | "draft" | "published";
@@ -42,9 +43,21 @@ const filters: { key: FilterKey; label: string }[] = [
   { key: "published", label: "Published" },
 ];
 
+function canResubmit(sub: ApiSubmission) {
+  return canAuthorResubmit(sub.status, sub.actionRequired);
+}
+
+function needsAuthorAction(sub: ApiSubmission) {
+  return (
+    Boolean(sub.actionRequired) ||
+    sub.status === "MAJOR_REVISION" ||
+    sub.status === "MINOR_REVISION"
+  );
+}
+
 function matchesFilter(sub: ApiSubmission, filter: FilterKey) {
   if (filter === "all") return true;
-  if (filter === "action") return Boolean(sub.actionRequired);
+  if (filter === "action") return needsAuthorAction(sub) || canResubmit(sub);
   if (filter === "draft") return sub.status === "DRAFT";
   if (filter === "published") return sub.status === "PUBLISHED";
   return sub.status !== "DRAFT" && sub.status !== "PUBLISHED";
@@ -69,16 +82,20 @@ function DashboardInner() {
   const [notifications, setNotifications] = useState<ApiNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
+  async function refresh() {
+    const [subsRes, notifRes] = await Promise.all([
+      fetch("/api/submissions"),
+      fetch("/api/notifications"),
+    ]);
+    const subsData = await subsRes.json();
+    const notifData = await notifRes.json();
+    if (subsRes.ok) setSubmissions(subsData.submissions ?? []);
+    if (notifRes.ok) setNotifications(notifData.notifications ?? []);
+  }
+
   useEffect(() => {
     void (async () => {
-      const [subsRes, notifRes] = await Promise.all([
-        fetch("/api/submissions"),
-        fetch("/api/notifications"),
-      ]);
-      const subsData = await subsRes.json();
-      const notifData = await notifRes.json();
-      if (subsRes.ok) setSubmissions(subsData.submissions ?? []);
-      if (notifRes.ok) setNotifications(notifData.notifications ?? []);
+      await refresh();
       setLoading(false);
     })();
   }, []);
@@ -88,7 +105,8 @@ function DashboardInner() {
     (s) => s.status !== "DRAFT" && s.status !== "PUBLISHED",
   );
   const published = submissions.filter((s) => s.status === "PUBLISHED");
-  const needsAction = submissions.filter((s) => s.actionRequired);
+  // Banner: revision requests (not every under-review manuscript)
+  const needsAction = submissions.filter((s) => needsAuthorAction(s));
   const unread = notifications.filter((n) => n.unread).length;
 
   const filtered = useMemo(
@@ -157,7 +175,7 @@ function DashboardInner() {
               <div>
                 <h2 className="text-sm font-semibold text-amber-950">Action required</h2>
                 <p className="mt-0.5 text-xs text-amber-800/80">
-                  These manuscripts need your attention before they can move forward.
+                  Revise and resubmit here when reviewers request corrections.
                 </p>
               </div>
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
@@ -166,31 +184,61 @@ function DashboardInner() {
             </div>
             <ul className="divide-y divide-amber-100">
               {needsAction.map((sub) => (
-                <li
-                  key={sub.id}
-                  className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge status={toUiStatus(sub.status)} />
-                      <span className="text-xs font-medium text-amber-900/70">
-                        {sub.manuscriptId}
-                      </span>
+                  <li key={sub.id} id={`action-${sub.id}`} className="px-5 py-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge status={toUiStatus(sub.status)} />
+                          <span className="text-xs font-medium text-amber-900/70">
+                            {sub.manuscriptId}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 truncate text-sm font-semibold text-[var(--ink)]">
+                          {sub.title}
+                        </p>
+                        <p className="mt-1 text-xs text-amber-900/75">
+                          {sub.actionRequired ||
+                            (canResubmit(sub)
+                              ? "Upload your revised manuscript and response to reviewers."
+                              : "Action needed on this manuscript.")}
+                        </p>
+                        {sub.feedback?.[0] && (
+                          <p className="mt-2 line-clamp-2 text-xs text-[var(--muted)]">
+                            Latest feedback: {sub.feedback[0].message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        {!canResubmit(sub) && (
+                          <Link
+                            href={
+                              sub.status === "DRAFT"
+                                ? "/submissions/new"
+                                : `/submissions/${sub.id}`
+                            }
+                            className="btn-primary shrink-0 !px-4 !py-2 text-sm"
+                          >
+                            Continue
+                          </Link>
+                        )}
+                        <Link
+                          href={`/submissions/${sub.id}`}
+                          className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-950 hover:border-amber-400"
+                        >
+                          View details
+                        </Link>
+                      </div>
                     </div>
-                    <p className="mt-1.5 truncate text-sm font-semibold text-[var(--ink)]">
-                      {sub.title}
-                    </p>
-                    <p className="mt-1 text-xs text-amber-900/75">
-                      {sub.actionRequired}
-                    </p>
-                  </div>
-                  <Link
-                    href={`/submissions/${sub.id}`}
-                    className="btn-primary shrink-0 !px-4 !py-2 text-sm"
-                  >
-                    Continue
-                  </Link>
-                </li>
+                    {canResubmit(sub) && (
+                      <ResubmitPanel
+                        submissionId={sub.id}
+                        manuscriptId={sub.manuscriptId}
+                        onDone={async () => {
+                          await refresh();
+                        }}
+                      />
+                    )}
+                  </li>
               ))}
             </ul>
           </section>
@@ -262,6 +310,7 @@ function DashboardInner() {
                 const authorCount = Array.isArray(sub.authorsJson)
                   ? sub.authorsJson.length || 1
                   : 1;
+                const showResubmit = canResubmit(sub);
                 return (
                   <article
                     key={sub.id}
@@ -272,7 +321,9 @@ function DashboardInner() {
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusBadge status={toUiStatus(sub.status)} />
-                            {sub.actionRequired && (
+                            {(sub.actionRequired ||
+                              sub.status === "MAJOR_REVISION" ||
+                              sub.status === "MINOR_REVISION") && (
                               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
                                 Action needed
                               </span>
@@ -285,12 +336,26 @@ function DashboardInner() {
                             {sub.manuscriptId}, {sub.articleType}, {sub.journal.title}
                           </p>
                         </div>
-                        <Link
-                          href={`/submissions/${sub.id}`}
-                          className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-white hover:text-[var(--accent)]"
-                        >
-                          {sub.status === "DRAFT" ? "Resume" : "Track"}
-                        </Link>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          {showResubmit && (
+                            <Link
+                              href={`/submissions/${sub.id}#resubmit`}
+                              className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                            >
+                              Resubmit
+                            </Link>
+                          )}
+                          <Link
+                            href={
+                              sub.status === "DRAFT"
+                                ? "/submissions/new"
+                                : `/submissions/${sub.id}`
+                            }
+                            className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-white hover:text-[var(--accent)]"
+                          >
+                            {sub.status === "DRAFT" ? "Resume" : "Track"}
+                          </Link>
+                        </div>
                       </div>
 
                       <div className="mt-4">

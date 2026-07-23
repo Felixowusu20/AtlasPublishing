@@ -1,38 +1,102 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   detectFileKind,
   googleEmbedUrl,
+  mimeFromUrl,
   officeEmbedUrl,
   toInlineCloudinaryUrl,
 } from "@/lib/file-view";
 
 type Props = {
   url: string;
+  publicId?: string | null;
   title?: string;
   className?: string;
 };
 
-export function ManuscriptViewer({ url, title, className }: Props) {
+type ViewMode = "native" | "google" | "office";
+
+/**
+ * In-app manuscript viewer with optional Google / Office embeds.
+ */
+export function ManuscriptViewer({ url, publicId, title, className }: Props) {
   const kind = useMemo(() => detectFileKind(url), [url]);
   const inlineRemote = useMemo(() => toInlineCloudinaryUrl(url), [url]);
-  const proxyUrl = useMemo(
-    () => `/api/files/view?url=${encodeURIComponent(inlineRemote)}`,
-    [inlineRemote],
-  );
-  const [mode, setMode] = useState<"native" | "office" | "google">(() => {
-    if (kind === "office") return "office";
-    if (kind === "pdf" || kind === "image") return "native";
-    return "google";
+  const proxyUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      url: inlineRemote,
+      redirect: "0",
+    });
+    if (publicId) params.set("publicId", publicId);
+    return `/api/files/view?${params.toString()}`;
+  }, [inlineRemote, publicId]);
+
+  const [mode, setMode] = useState<ViewMode>(() => {
+    if (kind === "office") return "native";
+    return "native";
   });
 
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (mode !== "native") {
+      setLoading(false);
+      setError("");
+      return;
+    }
+
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError("");
+      setBlobUrl(null);
+      try {
+        const res = await fetch(proxyUrl);
+        const contentType = res.headers.get("content-type") || "";
+        if (!res.ok || contentType.includes("application/json")) {
+          const data = contentType.includes("application/json")
+            ? await res.json().catch(() => null)
+            : null;
+          throw new Error(data?.error ?? "Could not load manuscript file");
+        }
+        const buffer = await res.arrayBuffer();
+        if (!buffer.byteLength) {
+          throw new Error("Empty file returned from storage");
+        }
+        const type =
+          contentType.split(";")[0] || mimeFromUrl(url) || "application/pdf";
+        const blob = new Blob([buffer], { type });
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setBlobUrl(objectUrl);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to open file");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [mode, proxyUrl, url]);
+
   const embedSrc =
-    mode === "office"
-      ? officeEmbedUrl(inlineRemote)
-      : mode === "google"
-        ? googleEmbedUrl(inlineRemote)
-        : proxyUrl;
+    mode === "google"
+      ? googleEmbedUrl(inlineRemote)
+      : mode === "office"
+        ? officeEmbedUrl(inlineRemote)
+        : null;
 
   return (
     <div
@@ -44,37 +108,26 @@ export function ManuscriptViewer({ url, title, className }: Props) {
             {title ?? "Manuscript preview"}
           </p>
           <p className="text-[11px] text-[var(--muted)]">
-            Opens on this page — no download required
+            Opens on this page — switch viewer if needed
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          {(kind === "pdf" || kind === "other") && (
-            <>
-              <ModeButton
-                active={mode === "native"}
-                onClick={() => setMode("native")}
-                label="In-app"
-              />
-              <ModeButton
-                active={mode === "google"}
-                onClick={() => setMode("google")}
-                label="Google view"
-              />
-            </>
-          )}
-          {kind === "office" && (
-            <>
-              <ModeButton
-                active={mode === "office"}
-                onClick={() => setMode("office")}
-                label="Office view"
-              />
-              <ModeButton
-                active={mode === "google"}
-                onClick={() => setMode("google")}
-                label="Google view"
-              />
-            </>
+          <ModeButton
+            active={mode === "native"}
+            onClick={() => setMode("native")}
+            label="In-app"
+          />
+          <ModeButton
+            active={mode === "google"}
+            onClick={() => setMode("google")}
+            label="Google view"
+          />
+          {(kind === "office" || kind === "other") && (
+            <ModeButton
+              active={mode === "office"}
+              onClick={() => setMode("office")}
+              label="Office view"
+            />
           )}
           <a
             href={proxyUrl}
@@ -87,15 +140,89 @@ export function ManuscriptViewer({ url, title, className }: Props) {
         </div>
       </div>
 
-      <div className="relative bg-[#e8edf2]">
-        {kind === "image" ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={proxyUrl}
-            alt={title ?? "Manuscript image"}
-            className="mx-auto max-h-[75vh] w-auto max-w-full object-contain p-4"
-          />
-        ) : (
+      <div className="relative min-h-[320px] bg-[#e8edf2]">
+        {mode === "native" && (
+          <>
+            {loading && (
+              <p className="p-8 text-center text-sm text-[var(--muted)]">
+                Loading manuscript…
+              </p>
+            )}
+
+            {!loading && error && (
+              <div className="space-y-3 p-8 text-center">
+                <p className="text-sm text-rose-700">{error}</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <a href={proxyUrl} target="_blank" rel="noreferrer" className="btn-primary">
+                    Open via secure link
+                  </a>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setMode("google")}
+                  >
+                    Try Google view
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!loading && !error && blobUrl && kind === "image" && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={blobUrl}
+                alt={title ?? "Manuscript image"}
+                className="mx-auto max-h-[75vh] w-auto max-w-full object-contain p-4"
+              />
+            )}
+
+            {!loading && !error && blobUrl && kind === "pdf" && (
+              <iframe
+                title={title ?? "Manuscript PDF"}
+                src={`${blobUrl}#view=FitH`}
+                className="h-[min(75vh,720px)] w-full border-0 bg-white"
+              />
+            )}
+
+            {!loading &&
+              !error &&
+              blobUrl &&
+              kind !== "pdf" &&
+              kind !== "image" && (
+                <div className="space-y-3 p-8 text-center">
+                  <p className="text-sm text-[var(--ink)]">
+                    File loaded. Open in a new tab to download, or try Google /
+                    Office view.
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <a
+                      href={blobUrl}
+                      download
+                      className="btn-primary"
+                    >
+                      Download file
+                    </a>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setMode("google")}
+                    >
+                      Google view
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setMode("office")}
+                    >
+                      Office view
+                    </button>
+                  </div>
+                </div>
+              )}
+          </>
+        )}
+
+        {(mode === "google" || mode === "office") && embedSrc && (
           <iframe
             key={embedSrc}
             title={title ?? "Manuscript viewer"}

@@ -72,6 +72,8 @@ export function reviewFeedbackEmailHtml(opts: {
   status: string;
   message: string;
   manuscriptId: string;
+  submissionUrl: string;
+  needsRevision?: boolean;
 }) {
   return `
   <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
@@ -80,9 +82,47 @@ export function reviewFeedbackEmailHtml(opts: {
     <p>Your manuscript <strong>${opts.title}</strong> has a new editorial update.</p>
     <p><strong>Status:</strong> ${opts.status}</p>
     <div style="background:#eef2f6;padding:14px;border-radius:10px;margin:16px 0">
+      <p style="margin:0 0 8px;font-weight:600">Reviewer / editor feedback</p>
       ${opts.message.replace(/\n/g, "<br/>")}
     </div>
-    <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open dashboard</a></p>
+    ${
+      opts.needsRevision
+        ? `<p>Please revise your manuscript, then use <strong>Resubmit</strong> on your author portal to send the corrected file back for review.</p>`
+        : ""
+    }
+    <p><a href="${opts.submissionUrl}" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Open manuscript &amp; feedback</a></p>
+    <p style="color:#5b6b7c;font-size:13px">Atlas Academic Publishing</p>
+  </div>`;
+}
+
+export function resubmissionEmailHtml(opts: {
+  authorName: string;
+  title: string;
+  manuscriptId: string;
+  submissionUrl: string;
+}) {
+  return `
+  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
+    <h1 style="font-size:22px">Resubmission received: ${opts.manuscriptId}</h1>
+    <p>Hi ${opts.authorName},</p>
+    <p>We received your revised manuscript <strong>${opts.title}</strong>. It is back under review.</p>
+    <p><a href="${opts.submissionUrl}" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Track progress</a></p>
+  </div>`;
+}
+
+export function reviewerResubmissionNoticeHtml(opts: {
+  reviewerName: string;
+  authorName: string;
+  title: string;
+  manuscriptId: string;
+  adminUrl: string;
+}) {
+  return `
+  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
+    <h1 style="font-size:22px">Author resubmitted ${opts.manuscriptId}</h1>
+    <p>Hi ${opts.reviewerName},</p>
+    <p>${opts.authorName} uploaded a revised file for <strong>${opts.title}</strong>.</p>
+    <p><a href="${opts.adminUrl}" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Open in inbox</a></p>
   </div>`;
 }
 

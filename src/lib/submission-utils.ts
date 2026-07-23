@@ -54,3 +54,17 @@ export function slugify(input: string) {
     .replace(/(^-|-$)/g, "")
     .slice(0, 80);
 }
+
+/** Author may upload a revised file + message during active review. */
+export function canAuthorResubmit(
+  status: string,
+  actionRequired?: string | null,
+) {
+  if (actionRequired) return true;
+  return (
+    status === "MAJOR_REVISION" ||
+    status === "MINOR_REVISION" ||
+    status === "UNDER_REVIEW" ||
+    status === "TECHNICAL_CHECK"
+  );
+}

@@ -86,7 +86,7 @@ export async function POST(request: Request, { params }: Params) {
           actionRequired:
             body.actionRequired === undefined
               ? status === "MAJOR_REVISION" || status === "MINOR_REVISION"
-                ? "Please revise and resubmit based on reviewer feedback."
+                ? "Please revise your manuscript, then use Resubmit on your author dashboard to send the corrected file back for review."
                 : null
               : body.actionRequired,
           reviewerId:
@@ -120,21 +120,47 @@ export async function POST(request: Request, { params }: Params) {
       return { feedback, sub };
     });
 
-    void sendEmail({
-      to: submission.author.email,
-      subject: `Review update for ${submission.manuscriptId}`,
-      html: reviewFeedbackEmailHtml({
-        authorName: submission.author.name,
-        title: submission.title,
-        status: labelStatus(status),
-        message: body.message,
-        manuscriptId: submission.manuscriptId,
-      }),
-    });
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const needsRevision =
+      status === "MAJOR_REVISION" || status === "MINOR_REVISION";
+
+    let emailSent = false;
+    try {
+      const mail = await sendEmail({
+        to: submission.author.email,
+        subject: `Review feedback: ${submission.manuscriptId} — ${labelStatus(status)}`,
+        html: reviewFeedbackEmailHtml({
+          authorName: submission.author.name,
+          title: submission.title,
+          status: labelStatus(status),
+          message: body.message,
+          manuscriptId: submission.manuscriptId,
+          submissionUrl: `${base}/submissions/${id}`,
+          needsRevision,
+        }),
+        text: [
+          `Review update for ${submission.manuscriptId}`,
+          `Status: ${labelStatus(status)}`,
+          "",
+          body.message,
+          "",
+          `Open: ${base}/submissions/${id}`,
+        ].join("\n"),
+      });
+      emailSent = mail.ok;
+      if (mail.skipped) {
+        console.warn(
+          `[review-email] skipped (SMTP not configured) → ${submission.author.email}`,
+        );
+      }
+    } catch (mailErr) {
+      console.error("[review-email] failed", mailErr);
+    }
 
     return jsonOk({
       submission: updated.sub,
       feedback: updated.feedback,
+      emailSent,
     });
   } catch (err) {
     if (err instanceof z.ZodError) {

@@ -5,7 +5,8 @@ import { use, useEffect, useState } from "react";
 import { StatusBadge } from "@/components/status-badge";
 import { RequireAuth } from "@/components/require-auth";
 import { ManuscriptViewer } from "@/components/manuscript-viewer";
-import { uiStatus } from "@/lib/submission-utils";
+import { ResubmitPanel } from "@/components/resubmit-panel";
+import { canAuthorResubmit, uiStatus } from "@/lib/submission-utils";
 
 type Feedback = {
   id: string;
@@ -26,6 +27,7 @@ type Submission = {
   progress: number;
   actionRequired?: string | null;
   manuscriptUrl?: string | null;
+  manuscriptPublicId?: string | null;
   journal: { title: string };
   feedback: Feedback[];
   updatedAt: string;
@@ -36,14 +38,15 @@ function Detail({ id }: { id: string }) {
   const [sub, setSub] = useState<Submission | null>(null);
   const [error, setError] = useState("");
 
+  async function load() {
+    const res = await fetch(`/api/submissions/${id}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Not found");
+    setSub(data.submission);
+  }
+
   useEffect(() => {
-    void fetch(`/api/submissions/${id}`)
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Not found");
-        setSub(data.submission);
-      })
-      .catch((err) => setError(err.message));
+    void load().catch((err) => setError(err.message));
   }, [id]);
 
   if (error) {
@@ -63,13 +66,17 @@ function Detail({ id }: { id: string }) {
     );
   }
 
+  const showResubmit = canAuthorResubmit(sub.status, sub.actionRequired);
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <Link href="/dashboard" className="text-xs font-semibold text-[var(--accent)]">
         ← Dashboard
       </Link>
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <StatusBadge status={uiStatus(sub.status as Parameters<typeof uiStatus>[0])} />
+        <StatusBadge
+          status={uiStatus(sub.status as Parameters<typeof uiStatus>[0])}
+        />
         <span className="text-xs text-[var(--muted)]">{sub.manuscriptId}</span>
       </div>
       <h1 className="mt-3 font-[family-name:var(--font-display)] text-3xl text-[var(--ink)]">
@@ -98,6 +105,68 @@ function Detail({ id }: { id: string }) {
         </div>
       )}
 
+      {showResubmit && (
+        <section className="mt-8 scroll-mt-24" id="resubmit">
+          <div className="rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">
+                  Author action
+                </p>
+                <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+                  Resubmit revised manuscript
+                </h2>
+                <p className="mt-1 text-sm text-amber-900/80">
+                  After you fix reviewer comments, upload the corrected file and
+                  a short message, then submit.
+                </p>
+              </div>
+              <a href="#resubmit-form" className="btn-primary shrink-0">
+                Resubmit
+              </a>
+            </div>
+            <div id="resubmit-form">
+              <ResubmitPanel
+                submissionId={sub.id}
+                manuscriptId={sub.manuscriptId}
+                onDone={() => void load()}
+              />
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="mt-8">
+        <h2 className="font-[family-name:var(--font-display)] text-xl">
+          Reviewer feedback
+        </h2>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          The same feedback is emailed to you when a reviewer sends an update.
+        </p>
+        <div className="mt-4 space-y-3">
+          {sub.feedback.length === 0 && (
+            <p className="text-sm text-[var(--muted)]">
+              No reviewer messages yet.
+            </p>
+          )}
+          {sub.feedback.map((f) => (
+            <article
+              key={f.id}
+              className="rounded-xl border border-[var(--line)] bg-white p-4"
+            >
+              <p className="text-xs text-[var(--muted)]">
+                {f.message.startsWith("Author response")
+                  ? "You"
+                  : f.reviewer.name}{" "}
+                · {uiStatus(f.status as Parameters<typeof uiStatus>[0])} ·{" "}
+                {new Date(f.createdAt).toLocaleString()}
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm">{f.message}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="mt-8 card p-5">
         <h2 className="text-sm font-semibold">Abstract</h2>
         <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
@@ -112,37 +181,11 @@ function Detail({ id }: { id: string }) {
         <section className="mt-8">
           <ManuscriptViewer
             url={sub.manuscriptUrl}
+            publicId={sub.manuscriptPublicId}
             title={`${sub.manuscriptId} — your manuscript`}
           />
         </section>
       )}
-
-      <section className="mt-8">
-        <h2 className="font-[family-name:var(--font-display)] text-xl">
-          Reviewer feedback
-        </h2>
-        <div className="mt-4 space-y-3">
-          {sub.feedback.length === 0 && (
-            <p className="text-sm text-[var(--muted)]">
-              No reviewer messages yet. You will also get an email when feedback
-              arrives.
-            </p>
-          )}
-          {sub.feedback.map((f) => (
-            <article
-              key={f.id}
-              className="rounded-xl border border-[var(--line)] bg-white p-4"
-            >
-              <p className="text-xs text-[var(--muted)]">
-                {f.reviewer.name} ·{" "}
-                {uiStatus(f.status as Parameters<typeof uiStatus>[0])} ·{" "}
-                {new Date(f.createdAt).toLocaleString()}
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm">{f.message}</p>
-            </article>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
