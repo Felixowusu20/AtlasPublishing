@@ -1,66 +1,18 @@
-import Link from "next/link";
 import { HeroSlider } from "@/components/hero-slider";
 import {
   announcements,
   journals,
-  platformStats,
   publishedArticles,
   publishingWorkflow,
 } from "@/data/mock";
+import Link from "next/link";
 
 export default function HomePage() {
   const latest = publishedArticles.slice(0, 4);
 
   return (
     <div>
-      <section className="relative isolate overflow-hidden border-b border-[var(--line)] bg-[var(--ink)] text-white">
-        <HeroSlider />
-        <div className="relative z-10 mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:py-24">
-          <div>
-            <p className="text-sm font-medium tracking-wide text-teal-200/90">
-              Atlas Academic Publishing
-            </p>
-            <h1 className="mt-4 font-[family-name:var(--font-display)] text-4xl leading-tight sm:text-5xl">
-              Advance research from submission to citation
-            </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-200">
-              Atlas helps researchers submit manuscripts, track peer review, and
-              publish across our journals, from first draft to lasting citation.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/submissions/new"
-                className="inline-flex rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-slate-100"
-              >
-                Submit manuscript
-              </Link>
-              <Link
-                href="/articles"
-                className="inline-flex rounded-lg border border-white/25 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15"
-              >
-                Browse articles
-              </Link>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 self-end">
-            {[
-              [String(platformStats.journals), "Journals"],
-              [String(platformStats.articlesPublished), "Articles"],
-              [`${platformStats.avgDaysToFirstDecision}d`, "First decision"],
-              [String(platformStats.countries), "Countries"],
-            ].map(([value, label]) => (
-              <div
-                key={label}
-                className="rounded-xl border border-white/15 bg-white/10 px-4 py-4 backdrop-blur-md"
-              >
-                <p className="text-2xl font-semibold tracking-tight">{value}</p>
-                <p className="mt-1 text-xs text-slate-300">{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <HeroSlider />
 
       <section className="border-b border-[var(--line)] bg-[var(--surface)]/60">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
