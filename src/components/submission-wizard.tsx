@@ -206,7 +206,7 @@ export function SubmissionWizard() {
                 </p>
                 <p className="mt-1">
                   <span className="font-medium text-[var(--ink)]">Avg. review:</span>{" "}
-                  {selectedJournal.avgReviewDays} days · APC{" "}
+                  {selectedJournal.avgReviewDays} days, APC{" "}
                   {selectedJournal.apc}
                 </p>
               </div>
@@ -230,7 +230,7 @@ export function SubmissionWizard() {
                 rows={6}
                 value={form.abstract}
                 onChange={(e) => update("abstract", e.target.value)}
-                placeholder="250–300 words recommended"
+                placeholder="250 to 300 words recommended"
               />
             </label>
             <label className="field">
@@ -333,7 +333,7 @@ export function SubmissionWizard() {
                 File upload is mocked for now
               </p>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Later: Cloudinary · PDF / DOCX / LaTeX ZIP · virus scan
+                Later: Cloudinary, PDF / DOCX / LaTeX ZIP, virus scan
               </p>
             </div>
           </div>
@@ -341,21 +341,21 @@ export function SubmissionWizard() {
 
         {step === 6 && (
           <div className="space-y-4 text-sm">
-            <ReviewRow label="Journal" value={selectedJournal?.title ?? "—"} />
-            <ReviewRow label="Article type" value={form.articleType || "—"} />
-            <ReviewRow label="Title" value={form.title || "—"} />
-            <ReviewRow label="Keywords" value={form.keywords || "—"} />
+            <ReviewRow label="Journal" value={selectedJournal?.title ?? "N/A"} />
+            <ReviewRow label="Article type" value={form.articleType || "N/A"} />
+            <ReviewRow label="Title" value={form.title || "N/A"} />
+            <ReviewRow label="Keywords" value={form.keywords || "N/A"} />
             <ReviewRow
               label="Author"
-              value={`${form.authorName} · ${form.affiliation}`}
+              value={`${form.authorName}, ${form.affiliation}`}
             />
-            <ReviewRow label="Manuscript" value={form.manuscriptFile || "—"} />
+            <ReviewRow label="Manuscript" value={form.manuscriptFile || "N/A"} />
             <div className="rounded-xl bg-[var(--surface)] p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
                 Abstract
               </p>
               <p className="mt-2 leading-relaxed text-[var(--ink)]">
-                {form.abstract || "—"}
+                {form.abstract || "N/A"}
               </p>
             </div>
           </div>

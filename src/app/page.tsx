@@ -1,112 +1,265 @@
 import Link from "next/link";
-import { journals, submissions } from "@/data/mock";
+import { HeroSlider } from "@/components/hero-slider";
+import {
+  announcements,
+  journals,
+  platformStats,
+  publishedArticles,
+  publishingWorkflow,
+} from "@/data/mock";
 
 export default function HomePage() {
-  const active = submissions.filter((s) => s.status !== "Published").length;
+  const latest = publishedArticles.slice(0, 4);
 
   return (
     <div>
-      <section className="relative overflow-hidden border-b border-[var(--line)] bg-[var(--ink)] text-white">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-40"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 20% 20%, #1a6b6a 0%, transparent 40%), radial-gradient(circle at 80% 0%, #1e4a6e 0%, transparent 35%)",
-          }}
-        />
-        <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
-          <p className="text-sm font-medium tracking-wide text-teal-200/90">
-            Atlas Academic Publishing
-          </p>
-          <h1 className="mt-4 max-w-2xl font-[family-name:var(--font-display)] text-4xl leading-tight sm:text-5xl">
-            Submit. Review. Publish.
-          </h1>
-          <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-300">
-            A clear path from manuscript to publication across our journals —
-            built for authors, reviewers, and editors.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href="/submissions/new"
-              className="inline-flex rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-slate-100"
-            >
-              Start a submission
-            </Link>
-            <Link
-              href="/journals"
-              className="inline-flex rounded-lg border border-white/25 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
-            >
-              Browse journals
-            </Link>
+      <section className="relative isolate overflow-hidden border-b border-[var(--line)] bg-[var(--ink)] text-white">
+        <HeroSlider />
+        <div className="relative z-10 mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:py-24">
+          <div>
+            <p className="text-sm font-medium tracking-wide text-teal-200/90">
+              Atlas Academic Publishing
+            </p>
+            <h1 className="mt-4 font-[family-name:var(--font-display)] text-4xl leading-tight sm:text-5xl">
+              Advance research from submission to citation
+            </h1>
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-200">
+              Atlas helps researchers submit manuscripts, track peer review, and
+              publish across our journals, from first draft to lasting citation.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/submissions/new"
+                className="inline-flex rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-slate-100"
+              >
+                Submit manuscript
+              </Link>
+              <Link
+                href="/articles"
+                className="inline-flex rounded-lg border border-white/25 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15"
+              >
+                Browse articles
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 self-end">
+            {[
+              [String(platformStats.journals), "Journals"],
+              [String(platformStats.articlesPublished), "Articles"],
+              [`${platformStats.avgDaysToFirstDecision}d`, "First decision"],
+              [String(platformStats.countries), "Countries"],
+            ].map(([value, label]) => (
+              <div
+                key={label}
+                className="rounded-xl border border-white/15 bg-white/10 px-4 py-4 backdrop-blur-md"
+              >
+                <p className="text-2xl font-semibold tracking-tight">{value}</p>
+                <p className="mt-1 text-xs text-slate-300">{label}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-        <div className="grid gap-4 sm:grid-cols-3">
-          {[
-            { label: "Journals", value: String(journals.length) },
-            { label: "Your active manuscripts", value: String(active) },
-            { label: "Avg. review time", value: "28 days" },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-2xl border border-[var(--line)] bg-white px-5 py-6 shadow-sm"
-            >
-              <p className="text-3xl font-semibold tracking-tight text-[var(--ink)]">
-                {stat.value}
-              </p>
-              <p className="mt-1 text-sm text-[var(--muted)]">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-14 flex items-end justify-between gap-4">
-          <div>
+      <section className="border-b border-[var(--line)] bg-[var(--surface)]/60">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+          <div className="max-w-2xl">
             <h2 className="font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
-              Featured journals
+              How publishing works on Atlas
             </h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Choose a journal and begin your submission.
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              A clear path from manuscript upload to publication.
             </p>
           </div>
-          <Link
-            href="/journals"
-            className="hidden text-sm font-semibold text-[var(--accent)] hover:underline sm:block"
-          >
-            View all
-          </Link>
-        </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {journals.slice(0, 4).map((journal) => (
-            <Link
-              key={journal.id}
-              href={`/journals/${journal.slug}`}
-              className="group rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--accent)]/40 hover:shadow-md"
-            >
-              <div className="flex gap-4">
-                <div
-                  className="flex h-16 w-12 shrink-0 items-end justify-center rounded-md pb-2 text-[10px] font-bold text-white"
-                  style={{ background: journal.coverColor }}
-                >
-                  {journal.shortTitle}
+          <ol className="relative mt-10 grid gap-8 sm:grid-cols-5 sm:gap-4">
+            {/* Connecting line across steps (desktop) */}
+            <div
+              className="pointer-events-none absolute left-[10%] right-[10%] top-5 hidden h-px bg-[var(--line)] sm:block"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute left-[10%] right-[10%] top-5 hidden h-px bg-gradient-to-r from-transparent via-[var(--accent)]/35 to-transparent sm:block"
+              aria-hidden
+            />
+
+            {publishingWorkflow.map((item, index) => (
+              <li key={item.step} className="relative flex flex-col items-center text-center">
+                <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-[var(--accent)] bg-white text-sm font-semibold text-[var(--accent)] shadow-[0_0_0_6px_var(--paper)]">
+                  {item.step}
                 </div>
-                <div>
-                  <h3 className="font-semibold text-[var(--ink)] group-hover:text-[var(--accent)]">
-                    {journal.title}
+
+                {/* Mobile vertical connector */}
+                {index < publishingWorkflow.length - 1 && (
+                  <div
+                    className="absolute left-1/2 top-10 h-[calc(100%-0.5rem)] w-px -translate-x-1/2 bg-[var(--line)] sm:hidden"
+                    aria-hidden
+                  />
+                )}
+
+                <div className="mt-4 w-full rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--accent)]/30 hover:shadow-md">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
+                    Step {item.step}
+                  </p>
+                  <p className="mt-1.5 text-sm font-semibold text-[var(--ink)]">
+                    {item.title}
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed text-[var(--muted)]">
+                    {item.detail}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+        <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr]">
+          {/* Latest articles */}
+          <div>
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h2 className="font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+                  Latest articles
+                </h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Newly published and Early View
+                </p>
+              </div>
+              <Link
+                href="/articles"
+                className="text-sm font-semibold text-[var(--accent)] hover:underline"
+              >
+                View all
+              </Link>
+            </div>
+            <div className="mt-5 space-y-3">
+              {latest.map((article) => (
+                <Link
+                  key={article.id}
+                  href={`/articles/${article.slug}`}
+                  className="block card p-4 transition hover:border-[var(--accent)]/40 sm:p-5"
+                >
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 font-medium text-[var(--accent)]">
+                      {article.articleType}
+                    </span>
+                    {article.openAccess && (
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 font-medium text-emerald-700">
+                        Open Access
+                      </span>
+                    )}
+                    {article.issue === "Early View" && (
+                      <span className="rounded-full bg-amber-50 px-2.5 py-0.5 font-medium text-amber-800">
+                        Early View
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-2 text-base font-semibold text-[var(--ink)]">
+                    {article.title}
                   </h3>
-                  <p className="mt-1 line-clamp-2 text-sm text-[var(--muted)]">
-                    {journal.description}
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    {article.authors.join(", ")}
+                  </p>
+                  <p className="mt-2 line-clamp-2 text-sm text-[var(--muted)]">
+                    {article.abstract}
                   </p>
                   <p className="mt-3 text-xs text-[var(--muted)]">
-                    ISSN {journal.issn} · {journal.reviewType} ·{" "}
-                    {journal.openAccess ? "Open Access" : "Subscription"}
+                    {article.journalTitle}, {article.publishedAt}, DOI{" "}
+                    {article.doi}
                   </p>
-                </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Announcements + journals */}
+          <aside className="space-y-8">
+            <div>
+              <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+                Announcements
+              </h2>
+              <ul className="mt-4 space-y-3">
+                {announcements.map((a) => (
+                  <li key={a.id} className="card p-4">
+                    <p className="text-xs text-[var(--muted)]">{a.date}</p>
+                    <Link
+                      href={a.href}
+                      className="mt-1 block text-sm font-semibold text-[var(--ink)] hover:text-[var(--accent)]"
+                    >
+                      {a.title}
+                    </Link>
+                    <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+                      {a.summary}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <div className="flex items-end justify-between">
+                <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+                  Our journals
+                </h2>
+                <Link
+                  href="/journals"
+                  className="text-sm font-semibold text-[var(--accent)]"
+                >
+                  All
+                </Link>
               </div>
+              <div className="mt-4 space-y-2">
+                {journals.map((j) => (
+                  <Link
+                    key={j.id}
+                    href={`/journals/${j.slug}`}
+                    className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white p-3 hover:border-[var(--accent)]/40"
+                  >
+                    <span
+                      className="flex h-12 w-9 items-end justify-center rounded pb-1.5 text-[9px] font-bold text-white"
+                      style={{ background: j.coverColor }}
+                    >
+                      {j.shortTitle}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold text-[var(--ink)]">
+                        {j.title}
+                      </span>
+                      <span className="block text-xs text-[var(--muted)]">
+                        {j.openAccess ? "Open Access" : "Subscription"}, IF{" "}
+                        {j.impactFactor ?? "N/A"}
+                      </span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section className="border-t border-[var(--line)] bg-[var(--surface)]">
+        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-4 py-10 sm:flex-row sm:items-center sm:px-6">
+          <div>
+            <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+              Ready to submit?
+            </h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Create an account, pick a journal, and track your manuscript end to
+              end.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Link href="/register" className="btn-secondary">
+              Register
             </Link>
-          ))}
+            <Link href="/submissions/new" className="btn-primary">
+              Start submission
+            </Link>
+          </div>
         </div>
       </section>
     </div>

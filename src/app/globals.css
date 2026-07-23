@@ -90,3 +90,54 @@ body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+
+.menu-link {
+  display: block;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+
+.menu-link:hover {
+  background: var(--surface);
+}
+
+@keyframes hero-kenburns {
+  from {
+    transform: scale(1.05) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.12) translate3d(-1.5%, -1%, 0);
+  }
+}
+
+.hero-kenburns {
+  animation: hero-kenburns 18s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.page-wrap {
+  margin-inline: auto;
+  max-width: 72rem;
+  padding: 2.5rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .page-wrap {
+    padding-inline: 1.5rem;
+  }
+}
+
+.page-title {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.875rem;
+  color: var(--ink);
+}
+
+.card {
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: white;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}

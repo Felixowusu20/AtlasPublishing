@@ -60,7 +60,7 @@ export default async function SubmissionDetailPage({
             {sub.title}
           </h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            {sub.journalTitle} · {sub.articleType}
+            {sub.journalTitle}, {sub.articleType}
           </p>
         </div>
         {sub.status === "Draft" && (

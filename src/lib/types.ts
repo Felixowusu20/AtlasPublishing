@@ -71,6 +71,35 @@ export interface Journal {
   apc: string;
   editorInChief: string;
   coverColor: string;
+  indexedIn: string[];
+  foundedYear: number;
+}
+
+export interface EditorialMember {
+  name: string;
+  role: string;
+  affiliation: string;
+  country: string;
+}
+
+export interface JournalIssue {
+  id: string;
+  journalSlug: string;
+  volume: string;
+  issue: string;
+  year: string;
+  publishedAt: string;
+  title: string;
+  articleCount: number;
+  isCurrent: boolean;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  date: string;
+  summary: string;
+  href: string;
 }
 
 export interface Submission {
@@ -91,6 +120,7 @@ export interface Submission {
   conflictOfInterest?: string;
   ethicsStatement?: string;
   progressStep: number;
+  actionRequired?: string;
 }
 
 export interface CurrentUser {
@@ -101,4 +131,31 @@ export interface CurrentUser {
   institution: string;
   orcid: string;
   researchInterests: string[];
+}
+
+export interface PublishedArticle {
+  id: string;
+  slug: string;
+  doi: string;
+  title: string;
+  authors: string[];
+  affiliations: string[];
+  journalTitle: string;
+  journalSlug: string;
+  journalId: string;
+  publishedAt: string;
+  receivedAt: string;
+  acceptedAt: string;
+  volume: string;
+  issue: string;
+  pages: string;
+  articleType: ArticleType;
+  openAccess: boolean;
+  license: string;
+  abstract: string;
+  keywords: string[];
+  citations: number;
+  downloads: number;
+  views: number;
+  sections: { heading: string; body: string }[];
 }

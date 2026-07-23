@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Libre_Franklin, Source_Serif_4 } from "next/font/google";
+import { AuthProvider } from "@/components/auth-provider";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import "./globals.css";
 
@@ -27,9 +28,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${body.variable} ${display.variable} h-full`}>
       <body className="flex min-h-full flex-col antialiased">
-        <SiteHeader />
-        <main className="flex-1">{children}</main>
-        <SiteFooter />
+        <AuthProvider>
+          <SiteHeader />
+          <main className="flex-1">{children}</main>
+          <SiteFooter />
+        </AuthProvider>
       </body>
     </html>
   );
