@@ -19,7 +19,7 @@ function ProfileInner() {
     <div className="page-wrap">
       <h1 className="page-title">My profile</h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
-        Demo profile. Editable fields will sync to the database later.
+        Your author account details from Atlas.
       </p>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">

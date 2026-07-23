@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import type { DemoRole } from "@/lib/auth";
 
 export default function RegisterPage() {
   const { register, user, ready } = useAuth();
@@ -16,7 +15,6 @@ export default function RegisterPage() {
     confirm: "",
     institution: "",
     orcid: "",
-    role: "author" as DemoRole,
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,7 +27,7 @@ export default function RegisterPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
     if (form.password !== form.confirm) {
@@ -37,12 +35,11 @@ export default function RegisterPage() {
       return;
     }
     setLoading(true);
-    const result = register({
+    const result = await register({
       name: form.name,
       email: form.email,
       password: form.password,
       institution: form.institution,
-      role: form.role,
       orcid: form.orcid,
     });
     setLoading(false);
@@ -60,11 +57,11 @@ export default function RegisterPage() {
           Create account
         </p>
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
-          Register for Atlas
+          Register as an author
         </h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Demo registration only. Data stays in localStorage until we connect
-          PostgreSQL.
+          You will receive a welcome email after registration. Sign-ins also
+          trigger an email notification.
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
@@ -95,16 +92,6 @@ export default function RegisterPage() {
             />
           </label>
           <label className="field">
-            <span>I am registering as</span>
-            <select
-              value={form.role}
-              onChange={(e) => update("role", e.target.value)}
-            >
-              <option value="author">Author / Researcher</option>
-              <option value="reader">Reader</option>
-            </select>
-          </label>
-          <label className="field">
             <span>ORCID (optional)</span>
             <input
               value={form.orcid}
@@ -112,26 +99,24 @@ export default function RegisterPage() {
               placeholder="0000-0000-0000-0000"
             />
           </label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="field">
-              <span>Password</span>
-              <input
-                type="password"
-                required
-                value={form.password}
-                onChange={(e) => update("password", e.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Confirm password</span>
-              <input
-                type="password"
-                required
-                value={form.confirm}
-                onChange={(e) => update("confirm", e.target.value)}
-              />
-            </label>
-          </div>
+          <label className="field">
+            <span>Password</span>
+            <input
+              type="password"
+              required
+              value={form.password}
+              onChange={(e) => update("password", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Confirm password</span>
+            <input
+              type="password"
+              required
+              value={form.confirm}
+              onChange={(e) => update("confirm", e.target.value)}
+            />
+          </label>
 
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">

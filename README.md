@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Atlas Academic Publishing
 
-## Getting Started
+Next.js journal platform with Prisma (Neon PostgreSQL), Cloudinary uploads, Google SMTP email, author auth, and an admin panel for CMS + peer review.
 
-First, run the development server:
+## Setup
+
+1. Copy env placeholders and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+Required variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `AUTH_SECRET` | JWT signing secret |
+| `CLOUDINARY_CLOUD_NAME` / `API_KEY` / `API_SECRET` | Image & manuscript uploads |
+| `SMTP_HOST` / `PORT` / `USER` / `PASS` / `FROM` | Google SMTP (App Password) |
+| `NEXT_PUBLIC_APP_URL` | App URL used in emails |
+
+2. Install and push the schema:
+
+```bash
+npm install
+npm run db:push
+# or: npm run db:migrate
+```
+
+3. Run the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Roles & URLs
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Authors**: `/register`, `/login`, `/dashboard`, `/submissions/new`
+- **Super admin bootstrap**: `/admin/register` (only when no super admin exists)
+- **Admin / reviewers**: `/admin/login` → `/admin`
+  - Super admin: Hero CMS, Latest articles, Announcements, Journals, Reviewers, Submission inbox
+  - Reviewers: Submission inbox + send feedback (email + author dashboard progress)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Review flow
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Author submits a manuscript (file → Cloudinary).
+2. It appears in `/admin/submissions`.
+3. Reviewer/admin sends feedback with a new status.
+4. Author receives email + in-app notification; progress bar updates immediately.

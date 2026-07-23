@@ -1,15 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
 import { StatusBadge } from "@/components/status-badge";
 import { initials } from "@/lib/auth";
-import { notifications, submissions } from "@/data/mock";
-import type { Submission, SubmissionStatus } from "@/lib/types";
+import { uiStatus } from "@/lib/submission-utils";
+import type { SubmissionStatus as UiSubmissionStatus } from "@/lib/types";
 
 type FilterKey = "all" | "action" | "active" | "draft" | "published";
+
+type ApiSubmission = {
+  id: string;
+  manuscriptId: string;
+  title: string;
+  articleType: string;
+  status: string;
+  progress: number;
+  actionRequired?: string | null;
+  submittedAt?: string | null;
+  updatedAt: string;
+  journal: { title: string };
+  authorsJson?: { name: string }[] | null;
+  feedback?: { message: string; createdAt: string }[];
+};
+
+type ApiNotification = {
+  id: string;
+  title: string;
+  body: string;
+  unread: boolean;
+  createdAt: string;
+};
 
 const filters: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
@@ -19,30 +42,16 @@ const filters: { key: FilterKey; label: string }[] = [
   { key: "published", label: "Published" },
 ];
 
-function matchesFilter(sub: Submission, filter: FilterKey) {
+function matchesFilter(sub: ApiSubmission, filter: FilterKey) {
   if (filter === "all") return true;
   if (filter === "action") return Boolean(sub.actionRequired);
-  if (filter === "draft") return sub.status === "Draft";
-  if (filter === "published") return sub.status === "Published";
-  return sub.status !== "Draft" && sub.status !== "Published";
+  if (filter === "draft") return sub.status === "DRAFT";
+  if (filter === "published") return sub.status === "PUBLISHED";
+  return sub.status !== "DRAFT" && sub.status !== "PUBLISHED";
 }
 
-function stageProgress(status: SubmissionStatus) {
-  const order: SubmissionStatus[] = [
-    "Draft",
-    "Submitted",
-    "Technical Check",
-    "Under Review",
-    "Minor Revision",
-    "Major Revision",
-    "Accepted",
-    "In Production",
-    "Published",
-  ];
-  if (status === "Rejected") return 40;
-  const idx = order.indexOf(status);
-  if (idx < 0) return 10;
-  return Math.round(((idx + 1) / order.length) * 100);
+function toUiStatus(status: string): UiSubmissionStatus {
+  return uiStatus(status as Parameters<typeof uiStatus>[0]) as UiSubmissionStatus;
 }
 
 export default function DashboardPage() {
@@ -56,18 +65,35 @@ export default function DashboardPage() {
 function DashboardInner() {
   const { user } = useAuth();
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
+  const [notifications, setNotifications] = useState<ApiNotification[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const drafts = submissions.filter((s) => s.status === "Draft");
+  useEffect(() => {
+    void (async () => {
+      const [subsRes, notifRes] = await Promise.all([
+        fetch("/api/submissions"),
+        fetch("/api/notifications"),
+      ]);
+      const subsData = await subsRes.json();
+      const notifData = await notifRes.json();
+      if (subsRes.ok) setSubmissions(subsData.submissions ?? []);
+      if (notifRes.ok) setNotifications(notifData.notifications ?? []);
+      setLoading(false);
+    })();
+  }, []);
+
+  const drafts = submissions.filter((s) => s.status === "DRAFT");
   const active = submissions.filter(
-    (s) => s.status !== "Draft" && s.status !== "Published",
+    (s) => s.status !== "DRAFT" && s.status !== "PUBLISHED",
   );
-  const published = submissions.filter((s) => s.status === "Published");
+  const published = submissions.filter((s) => s.status === "PUBLISHED");
   const needsAction = submissions.filter((s) => s.actionRequired);
   const unread = notifications.filter((n) => n.unread).length;
 
   const filtered = useMemo(
     () => submissions.filter((s) => matchesFilter(s, filter)),
-    [filter],
+    [filter, submissions],
   );
 
   if (!user) return null;
@@ -78,7 +104,6 @@ function DashboardInner() {
 
   return (
     <div className="min-h-full bg-[var(--paper)]">
-      {/* Welcome banner */}
       <section className="border-b border-[var(--line)] bg-[var(--ink)] text-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-10">
           <div className="flex items-start gap-4">
@@ -119,45 +144,20 @@ function DashboardInner() {
       </section>
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        {/* KPI row */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Needs action"
-            value={needsAction.length}
-            hint="Deadlines and revisions"
-            tone="amber"
-          />
-          <StatCard
-            label="In progress"
-            value={drafts.length + active.length}
-            hint="Drafts and active reviews"
-            tone="teal"
-          />
-          <StatCard
-            label="Under review"
-            value={active.length}
-            hint="With editors or reviewers"
-            tone="sky"
-          />
-          <StatCard
-            label="Published"
-            value={published.length}
-            hint="Live on Atlas journals"
-            tone="emerald"
-          />
+          <StatCard label="Needs action" value={needsAction.length} hint="Deadlines and revisions" tone="amber" />
+          <StatCard label="In progress" value={drafts.length + active.length} hint="Drafts and active reviews" tone="teal" />
+          <StatCard label="Under review" value={active.length} hint="With editors or reviewers" tone="sky" />
+          <StatCard label="Published" value={published.length} hint="Live on Atlas journals" tone="emerald" />
         </div>
 
-        {/* Action required */}
         {needsAction.length > 0 && (
           <section className="mt-8 overflow-hidden rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50 to-white shadow-sm">
             <div className="flex items-center justify-between border-b border-amber-100 px-5 py-4">
               <div>
-                <h2 className="text-sm font-semibold text-amber-950">
-                  Action required
-                </h2>
+                <h2 className="text-sm font-semibold text-amber-950">Action required</h2>
                 <p className="mt-0.5 text-xs text-amber-800/80">
-                  These manuscripts need your attention before they can move
-                  forward.
+                  These manuscripts need your attention before they can move forward.
                 </p>
               </div>
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
@@ -172,7 +172,7 @@ function DashboardInner() {
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge status={sub.status} />
+                      <StatusBadge status={toUiStatus(sub.status)} />
                       <span className="text-xs font-medium text-amber-900/70">
                         {sub.manuscriptId}
                       </span>
@@ -197,7 +197,6 @@ function DashboardInner() {
         )}
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_300px]">
-          {/* Manuscripts */}
           <section>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -218,9 +217,7 @@ function DashboardInner() {
 
             <div className="mt-4 flex flex-wrap gap-1.5 rounded-xl border border-[var(--line)] bg-white p-1.5">
               {filters.map((f) => {
-                const count = submissions.filter((s) =>
-                  matchesFilter(s, f.key),
-                ).length;
+                const count = submissions.filter((s) => matchesFilter(s, f.key)).length;
                 const activeFilter = filter === f.key;
                 return (
                   <button
@@ -234,9 +231,7 @@ function DashboardInner() {
                     }`}
                   >
                     {f.label}
-                    <span
-                      className={`ml-1.5 ${activeFilter ? "text-white/70" : "text-[var(--muted)]"}`}
-                    >
+                    <span className={`ml-1.5 ${activeFilter ? "text-white/70" : "text-[var(--muted)]"}`}>
                       {count}
                     </span>
                   </button>
@@ -245,7 +240,10 @@ function DashboardInner() {
             </div>
 
             <div className="mt-4 space-y-3">
-              {filtered.length === 0 && (
+              {loading && (
+                <p className="text-sm text-[var(--muted)]">Loading manuscripts…</p>
+              )}
+              {!loading && filtered.length === 0 && (
                 <div className="card px-6 py-12 text-center">
                   <p className="text-sm font-medium text-[var(--ink)]">
                     No manuscripts in this view
@@ -253,17 +251,17 @@ function DashboardInner() {
                   <p className="mt-1 text-xs text-[var(--muted)]">
                     Try another filter or start a new submission.
                   </p>
-                  <Link
-                    href="/submissions/new"
-                    className="btn-primary mt-5 inline-flex"
-                  >
+                  <Link href="/submissions/new" className="btn-primary mt-5 inline-flex">
                     New submission
                   </Link>
                 </div>
               )}
 
               {filtered.map((sub) => {
-                const progress = stageProgress(sub.status);
+                const progress = sub.progress;
+                const authorCount = Array.isArray(sub.authorsJson)
+                  ? sub.authorsJson.length || 1
+                  : 1;
                 return (
                   <article
                     key={sub.id}
@@ -273,7 +271,7 @@ function DashboardInner() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <StatusBadge status={sub.status} />
+                            <StatusBadge status={toUiStatus(sub.status)} />
                             {sub.actionRequired && (
                               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
                                 Action needed
@@ -284,15 +282,14 @@ function DashboardInner() {
                             {sub.title}
                           </h3>
                           <p className="mt-1.5 text-xs text-[var(--muted)]">
-                            {sub.manuscriptId}, {sub.articleType},{" "}
-                            {sub.journalTitle}
+                            {sub.manuscriptId}, {sub.articleType}, {sub.journal.title}
                           </p>
                         </div>
                         <Link
                           href={`/submissions/${sub.id}`}
                           className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-white hover:text-[var(--accent)]"
                         >
-                          {sub.status === "Draft" ? "Resume" : "Track"}
+                          {sub.status === "DRAFT" ? "Resume" : "Track"}
                         </Link>
                       </div>
 
@@ -313,21 +310,21 @@ function DashboardInner() {
                         <span>
                           Updated{" "}
                           <span className="font-medium text-[var(--ink)]">
-                            {sub.updatedAt}
+                            {new Date(sub.updatedAt).toLocaleDateString()}
                           </span>
                         </span>
                         {sub.submittedAt && (
                           <span>
                             Submitted{" "}
                             <span className="font-medium text-[var(--ink)]">
-                              {sub.submittedAt}
+                              {new Date(sub.submittedAt).toLocaleDateString()}
                             </span>
                           </span>
                         )}
                         <span>
                           Authors{" "}
                           <span className="font-medium text-[var(--ink)]">
-                            {sub.authors.length}
+                            {authorCount}
                           </span>
                         </span>
                       </div>
@@ -338,20 +335,19 @@ function DashboardInner() {
             </div>
           </section>
 
-          {/* Sidebar */}
           <aside className="space-y-4">
             <div className="card p-5">
-              <h2 className="text-sm font-semibold text-[var(--ink)]">
-                Quick actions
-              </h2>
+              <h2 className="text-sm font-semibold text-[var(--ink)]">Quick actions</h2>
               <div className="mt-3 space-y-1.5">
-                {[
-                  ["/submissions/new", "Submit a manuscript"],
-                  ["/journals", "Browse journals"],
-                  ["/authors/guidelines", "Author guidelines"],
-                  ["/authors/fees", "Fees and waivers"],
-                  ["/search", "Search articles"],
-                ].map(([href, label]) => (
+                {(
+                  [
+                    ["/submissions/new", "Submit a manuscript"],
+                    ["/journals", "Browse journals"],
+                    ["/authors/guidelines", "Author guidelines"],
+                    ["/authors/fees", "Fees and waivers"],
+                    ["/search", "Search articles"],
+                  ] as const
+                ).map(([href, label]) => (
                   <Link
                     key={href}
                     href={href}
@@ -369,10 +365,7 @@ function DashboardInner() {
                 <h2 className="text-sm font-semibold text-[var(--ink)]">
                   Recent activity
                 </h2>
-                <Link
-                  href="/notifications"
-                  className="text-xs font-semibold text-[var(--accent)]"
-                >
+                <Link href="/notifications" className="text-xs font-semibold text-[var(--accent)]">
                   View all
                 </Link>
               </div>
@@ -387,70 +380,21 @@ function DashboardInner() {
                         <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
                       )}
                       <div className={!n.unread ? "pl-3.5" : ""}>
-                        <p className="text-xs font-semibold text-[var(--ink)]">
-                          {n.title}
-                        </p>
+                        <p className="text-xs font-semibold text-[var(--ink)]">{n.title}</p>
                         <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
                           {n.body}
                         </p>
                         <p className="mt-1.5 text-[10px] text-[var(--muted)]">
-                          {n.time}
+                          {new Date(n.createdAt).toLocaleString()}
                         </p>
                       </div>
                     </div>
                   </li>
                 ))}
+                {notifications.length === 0 && (
+                  <li className="text-xs text-[var(--muted)]">No notifications yet.</li>
+                )}
               </ul>
-            </div>
-
-            <div className="card overflow-hidden">
-              <div className="bg-[var(--accent-soft)] px-5 py-4">
-                <h2 className="text-sm font-semibold text-[var(--accent)]">
-                  Author profile
-                </h2>
-              </div>
-              <div className="space-y-3 p-5 text-sm">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-                    Email
-                  </p>
-                  <p className="mt-0.5 font-medium text-[var(--ink)]">
-                    {user.email}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-                    Role
-                  </p>
-                  <p className="mt-0.5 font-medium capitalize text-[var(--ink)]">
-                    {user.role}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-                    Interests
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {(user.researchInterests.length
-                      ? user.researchInterests
-                      : ["Not set"]
-                    ).map((interest) => (
-                      <span
-                        key={interest}
-                        className="rounded-full bg-[var(--surface)] px-2.5 py-1 text-[11px] text-[var(--muted)]"
-                      >
-                        {interest}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <Link
-                  href="/profile"
-                  className="mt-2 inline-flex text-xs font-semibold text-[var(--accent)] hover:underline"
-                >
-                  Manage profile →
-                </Link>
-              </div>
             </div>
           </aside>
         </div>
@@ -484,9 +428,7 @@ function StatCard({
   };
 
   return (
-    <div
-      className={`rounded-2xl border bg-gradient-to-br p-5 shadow-sm ${tones[tone]}`}
-    >
+    <div className={`rounded-2xl border bg-gradient-to-br p-5 shadow-sm ${tones[tone]}`}>
       <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
         {label}
       </p>

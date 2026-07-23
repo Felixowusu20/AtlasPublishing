@@ -114,12 +114,15 @@ export function SiteHeader() {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
+  if (pathname.startsWith("/admin")) return null;
+
   function handleSignOut() {
-    logout();
-    setAccountOpen(false);
-    setMobileOpen(false);
-    setOpen(null);
-    router.replace("/login");
+    void logout().then(() => {
+      setAccountOpen(false);
+      setMobileOpen(false);
+      setOpen(null);
+      router.replace("/login");
+    });
   }
 
   return (
@@ -384,6 +387,9 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 export function SiteFooter() {
+  const pathname = usePathname();
+  if (pathname.startsWith("/admin")) return null;
+
   return (
     <footer className="mt-auto border-t border-[var(--line)] bg-[var(--ink)] text-slate-300">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">

@@ -9,132 +9,103 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  DEMO_SESSION_KEY,
-  DEMO_USERS_KEY,
-  seedUsers,
-  type DemoRole,
-  type DemoUser,
-} from "@/lib/auth";
 
-type PublicUser = Omit<DemoUser, "password">;
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  institution: string;
+  orcid: string;
+  researchInterests: string[];
+};
 
 type AuthContextValue = {
-  user: PublicUser | null;
+  user: AuthUser | null;
   ready: boolean;
-  login: (email: string, password: string) => { ok: boolean; error?: string };
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   register: (input: {
     name: string;
     email: string;
     password: string;
     institution: string;
-    role: DemoRole;
     orcid?: string;
-  }) => { ok: boolean; error?: string };
-  logout: () => void;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function toPublic(user: DemoUser): PublicUser {
-  const { password: _p, ...rest } = user;
-  return rest;
-}
-
-function readUsers(): DemoUser[] {
-  if (typeof window === "undefined") return seedUsers;
-  try {
-    const raw = localStorage.getItem(DEMO_USERS_KEY);
-    if (!raw) {
-      localStorage.setItem(DEMO_USERS_KEY, JSON.stringify(seedUsers));
-      return seedUsers;
-    }
-    return JSON.parse(raw) as DemoUser[];
-  } catch {
-    return seedUsers;
-  }
-}
-
-function writeUsers(users: DemoUser[]) {
-  localStorage.setItem(DEMO_USERS_KEY, JSON.stringify(users));
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<PublicUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    readUsers();
+  const refresh = useCallback(async () => {
     try {
-      const session = localStorage.getItem(DEMO_SESSION_KEY);
-      if (session) setUser(JSON.parse(session) as PublicUser);
+      const res = await fetch("/api/auth/me");
+      if (!res.ok) {
+        setUser(null);
+        return;
+      }
+      const data = await res.json();
+      setUser(data.user);
     } catch {
-      localStorage.removeItem(DEMO_SESSION_KEY);
+      setUser(null);
     }
-    setReady(true);
   }, []);
 
-  const login = useCallback((email: string, password: string) => {
-    const users = readUsers();
-    const found = users.find(
-      (u) => u.email.toLowerCase() === email.trim().toLowerCase(),
-    );
-    if (!found || found.password !== password) {
-      return { ok: false, error: "Invalid email or password." };
-    }
-    const pub = toPublic(found);
-    localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(pub));
-    setUser(pub);
+  useEffect(() => {
+    void (async () => {
+      await refresh();
+      setReady(true);
+    })();
+  }, [refresh]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error ?? "Login failed" };
+    setUser(data.user);
     return { ok: true };
   }, []);
 
   const register = useCallback(
-    (input: {
+    async (input: {
       name: string;
       email: string;
       password: string;
       institution: string;
-      role: DemoRole;
       orcid?: string;
     }) => {
-      const users = readUsers();
-      if (users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
-        return { ok: false, error: "An account with this email already exists." };
-      }
-      if (input.password.length < 6) {
-        return { ok: false, error: "Password must be at least 6 characters." };
-      }
-      const next: DemoUser = {
-        id: `u-${Date.now()}`,
-        name: input.name.trim(),
-        email: input.email.trim().toLowerCase(),
-        password: input.password,
-        role: input.role,
-        institution: input.institution.trim(),
-        orcid: input.orcid?.trim() || undefined,
-        researchInterests: [],
-      };
-      writeUsers([...users, next]);
-      const pub = toPublic(next);
-      localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(pub));
-      setUser(pub);
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data.error ?? "Registration failed" };
+      setUser(data.user);
       return { ok: true };
     },
     [],
   );
 
-  const logout = useCallback(() => {
-    try {
-      localStorage.removeItem(DEMO_SESSION_KEY);
-    } catch {
-      // ignore storage errors in demo
-    }
+  const logout = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, ready, login, register, logout }),
-    [user, ready, login, register, logout],
+    () => ({ user, ready, login, register, logout, refresh }),
+    [user, ready, login, register, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

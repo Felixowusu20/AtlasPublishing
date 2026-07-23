@@ -1,14 +1,39 @@
 import { HeroSlider } from "@/components/hero-slider";
-import {
-  announcements,
-  journals,
-  publishedArticles,
-  publishingWorkflow,
-} from "@/data/mock";
+import { publishingWorkflow } from "@/data/mock";
+import { prisma } from "@/lib/db";
+import { journalCardColor } from "@/lib/journal-colors";
 import Link from "next/link";
 
-export default function HomePage() {
-  const latest = publishedArticles.slice(0, 4);
+export const dynamic = "force-dynamic";
+
+async function getHomeData() {
+  try {
+    const [articles, announcements, journals] = await Promise.all([
+      prisma.publishedArticle.findMany({
+        where: { isActive: true },
+        include: { journal: true },
+        orderBy: { publishedAt: "desc" },
+        take: 4,
+      }),
+      prisma.announcement.findMany({
+        where: { isActive: true },
+        orderBy: { publishedAt: "desc" },
+        take: 5,
+      }),
+      prisma.journal.findMany({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
+        take: 6,
+      }),
+    ]);
+    return { articles, announcements, journals };
+  } catch {
+    return { articles: [], announcements: [], journals: [] };
+  }
+}
+
+export default async function HomePage() {
+  const { articles, announcements, journals } = await getHomeData();
 
   return (
     <div>
@@ -26,31 +51,22 @@ export default function HomePage() {
           </div>
 
           <ol className="relative mt-10 grid gap-8 sm:grid-cols-5 sm:gap-4">
-            {/* Connecting line across steps (desktop) */}
             <div
               className="pointer-events-none absolute left-[10%] right-[10%] top-5 hidden h-px bg-[var(--line)] sm:block"
               aria-hidden
             />
-            <div
-              className="pointer-events-none absolute left-[10%] right-[10%] top-5 hidden h-px bg-gradient-to-r from-transparent via-[var(--accent)]/35 to-transparent sm:block"
-              aria-hidden
-            />
-
             {publishingWorkflow.map((item, index) => (
               <li key={item.step} className="relative flex flex-col items-center text-center">
                 <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-[var(--accent)] bg-white text-sm font-semibold text-[var(--accent)] shadow-[0_0_0_6px_var(--paper)]">
                   {item.step}
                 </div>
-
-                {/* Mobile vertical connector */}
                 {index < publishingWorkflow.length - 1 && (
                   <div
                     className="absolute left-1/2 top-10 h-[calc(100%-0.5rem)] w-px -translate-x-1/2 bg-[var(--line)] sm:hidden"
                     aria-hidden
                   />
                 )}
-
-                <div className="mt-4 w-full rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--accent)]/30 hover:shadow-md">
+                <div className="mt-4 w-full rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
                     Step {item.step}
                   </p>
@@ -69,7 +85,6 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
         <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr]">
-          {/* Latest articles */}
           <div>
             <div className="flex items-end justify-between gap-3">
               <div>
@@ -88,7 +103,12 @@ export default function HomePage() {
               </Link>
             </div>
             <div className="mt-5 space-y-3">
-              {latest.map((article) => (
+              {articles.length === 0 && (
+                <p className="rounded-xl border border-[var(--line)] bg-white p-6 text-sm text-[var(--muted)]">
+                  No published articles yet. Add them from the admin Latest Articles CMS.
+                </p>
+              )}
+              {articles.map((article) => (
                 <Link
                   key={article.id}
                   href={`/articles/${article.slug}`}
@@ -103,11 +123,6 @@ export default function HomePage() {
                         Open Access
                       </span>
                     )}
-                    {article.issue === "Early View" && (
-                      <span className="rounded-full bg-amber-50 px-2.5 py-0.5 font-medium text-amber-800">
-                        Early View
-                      </span>
-                    )}
                   </div>
                   <h3 className="mt-2 text-base font-semibold text-[var(--ink)]">
                     {article.title}
@@ -119,30 +134,43 @@ export default function HomePage() {
                     {article.abstract}
                   </p>
                   <p className="mt-3 text-xs text-[var(--muted)]">
-                    {article.journalTitle}, {article.publishedAt}, DOI{" "}
-                    {article.doi}
+                    {article.journal.title},{" "}
+                    {article.publishedAt.toISOString().slice(0, 10)}
+                    {article.doi ? `, DOI ${article.doi}` : ""}
                   </p>
                 </Link>
               ))}
             </div>
           </div>
 
-          {/* Announcements + journals */}
           <aside className="space-y-8">
             <div>
               <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
                 Announcements
               </h2>
               <ul className="mt-4 space-y-3">
+                {announcements.length === 0 && (
+                  <li className="card p-4 text-sm text-[var(--muted)]">
+                    No announcements yet.
+                  </li>
+                )}
                 {announcements.map((a) => (
                   <li key={a.id} className="card p-4">
-                    <p className="text-xs text-[var(--muted)]">{a.date}</p>
-                    <Link
-                      href={a.href}
-                      className="mt-1 block text-sm font-semibold text-[var(--ink)] hover:text-[var(--accent)]"
-                    >
-                      {a.title}
-                    </Link>
+                    <p className="text-xs text-[var(--muted)]">
+                      {a.publishedAt.toISOString().slice(0, 10)}
+                    </p>
+                    {a.href ? (
+                      <Link
+                        href={a.href}
+                        className="mt-1 block text-sm font-semibold text-[var(--ink)] hover:text-[var(--accent)]"
+                      >
+                        {a.title}
+                      </Link>
+                    ) : (
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                        {a.title}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
                       {a.summary}
                     </p>
@@ -164,7 +192,12 @@ export default function HomePage() {
                 </Link>
               </div>
               <div className="mt-4 space-y-2">
-                {journals.map((j) => (
+                {journals.length === 0 && (
+                  <p className="rounded-xl border border-[var(--line)] bg-white p-4 text-sm text-[var(--muted)]">
+                    Add journals in the admin CMS.
+                  </p>
+                )}
+                {journals.map((j, index) => (
                   <Link
                     key={j.id}
                     href={`/journals/${j.slug}`}
@@ -172,7 +205,7 @@ export default function HomePage() {
                   >
                     <span
                       className="flex h-12 w-9 items-end justify-center rounded pb-1.5 text-[9px] font-bold text-white"
-                      style={{ background: j.coverColor }}
+                      style={{ background: journalCardColor(j.coverColor, index) }}
                     >
                       {j.shortTitle}
                     </span>
@@ -181,8 +214,8 @@ export default function HomePage() {
                         {j.title}
                       </span>
                       <span className="block text-xs text-[var(--muted)]">
-                        {j.openAccess ? "Open Access" : "Subscription"}, IF{" "}
-                        {j.impactFactor ?? "N/A"}
+                        {j.openAccess ? "Open Access" : "Subscription"}
+                        {j.impactFactor ? `, IF ${j.impactFactor}` : ""}
                       </span>
                     </span>
                   </Link>
