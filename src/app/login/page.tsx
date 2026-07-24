@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import {
+  AUTH_IMAGES,
+  AuthSplitLayout,
+} from "@/components/auth-split-layout";
 import { PasswordField } from "@/components/password-field";
 
 function LoginForm() {
@@ -34,23 +38,22 @@ function LoginForm() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4 py-12">
-      <div className="card p-7 sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
+    <AuthSplitLayout
+      imageSrc={AUTH_IMAGES.authorLogin}
+      imageAlt="Sunlit university library reading room"
+      brand="Atlas Academic Publishing"
+      headline="Manuscripts tracked from submission to publication."
+      subhead="Manage revisions, feedback, and editorial progress."
+    >
+      <div className="auth-card">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
           Sign in
         </p>
-        <h1 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+        <h1 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
           Welcome back
         </h1>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          Author accounts only. Reviewers and admins use the{" "}
-          <Link href="/admin/login" className="font-semibold text-[var(--accent)]">
-            admin panel
-          </Link>
-          .
-        </p>
 
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
+        <form onSubmit={onSubmit} className="mt-4 space-y-2.5">
           <label className="field">
             <span>Email</span>
             <input
@@ -79,7 +82,7 @@ function LoginForm() {
           </div>
 
           {error && (
-            <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <p className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
               {error}
             </p>
           )}
@@ -89,20 +92,20 @@ function LoginForm() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-[var(--muted)]">
+        <p className="mt-4 text-center text-xs text-[var(--muted)]">
           New author?{" "}
           <Link href="/register" className="font-semibold text-[var(--accent)]">
             Create an account
           </Link>
         </p>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="p-12 text-center text-sm">Loading…</div>}>
+    <Suspense fallback={<div className="grid h-dvh place-items-center text-sm">Loading…</div>}>
       <LoginForm />
     </Suspense>
   );

@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import {
+  AUTH_IMAGES,
+  AuthSplitLayout,
+} from "@/components/auth-split-layout";
 import { PasswordField } from "@/components/password-field";
 
 export default function RegisterPage() {
@@ -52,21 +56,23 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-12">
-      <div className="card p-7 sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
+    <AuthSplitLayout
+      imageSrc={AUTH_IMAGES.authorRegister}
+      imageAlt="Writer’s desk with notebook and coffee"
+      brand="Atlas Academic Publishing"
+      headline="Join authors publishing across Atlas journals."
+      subhead="Submit manuscripts and track peer review."
+    >
+      <div className="auth-card">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
           Create account
         </p>
-        <h1 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+        <h1 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
           Register as an author
         </h1>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          You will receive a welcome email after registration. Sign-ins also
-          trigger an email notification.
-        </p>
 
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
-          <label className="field">
+        <form onSubmit={onSubmit} className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <label className="field sm:col-span-2">
             <span>Full name</span>
             <input
               required
@@ -75,7 +81,7 @@ export default function RegisterPage() {
               placeholder="Dr. Jane Example"
             />
           </label>
-          <label className="field">
+          <label className="field sm:col-span-2">
             <span>Email</span>
             <input
               type="email"
@@ -116,23 +122,27 @@ export default function RegisterPage() {
           />
 
           {error && (
-            <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <p className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700 sm:col-span-2">
               {error}
             </p>
           )}
 
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
+          <button
+            type="submit"
+            className="btn-primary w-full sm:col-span-2"
+            disabled={loading}
+          >
             {loading ? "Creating account…" : "Create account"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-[var(--muted)]">
+        <p className="mt-3 text-center text-xs text-[var(--muted)]">
           Already registered?{" "}
           <Link href="/login" className="font-semibold text-[var(--accent)]">
             Sign in
           </Link>
         </p>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }
