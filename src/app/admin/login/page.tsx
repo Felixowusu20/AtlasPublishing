@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useAdminAuth } from "@/components/admin-auth-provider";
+import {
+  AUTH_IMAGES,
+  AuthSplitLayout,
+} from "@/components/auth-split-layout";
 import { PasswordField } from "@/components/password-field";
 
 export default function AdminLoginPage() {
@@ -32,15 +36,21 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0b1f33] px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
+    <AuthSplitLayout
+      imageSrc={AUTH_IMAGES.adminLogin}
+      imageAlt="Bright modern editorial office"
+      brand="Atlas Admin"
+      headline="Editorial control for journals and submissions."
+      subhead="Review manuscripts and manage CMS content."
+    >
+      <div className="auth-card shadow-xl">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
           Admin access
         </p>
-        <h1 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+        <h1 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
           Sign in to Atlas Admin
         </h1>
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
+        <form onSubmit={onSubmit} className="mt-4 space-y-2.5">
           <label className="field">
             <span>Email</span>
             <input
@@ -58,7 +68,7 @@ export default function AdminLoginPage() {
             autoComplete="current-password"
           />
           {error && (
-            <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <p className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
               {error}
             </p>
           )}
@@ -66,13 +76,13 @@ export default function AdminLoginPage() {
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
-        <p className="mt-5 text-center text-sm text-[var(--muted)]">
+        <p className="mt-4 text-center text-xs text-[var(--muted)]">
           First setup?{" "}
           <Link href="/admin/register" className="font-semibold text-[var(--accent)]">
             Create super admin
           </Link>
         </p>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }

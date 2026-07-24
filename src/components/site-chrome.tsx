@@ -115,6 +115,14 @@ export function SiteHeader() {
   }, []);
 
   if (pathname.startsWith("/admin")) return null;
+  if (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/forgot-password" ||
+    pathname.startsWith("/reset-password")
+  ) {
+    return null;
+  }
 
   function handleSignOut() {
     void logout().then(() => {
@@ -382,6 +390,14 @@ function Chevron({ open }: { open: boolean }) {
 export function SiteFooter() {
   const pathname = usePathname();
   if (pathname.startsWith("/admin")) return null;
+  if (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/forgot-password" ||
+    pathname.startsWith("/reset-password")
+  ) {
+    return null;
+  }
 
   return (
     <footer className="mt-auto border-t border-[var(--line)] bg-[var(--ink)] text-slate-300">
