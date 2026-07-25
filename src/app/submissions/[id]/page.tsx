@@ -6,7 +6,11 @@ import { StatusBadge } from "@/components/status-badge";
 import { RequireAuth } from "@/components/require-auth";
 import { ManuscriptViewer } from "@/components/manuscript-viewer";
 import { ResubmitPanel } from "@/components/resubmit-panel";
-import { canAuthorResubmit, uiStatus } from "@/lib/submission-utils";
+import {
+  articleDownloadPath,
+  canAuthorResubmit,
+  uiStatus,
+} from "@/lib/submission-utils";
 
 type Feedback = {
   id: string;
@@ -32,6 +36,14 @@ type Submission = {
   feedback: Feedback[];
   updatedAt: string;
   submittedAt?: string | null;
+  publishedArticle?: {
+    id: string;
+    slug: string;
+    title: string;
+    manuscriptUrl?: string | null;
+    publishedAt?: string | null;
+    abstract?: string | null;
+  } | null;
 };
 
 function Detail({ id }: { id: string }) {
@@ -66,7 +78,12 @@ function Detail({ id }: { id: string }) {
     );
   }
 
-  const showResubmit = canAuthorResubmit(sub.status, sub.actionRequired);
+  const isPublished = sub.status === "PUBLISHED";
+  const showResubmit = !isPublished && canAuthorResubmit(sub.status, sub.actionRequired);
+  const published = sub.publishedArticle;
+  const downloadHref = published?.slug
+    ? articleDownloadPath(published.slug)
+    : null;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
@@ -86,20 +103,65 @@ function Detail({ id }: { id: string }) {
         {sub.journal.title} · {sub.articleType}
       </p>
 
-      <div className="mt-6">
-        <div className="mb-1.5 flex justify-between text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">
-          <span>Editorial progress</span>
-          <span>{sub.progress}%</span>
+      {isPublished ? (
+        <section className="mt-8 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
+            Published
+          </p>
+          <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+            Your article is live
+          </h2>
+          <p className="mt-2 max-w-xl text-sm text-emerald-950/80">
+            Editorial tracking and resubmission are closed. Download the final
+            Atlas PDF below, or open the public article page.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {downloadHref ? (
+              <a
+                href={downloadHref}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-primary !px-4 !py-2.5 text-sm"
+              >
+                Download article PDF
+              </a>
+            ) : (
+              <span className="rounded-lg bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-500">
+                PDF unavailable
+              </span>
+            )}
+            {published?.slug && (
+              <Link
+                href={`/articles/${published.slug}`}
+                className="btn-secondary !px-4 !py-2.5 text-sm"
+              >
+                View on Atlas
+              </Link>
+            )}
+            <span
+              className="cursor-not-allowed rounded-lg border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--muted)] opacity-50"
+              title="Tracking ends once the article is published"
+            >
+              Track (closed)
+            </span>
+          </div>
+        </section>
+      ) : (
+        <div className="mt-6">
+          <div className="mb-1.5 flex justify-between text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">
+            <span>Editorial progress</span>
+            <span>{sub.progress}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--surface)]">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-all"
+              style={{ width: `${sub.progress}%` }}
+            />
+          </div>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-[var(--surface)]">
-          <div
-            className="h-full rounded-full bg-[var(--accent)] transition-all"
-            style={{ width: `${sub.progress}%` }}
-          />
-        </div>
-      </div>
+      )}
 
-      {sub.actionRequired && (
+      {!isPublished && sub.actionRequired && (
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           {sub.actionRequired}
         </div>
@@ -136,48 +198,50 @@ function Detail({ id }: { id: string }) {
         </section>
       )}
 
-      <section className="mt-8">
-        <h2 className="font-[family-name:var(--font-display)] text-xl">
-          Reviewer feedback
-        </h2>
-        <p className="mt-1 text-xs text-[var(--muted)]">
-          The same feedback is emailed to you when a reviewer sends an update.
-        </p>
-        <div className="mt-4 space-y-3">
-          {sub.feedback.length === 0 && (
-            <p className="text-sm text-[var(--muted)]">
-              No reviewer messages yet.
-            </p>
-          )}
-          {sub.feedback.map((f) => (
-            <article
-              key={f.id}
-              className="rounded-xl border border-[var(--line)] bg-white p-4"
-            >
-              <p className="text-xs text-[var(--muted)]">
-                {f.message.startsWith("Author response")
-                  ? "You"
-                  : f.reviewer.name}{" "}
-                · {uiStatus(f.status as Parameters<typeof uiStatus>[0])} ·{" "}
-                {new Date(f.createdAt).toLocaleString()}
+      {!isPublished && (
+        <section className="mt-8">
+          <h2 className="font-[family-name:var(--font-display)] text-xl">
+            Reviewer feedback
+          </h2>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            The same feedback is emailed to you when a reviewer sends an update.
+          </p>
+          <div className="mt-4 space-y-3">
+            {sub.feedback.length === 0 && (
+              <p className="text-sm text-[var(--muted)]">
+                No reviewer messages yet.
               </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm">{f.message}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+            )}
+            {sub.feedback.map((f) => (
+              <article
+                key={f.id}
+                className="rounded-xl border border-[var(--line)] bg-white p-4"
+              >
+                <p className="text-xs text-[var(--muted)]">
+                  {f.message.startsWith("Author response")
+                    ? "You"
+                    : f.reviewer.name}{" "}
+                  · {uiStatus(f.status as Parameters<typeof uiStatus>[0])} ·{" "}
+                  {new Date(f.createdAt).toLocaleString()}
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm">{f.message}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="mt-8 card p-5">
         <h2 className="text-sm font-semibold">Abstract</h2>
         <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
-          {sub.abstract}
+          {published?.abstract || sub.abstract}
         </p>
         <p className="mt-3 text-xs text-[var(--muted)]">
           Keywords: {sub.keywords.join(", ")}
         </p>
       </section>
 
-      {sub.manuscriptUrl && (
+      {!isPublished && sub.manuscriptUrl && (
         <section className="mt-8">
           <ManuscriptViewer
             url={sub.manuscriptUrl}

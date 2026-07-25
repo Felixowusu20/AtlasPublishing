@@ -143,6 +143,8 @@ model PublishedArticle {
   affiliations  String[] @default([])
   journalId     String
   journal       Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  submissionId  String?  @unique
+  submission    Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
   publishedAt   DateTime @default(now())
   receivedAt    DateTime?
   acceptedAt    DateTime?
@@ -156,6 +158,7 @@ model PublishedArticle {
   keywords      String[] @default([])
   coverImageUrl String?
   coverImagePublicId String?
+  manuscriptUrl String?
   citations     Int      @default(0)
   downloads     Int      @default(0)
   views         Int      @default(0)
@@ -190,11 +193,18 @@ model Submission {
   ethicsStatement    String?
   manuscriptUrl      String?
   manuscriptPublicId String?
+  /// Full article body prepared for Atlas template / Typst PDF (Markdown-ish).
+  productionBody     String?
+  /// Uploaded figures for the production body: [{ id, url, filename, caption }]
+  productionFigures  Json?
+  /// Set when the reviewer marks the full manuscript as ready for publish.
+  manuscriptReadyAt  DateTime?
   actionRequired     String?
   authorsJson        Json?
   submittedAt        DateTime         @default(now())
   feedback           ReviewFeedback[]
   notifications      Notification[]
+  publishedArticle   PublishedArticle?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 

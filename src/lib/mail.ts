@@ -16,34 +16,49 @@ function getTransporter() {
     port,
     secure: port === 465,
     auth: { user, pass },
+    // Fail fast instead of hanging requests when SMTP is unreachable
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
   });
 }
 
+/**
+ * Send an email. Never throws — SMTP failures are logged and reported
+ * via the return value so fire-and-forget callers can't crash the server.
+ */
 export async function sendEmail(options: {
   to: string;
   subject: string;
   html: string;
   text?: string;
-}) {
+}): Promise<{ ok: boolean; skipped: boolean; error?: string }> {
   const transporter = getTransporter();
   if (!transporter) {
     console.info(`[mail:dry-run] to=${options.to} subject=${options.subject}`);
-    return { ok: false as const, skipped: true };
+    return { ok: false, skipped: true };
   }
 
   const from =
     process.env.SMTP_FROM ??
     `Atlas Academic Publishing <${process.env.SMTP_USER}>`;
 
-  await transporter.sendMail({
-    from,
-    to: options.to,
-    subject: options.subject,
-    html: options.html,
-    text: options.text,
-  });
-
-  return { ok: true as const, skipped: false };
+  try {
+    await transporter.sendMail({
+      from,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
+    return { ok: true, skipped: false };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[mail] failed to send "${options.subject}" to ${options.to}: ${message}`,
+    );
+    return { ok: false, skipped: false, error: message };
+  }
 }
 
 export function welcomeEmailHtml(name: string) {
@@ -153,5 +168,49 @@ export function passwordResetEmailHtml(opts: {
     <p>We received a request to reset the password for your author account. Click the button below to choose a new password. This link expires in 1 hour.</p>
     <p><a href="${opts.resetUrl}" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Reset password</a></p>
     <p style="color:#5b6b7c;font-size:13px">If you did not request this, you can ignore this email. Your password will stay the same.</p>
+  </div>`;
+}
+
+export function articlePublishedEmailHtml(opts: {
+  authorName: string;
+  title: string;
+  manuscriptId: string;
+  journalTitle: string;
+  articleUrl: string;
+  pdfUrl?: string | null;
+}) {
+  const downloadBlock = opts.pdfUrl
+    ? `<p style="margin:24px 0 8px">
+      <a href="${opts.pdfUrl}" style="background:#0f6b6a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">
+        Download your published article (PDF)
+      </a>
+    </p>
+    <p style="margin:8px 0 20px">
+      <a href="${opts.articleUrl}" style="color:#0f6b6a;font-size:14px">View the article page on Atlas →</a>
+    </p>`
+    : `<p>
+      <a href="${opts.articleUrl}" style="background:#0f6b6a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">
+        View your published article
+      </a>
+    </p>`;
+
+  return `
+  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
+    <h1 style="font-size:22px">Congratulations — your article is published</h1>
+    <p>Dear ${opts.authorName},</p>
+    <p>
+      We are delighted to congratulate you on the publication of your manuscript
+      <strong>${opts.title}</strong> (${opts.manuscriptId}) in
+      <em>${opts.journalTitle}</em>.
+    </p>
+    <p>
+      Your work is now live on Atlas Academic Publishing. Use the button below to
+      download the final article PDF, and share the article page with colleagues.
+    </p>
+    ${downloadBlock}
+    <p style="margin-top:20px;color:#5b6b7c;font-size:14px">
+      Thank you for publishing with Atlas. We look forward to your future submissions.
+    </p>
+    <p style="color:#5b6b7c;font-size:13px">Atlas Academic Publishing</p>
   </div>`;
 }

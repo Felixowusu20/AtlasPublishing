@@ -12,6 +12,15 @@ export async function GET() {
     where: { authorId: session.sub },
     include: {
       journal: true,
+      publishedArticle: {
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          manuscriptUrl: true,
+          publishedAt: true,
+        },
+      },
       feedback: {
         orderBy: { createdAt: "desc" },
         take: 5,

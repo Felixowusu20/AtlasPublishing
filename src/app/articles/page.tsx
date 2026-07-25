@@ -1,5 +1,80 @@
 import Link from "next/link";
+import { ArticleMetrics } from "@/components/article-metrics";
 import { publishedArticles } from "@/data/mock";
+import { prisma } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+
+type ArticleCard = {
+  id: string;
+  slug: string;
+  title: string;
+  authors: string[];
+  abstract: string;
+  articleType: string;
+  openAccess: boolean;
+  volume: string;
+  issue: string;
+  doi: string;
+  publishedAt: string;
+  journalTitle: string;
+  journalSlug: string;
+  views: number;
+  downloads: number;
+};
+
+async function getArticles(): Promise<ArticleCard[]> {
+  let published: ArticleCard[] = [];
+  try {
+    const rows = await prisma.publishedArticle.findMany({
+      where: { isActive: true },
+      include: { journal: true },
+      orderBy: { publishedAt: "desc" },
+    });
+    published = rows.map((a) => ({
+      id: a.id,
+      slug: a.slug,
+      title: a.title,
+      authors: a.authors,
+      abstract: a.abstract,
+      articleType: a.articleType,
+      openAccess: a.openAccess,
+      volume: a.volume ?? "—",
+      issue: a.issue ?? "Early View",
+      doi: a.doi ?? "Pending",
+      publishedAt: a.publishedAt.toISOString().slice(0, 10),
+      journalTitle: a.journal.title,
+      journalSlug: a.journal.slug,
+      views: a.views,
+      downloads: a.downloads,
+    }));
+  } catch {
+    published = [];
+  }
+
+  const seen = new Set(published.map((a) => a.slug));
+  const demo = publishedArticles
+    .filter((a) => !seen.has(a.slug))
+    .map((a) => ({
+      id: a.id,
+      slug: a.slug,
+      title: a.title,
+      authors: a.authors,
+      abstract: a.abstract,
+      articleType: a.articleType as string,
+      openAccess: a.openAccess,
+      volume: a.volume,
+      issue: a.issue,
+      doi: a.doi,
+      publishedAt: a.publishedAt,
+      journalTitle: a.journalTitle,
+      journalSlug: a.journalSlug,
+      views: a.views,
+      downloads: a.downloads,
+    }));
+
+  return [...published, ...demo];
+}
 
 export default async function ArticlesPage({
   searchParams,
@@ -7,10 +82,8 @@ export default async function ArticlesPage({
   searchParams: Promise<{ access?: string }>;
 }) {
   const { access } = await searchParams;
-  const list =
-    access === "oa"
-      ? publishedArticles.filter((a) => a.openAccess)
-      : publishedArticles;
+  const all = await getArticles();
+  const list = access === "oa" ? all.filter((a) => a.openAccess) : all;
 
   return (
     <div className="page-wrap">
@@ -39,6 +112,11 @@ export default async function ArticlesPage({
       </div>
 
       <div className="mt-8 space-y-4">
+        {list.length === 0 && (
+          <p className="card p-6 text-sm text-[var(--muted)]">
+            No articles published yet.
+          </p>
+        )}
         {list.map((article) => (
           <article key={article.id} className="card p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
@@ -77,7 +155,10 @@ export default async function ArticlesPage({
                 <span>{article.publishedAt}</span>
               </div>
               <div className="flex items-center gap-3">
-                <span>{article.views} views</span>
+                <ArticleMetrics
+                  views={article.views}
+                  downloads={article.downloads}
+                />
                 <Link
                   href={`/articles/${article.slug}`}
                   className="font-semibold text-[var(--accent)]"

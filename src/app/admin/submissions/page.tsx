@@ -35,7 +35,22 @@ export default function AdminSubmissionsPage() {
       </h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
         Review manuscripts and send feedback. Authors get dashboard + email
-        updates and progress changes instantly.
+        updates and progress changes instantly. After acceptance, write the
+        full article in{" "}
+        <Link
+          href="/admin/manuscripts"
+          className="font-semibold text-[var(--accent)]"
+        >
+          Full manuscripts
+        </Link>
+        , then go live from{" "}
+        <Link
+          href="/admin/publishedArticles"
+          className="font-semibold text-[var(--accent)]"
+        >
+          Publish papers
+        </Link>
+        .
       </p>
 
       <div className="mt-6 space-y-3">
