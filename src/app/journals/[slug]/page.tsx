@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArticleMetrics } from "@/components/article-metrics";
 import {
   getBoardByJournal,
   getIssuesByJournal,
@@ -231,6 +232,11 @@ export default async function JournalDetailPage({
                     {a.authors.join(", ")}
                     {a.pages ? `, pp. ${a.pages}` : ""}
                   </p>
+                  <ArticleMetrics
+                    views={a.views}
+                    downloads={a.downloads}
+                    className="mt-2"
+                  />
                 </Link>
               ))}
             </div>

@@ -13,6 +13,16 @@ export async function GET(_request: Request, { params }: Params) {
     where: { id, authorId: session.sub },
     include: {
       journal: true,
+      publishedArticle: {
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          manuscriptUrl: true,
+          publishedAt: true,
+          abstract: true,
+        },
+      },
       feedback: {
         orderBy: { createdAt: "desc" },
         include: {

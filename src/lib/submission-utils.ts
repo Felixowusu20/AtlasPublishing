@@ -60,6 +60,16 @@ export function canAuthorResubmit(
   status: string,
   actionRequired?: string | null,
 ) {
+  // Terminal / production states never allow resubmit
+  if (
+    status === "PUBLISHED" ||
+    status === "REJECTED" ||
+    status === "ACCEPTED" ||
+    status === "IN_PRODUCTION" ||
+    status === "DRAFT"
+  ) {
+    return false;
+  }
   if (actionRequired) return true;
   return (
     status === "MAJOR_REVISION" ||
@@ -67,4 +77,9 @@ export function canAuthorResubmit(
     status === "UNDER_REVIEW" ||
     status === "TECHNICAL_CHECK"
   );
+}
+
+/** Public PDF download path for a published article slug. */
+export function articleDownloadPath(slug: string) {
+  return `/api/articles/${encodeURIComponent(slug)}/download`;
 }

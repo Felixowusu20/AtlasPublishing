@@ -10,6 +10,7 @@ type Counts = {
   articles: number;
   announcements: number;
   reviewers: number;
+  publishQueue: number;
 };
 
 export default function AdminHomePage() {
@@ -18,7 +19,7 @@ export default function AdminHomePage() {
 
   useEffect(() => {
     void (async () => {
-      const [subs, journals, articles, announcements, reviewers] =
+      const [subs, journals, articles, announcements, reviewers, publish] =
         await Promise.all([
           fetch("/api/admin/submissions").then((r) => r.json()),
           fetch("/api/admin/journals").then((r) => r.json()),
@@ -27,6 +28,7 @@ export default function AdminHomePage() {
           user?.role === "SUPER_ADMIN"
             ? fetch("/api/admin/reviewers").then((r) => r.json())
             : Promise.resolve({ reviewers: [] }),
+          fetch("/api/admin/publish-queue").then((r) => r.json()),
         ]);
       setCounts({
         submissions: subs.submissions?.length ?? 0,
@@ -34,6 +36,7 @@ export default function AdminHomePage() {
         articles: articles.articles?.length ?? 0,
         announcements: announcements.announcements?.length ?? 0,
         reviewers: reviewers.reviewers?.length ?? 0,
+        publishQueue: publish.queue?.length ?? 0,
       });
     })();
   }, [user?.role]);
@@ -48,7 +51,7 @@ export default function AdminHomePage() {
       <p className="mt-2 text-sm text-[var(--muted)]">
         {user.role === "SUPER_ADMIN"
           ? "Manage CMS content, journals, reviewers, and the submission inbox."
-          : "Review manuscripts and send feedback to authors."}
+          : "Review manuscripts, prepare full articles, and publish accepted papers."}
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -56,6 +59,16 @@ export default function AdminHomePage() {
           label="Inbox"
           value={counts?.submissions}
           href="/admin/submissions"
+        />
+        <Stat
+          label="Full manuscripts"
+          value={counts?.publishQueue}
+          href="/admin/manuscripts"
+        />
+        <Stat
+          label="Publish queue"
+          value={counts?.publishQueue}
+          href="/admin/publishedArticles"
         />
         {user.role === "SUPER_ADMIN" && (
           <>

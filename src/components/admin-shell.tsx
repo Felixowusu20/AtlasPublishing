@@ -2,36 +2,54 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 import { initials } from "@/lib/session-client";
 
 const nav = [
-  { href: "/admin", label: "Overview", roles: ["SUPER_ADMIN", "REVIEWER"] },
+  { href: "/admin", label: "Overview", short: "Home", roles: ["SUPER_ADMIN", "REVIEWER"] },
   {
     href: "/admin/submissions",
     label: "Submission inbox",
+    short: "Inbox",
     roles: ["SUPER_ADMIN", "REVIEWER"],
   },
-  { href: "/admin/hero", label: "Hero CMS", roles: ["SUPER_ADMIN"] },
+  {
+    href: "/admin/manuscripts",
+    label: "Full manuscripts",
+    short: "Manuscripts",
+    roles: ["SUPER_ADMIN", "REVIEWER"],
+  },
+  {
+    href: "/admin/publishedArticles",
+    label: "Publish papers",
+    short: "Publish",
+    roles: ["SUPER_ADMIN", "REVIEWER"],
+  },
+  { href: "/admin/hero", label: "Hero CMS", short: "Hero", roles: ["SUPER_ADMIN"] },
   {
     href: "/admin/articles",
     label: "Latest articles",
-    roles: ["SUPER_ADMIN"],
+    short: "Articles",
+    roles: ["SUPER_ADMIN", "REVIEWER"],
   },
   {
     href: "/admin/announcements",
     label: "Announcements",
+    short: "News",
     roles: ["SUPER_ADMIN"],
   },
-  { href: "/admin/journals", label: "Journals", roles: ["SUPER_ADMIN"] },
-  { href: "/admin/reviewers", label: "Reviewers", roles: ["SUPER_ADMIN"] },
+  { href: "/admin/journals", label: "Journals", short: "Journals", roles: ["SUPER_ADMIN"] },
+  { href: "/admin/reviewers", label: "Reviewers", short: "Reviewers", roles: ["SUPER_ADMIN"] },
 ];
+
+const SIDEBAR_KEY = "atlas-admin-sidebar-collapsed";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const { user, ready, logout } = useAdminAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
 
   const isAuthPage =
     pathname === "/admin/login" || pathname === "/admin/register";
@@ -40,6 +58,26 @@ export function AdminShell({ children }: { children: ReactNode }) {
     if (!ready || isAuthPage) return;
     if (!user) router.replace("/admin/login");
   }, [ready, user, router, isAuthPage]);
+
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  function toggleSidebar() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   if (isAuthPage) return <>{children}</>;
 
@@ -55,16 +93,28 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-[#f3f6f9] text-[var(--ink)]">
-      <aside className="hidden w-64 shrink-0 border-r border-[var(--line)] bg-[#0b1f33] text-white lg:flex lg:flex-col">
-        <div className="border-b border-white/10 px-5 py-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-300">
-            Atlas Admin
-          </p>
-          <p className="mt-1 font-[family-name:var(--font-display)] text-lg">
-            Control panel
-          </p>
+      <aside
+        className={`hidden shrink-0 border-r border-[var(--line)] bg-[#0b1f33] text-white transition-[width] duration-200 lg:flex lg:flex-col ${
+          collapsed ? "w-[72px]" : "w-64"
+        }`}
+      >
+        <div
+          className={`border-b border-white/10 ${collapsed ? "px-3 py-4" : "px-5 py-5"}`}
+        >
+          {collapsed ? (
+            <p className="text-center text-xs font-semibold text-teal-300">A</p>
+          ) : (
+            <>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-300">
+                Atlas Admin
+              </p>
+              <p className="mt-1 font-[family-name:var(--font-display)] text-lg">
+                Control panel
+              </p>
+            </>
+          )}
         </div>
-        <nav className="flex-1 space-y-0.5 p-3">
+        <nav className={`flex-1 space-y-0.5 ${collapsed ? "p-2" : "p-3"}`}>
           {links.map((item) => {
             const active =
               item.href === "/admin"
@@ -74,47 +124,78 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block rounded-lg px-3 py-2.5 text-sm transition ${
+                title={item.label}
+                className={`block rounded-lg text-sm transition ${
+                  collapsed ? "px-2 py-2.5 text-center text-[11px]" : "px-3 py-2.5"
+                } ${
                   active
                     ? "bg-white/15 font-semibold text-white"
                     : "text-white/70 hover:bg-white/10 hover:text-white"
                 }`}
               >
-                {item.label}
+                {collapsed ? item.short : item.label}
               </Link>
             );
           })}
         </nav>
-        <div className="border-t border-white/10 p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 text-xs font-semibold">
-              {initials(user.name)}
+        <div className={`border-t border-white/10 ${collapsed ? "p-2" : "p-4"}`}>
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 text-xs font-semibold">
+                {initials(user.name)}
+              </div>
+              <button
+                type="button"
+                title="Sign out"
+                onClick={() => void logout().then(() => router.push("/admin/login"))}
+                className="rounded-lg border border-white/15 px-2 py-1.5 text-[10px] font-semibold text-white/80 hover:bg-white/10"
+              >
+                Out
+              </button>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{user.name}</p>
-              <p className="truncate text-[11px] text-white/50">
-                {user.role === "SUPER_ADMIN" ? "Super admin" : "Reviewer"}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void logout().then(() => router.push("/admin/login"))}
-            className="mt-3 w-full rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10"
-          >
-            Sign out
-          </button>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 text-xs font-semibold">
+                  {initials(user.name)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{user.name}</p>
+                  <p className="truncate text-[11px] text-white/50">
+                    {user.role === "SUPER_ADMIN" ? "Super admin" : "Reviewer"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void logout().then(() => router.push("/admin/login"))}
+                className="mt-3 w-full rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10"
+              >
+                Sign out
+              </button>
+            </>
+          )}
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-[var(--line)] bg-white px-4 py-3 lg:px-8">
-          <div className="lg:hidden">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
-              Atlas Admin
-            </p>
+        <header className="flex items-center justify-between gap-3 border-b border-[var(--line)] bg-white px-4 py-3 lg:px-8">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="hidden rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface)] lg:inline-flex"
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? "» Menu" : "« Menu"}
+            </button>
+            <div className="lg:hidden">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
+                Atlas Admin
+              </p>
+            </div>
           </div>
-          <div className="hidden lg:block" aria-hidden />
           <Link href="/" className="text-xs font-semibold text-[var(--accent)]">
             View site →
           </Link>

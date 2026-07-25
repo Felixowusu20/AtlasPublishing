@@ -1,3 +1,4 @@
+import { ArticleMetrics, formatMetric } from "@/components/article-metrics";
 import { HeroSlider } from "@/components/hero-slider";
 import { publishingWorkflow } from "@/data/mock";
 import { prisma } from "@/lib/db";
@@ -6,38 +7,89 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+type HomeStats = {
+  articleCount: number;
+  journalCount: number;
+  totalViews: number;
+  totalDownloads: number;
+};
+
 async function getHomeData() {
   try {
-    const [articles, announcements, journals] = await Promise.all([
-      prisma.publishedArticle.findMany({
-        where: { isActive: true },
-        include: { journal: true },
-        orderBy: { publishedAt: "desc" },
-        take: 4,
-      }),
-      prisma.announcement.findMany({
-        where: { isActive: true },
-        orderBy: { publishedAt: "desc" },
-        take: 5,
-      }),
-      prisma.journal.findMany({
-        where: { isActive: true },
-        orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
-        take: 6,
-      }),
-    ]);
-    return { articles, announcements, journals };
+    const [articles, announcements, journals, metrics, journalCount] =
+      await Promise.all([
+        prisma.publishedArticle.findMany({
+          where: { isActive: true },
+          include: { journal: true },
+          orderBy: { publishedAt: "desc" },
+          take: 4,
+        }),
+        prisma.announcement.findMany({
+          where: { isActive: true },
+          orderBy: { publishedAt: "desc" },
+          take: 5,
+        }),
+        prisma.journal.findMany({
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
+          take: 6,
+        }),
+        prisma.publishedArticle.aggregate({
+          where: { isActive: true },
+          _count: true,
+          _sum: { views: true, downloads: true },
+        }),
+        prisma.journal.count({ where: { isActive: true } }),
+      ]);
+
+    const stats: HomeStats = {
+      articleCount: metrics._count,
+      journalCount,
+      totalViews: metrics._sum.views ?? 0,
+      totalDownloads: metrics._sum.downloads ?? 0,
+    };
+
+    return { articles, announcements, journals, stats };
   } catch {
-    return { articles: [], announcements: [], journals: [] };
+    return {
+      articles: [],
+      announcements: [],
+      journals: [],
+      stats: null as HomeStats | null,
+    };
   }
 }
 
 export default async function HomePage() {
-  const { articles, announcements, journals } = await getHomeData();
+  const { articles, announcements, journals, stats } = await getHomeData();
 
   return (
     <div>
       <HeroSlider />
+
+      {stats && (
+        <section className="border-b border-[var(--line)] bg-white">
+          <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-px overflow-hidden px-4 py-6 sm:grid-cols-4 sm:px-6">
+            {(
+              [
+                ["Published articles", stats.articleCount],
+                ["Active journals", stats.journalCount],
+                ["Article views", stats.totalViews],
+                ["PDF downloads", stats.totalDownloads],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label} className="px-4 py-2 text-center sm:py-0">
+                <dd className="font-[family-name:var(--font-display)] text-2xl font-semibold text-[var(--ink)] sm:text-3xl">
+                  {formatMetric(value)}
+                </dd>
+                <dt className="mt-1 text-[11px] font-medium uppercase tracking-wider text-[var(--muted)]">
+                  {label}
+                </dt>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
 
       <section className="border-b border-[var(--line)] bg-[var(--surface)]/60">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
@@ -138,6 +190,11 @@ export default async function HomePage() {
                     {article.publishedAt.toISOString().slice(0, 10)}
                     {article.doi ? `, DOI ${article.doi}` : ""}
                   </p>
+                  <ArticleMetrics
+                    views={article.views}
+                    downloads={article.downloads}
+                    className="mt-2"
+                  />
                 </Link>
               ))}
             </div>

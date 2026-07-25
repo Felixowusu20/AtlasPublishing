@@ -7,7 +7,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ResubmitPanel } from "@/components/resubmit-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { initials } from "@/lib/auth";
-import { canAuthorResubmit, uiStatus } from "@/lib/submission-utils";
+import { canAuthorResubmit, uiStatus, articleDownloadPath } from "@/lib/submission-utils";
 import type { SubmissionStatus as UiSubmissionStatus } from "@/lib/types";
 
 type FilterKey = "all" | "action" | "active" | "draft" | "published";
@@ -25,6 +25,13 @@ type ApiSubmission = {
   journal: { title: string };
   authorsJson?: { name: string }[] | null;
   feedback?: { message: string; createdAt: string }[];
+  publishedArticle?: {
+    id: string;
+    slug: string;
+    title: string;
+    manuscriptUrl?: string | null;
+    publishedAt?: string | null;
+  } | null;
 };
 
 type ApiNotification = {
@@ -33,6 +40,15 @@ type ApiNotification = {
   body: string;
   unread: boolean;
   createdAt: string;
+  submissionId?: string | null;
+  submission?: {
+    id: string;
+    status: string;
+    publishedArticle?: {
+      slug: string;
+      manuscriptUrl?: string | null;
+    } | null;
+  } | null;
 };
 
 const filters: { key: FilterKey; label: string }[] = [
@@ -48,6 +64,7 @@ function canResubmit(sub: ApiSubmission) {
 }
 
 function needsAuthorAction(sub: ApiSubmission) {
+  if (sub.status === "PUBLISHED" || sub.status === "REJECTED") return false;
   return (
     Boolean(sub.actionRequired) ||
     sub.status === "MAJOR_REVISION" ||
@@ -310,7 +327,12 @@ function DashboardInner() {
                 const authorCount = Array.isArray(sub.authorsJson)
                   ? sub.authorsJson.length || 1
                   : 1;
-                const showResubmit = canResubmit(sub);
+                const isPublished = sub.status === "PUBLISHED";
+                const showResubmit = !isPublished && canResubmit(sub);
+                const published = sub.publishedArticle;
+                const downloadHref = published?.slug
+                  ? articleDownloadPath(published.slug)
+                  : null;
                 return (
                   <article
                     key={sub.id}
@@ -321,13 +343,14 @@ function DashboardInner() {
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusBadge status={toUiStatus(sub.status)} />
-                            {(sub.actionRequired ||
-                              sub.status === "MAJOR_REVISION" ||
-                              sub.status === "MINOR_REVISION") && (
-                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
-                                Action needed
-                              </span>
-                            )}
+                            {!isPublished &&
+                              (sub.actionRequired ||
+                                sub.status === "MAJOR_REVISION" ||
+                                sub.status === "MINOR_REVISION") && (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+                                  Action needed
+                                </span>
+                              )}
                           </div>
                           <h3 className="mt-2 text-base font-semibold leading-snug text-[var(--ink)] group-hover:text-[var(--accent)]">
                             {sub.title}
@@ -337,26 +360,68 @@ function DashboardInner() {
                           </p>
                         </div>
                         <div className="flex shrink-0 flex-wrap gap-2">
-                          {showResubmit && (
-                            <Link
-                              href={`/submissions/${sub.id}#resubmit`}
-                              className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
-                            >
-                              Resubmit
-                            </Link>
+                          {isPublished ? (
+                            <>
+                              {downloadHref ? (
+                                <a
+                                  href={downloadHref}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                                >
+                                  Download article
+                                </a>
+                              ) : (
+                                <span
+                                  className="rounded-lg bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-500"
+                                  title="PDF not ready yet"
+                                >
+                                  Download unavailable
+                                </span>
+                              )}
+                              <span
+                                className="cursor-not-allowed rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--muted)] opacity-60"
+                                title="Tracking ends once the article is published"
+                              >
+                                Track
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              {showResubmit && (
+                                <Link
+                                  href={`/submissions/${sub.id}#resubmit`}
+                                  className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                                >
+                                  Resubmit
+                                </Link>
+                              )}
+                              <Link
+                                href={
+                                  sub.status === "DRAFT"
+                                    ? "/submissions/new"
+                                    : `/submissions/${sub.id}`
+                                }
+                                className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-white hover:text-[var(--accent)]"
+                              >
+                                {sub.status === "DRAFT" ? "Resume" : "Track"}
+                              </Link>
+                            </>
                           )}
-                          <Link
-                            href={
-                              sub.status === "DRAFT"
-                                ? "/submissions/new"
-                                : `/submissions/${sub.id}`
-                            }
-                            className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-white hover:text-[var(--accent)]"
-                          >
-                            {sub.status === "DRAFT" ? "Resume" : "Track"}
-                          </Link>
                         </div>
                       </div>
+
+                      {isPublished && published?.slug && (
+                        <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2.5 text-xs text-emerald-950">
+                          Live on Atlas.{" "}
+                          <Link
+                            href={`/articles/${published.slug}`}
+                            className="font-semibold underline"
+                          >
+                            Open article page
+                          </Link>
+                        </div>
+                      )}
 
                       <div className="mt-4">
                         <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">
@@ -435,27 +500,47 @@ function DashboardInner() {
                 </Link>
               </div>
               <ul className="mt-3 space-y-3">
-                {notifications.slice(0, 3).map((n) => (
-                  <li
-                    key={n.id}
-                    className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 px-3 py-3"
-                  >
-                    <div className="flex items-start gap-2">
-                      {n.unread && (
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
-                      )}
-                      <div className={!n.unread ? "pl-3.5" : ""}>
-                        <p className="text-xs font-semibold text-[var(--ink)]">{n.title}</p>
-                        <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
-                          {n.body}
-                        </p>
-                        <p className="mt-1.5 text-[10px] text-[var(--muted)]">
-                          {new Date(n.createdAt).toLocaleString()}
-                        </p>
+                {notifications.slice(0, 3).map((n) => {
+                  const published = n.submission?.publishedArticle;
+                  const isPublished =
+                    n.submission?.status === "PUBLISHED" ||
+                    n.title.toLowerCase().includes("published");
+                  const downloadHref =
+                    published?.slug && published.manuscriptUrl
+                      ? articleDownloadPath(published.slug)
+                      : null;
+                  return (
+                    <li
+                      key={n.id}
+                      className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 px-3 py-3"
+                    >
+                      <div className="flex items-start gap-2">
+                        {n.unread && (
+                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
+                        )}
+                        <div className={!n.unread ? "pl-3.5" : ""}>
+                          <p className="text-xs font-semibold text-[var(--ink)]">{n.title}</p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
+                            {n.body}
+                          </p>
+                          {isPublished && downloadHref && (
+                            <a
+                              href={downloadHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1.5 inline-block text-[11px] font-semibold text-[var(--accent)]"
+                            >
+                              Download PDF →
+                            </a>
+                          )}
+                          <p className="mt-1.5 text-[10px] text-[var(--muted)]">
+                            {new Date(n.createdAt).toLocaleString()}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
                 {notifications.length === 0 && (
                   <li className="text-xs text-[var(--muted)]">No notifications yet.</li>
                 )}

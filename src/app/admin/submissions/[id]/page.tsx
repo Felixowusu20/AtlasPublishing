@@ -98,11 +98,19 @@ export default function AdminSubmissionDetailPage({
     setMessage("");
     setActionRequired("");
     setSubmission(data.submission);
-    setSuccess(
-      data.emailSent
-        ? "Feedback saved and emailed to the author."
-        : "Feedback saved. Email was not sent — check SMTP settings in .env.",
-    );
+    if (status === "ACCEPTED") {
+      setSuccess(
+        data.emailSent
+          ? "Accepted and emailed. Next: write the full manuscript, then publish."
+          : "Accepted (email skipped — check SMTP). Next: write the full manuscript, then publish.",
+      );
+    } else {
+      setSuccess(
+        data.emailSent
+          ? "Feedback saved and emailed to the author."
+          : "Feedback saved. Email was not sent — check SMTP settings in .env.",
+      );
+    }
   }
 
   if (!submission) {
@@ -236,16 +244,50 @@ export default function AdminSubmissionDetailPage({
             </p>
           )}
           {success && (
-            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              {success}
-            </p>
+            <div className="space-y-2 rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
+              <p>{success}</p>
+              {(status === "ACCEPTED" || submission.status === "ACCEPTED") && (
+                <Link
+                  href={`/admin/manuscripts?id=${submission.id}`}
+                  className="btn-primary inline-flex !px-3 !py-2 text-xs"
+                >
+                  Write full manuscript →
+                </Link>
+              )}
+            </div>
           )}
+          {(submission.status === "ACCEPTED" ||
+            submission.status === "IN_PRODUCTION") &&
+            !success && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+                <p className="font-medium">Ready for production</p>
+                <p className="mt-1 text-xs text-amber-900/80">
+                  Write the full article in Full manuscripts, then publish from
+                  Publish papers.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  <Link
+                    href={`/admin/manuscripts?id=${submission.id}`}
+                    className="text-xs font-semibold text-[var(--accent)] underline"
+                  >
+                    Open Full manuscripts →
+                  </Link>
+                  <Link
+                    href={`/admin/publishedArticles?id=${submission.id}`}
+                    className="text-xs font-semibold text-[var(--accent)] underline"
+                  >
+                    Go to Publish papers →
+                  </Link>
+                </div>
+              </div>
+            )}
           <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading ? "Sending…" : "Send feedback"}
           </button>
           <p className="text-[11px] text-[var(--muted)]">
             Feedback is saved to the author dashboard and emailed to the author
-            immediately.
+            immediately. Acceptance does not publish the paper yet — use Publish
+            papers for that.
           </p>
         </form>
       </div>

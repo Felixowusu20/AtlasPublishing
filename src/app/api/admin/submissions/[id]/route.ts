@@ -87,7 +87,9 @@ export async function POST(request: Request, { params }: Params) {
             body.actionRequired === undefined
               ? status === "MAJOR_REVISION" || status === "MINOR_REVISION"
                 ? "Please revise your manuscript, then use Resubmit on your author dashboard to send the corrected file back for review."
-                : null
+                : status === "ACCEPTED"
+                  ? "Accepted — your paper is queued for publication. You will receive an email with the live article link once it is published."
+                  : null
               : body.actionRequired,
           reviewerId:
             body.assignToMe === false

@@ -93,12 +93,21 @@ export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
+  // Hover menus stay inert until after hydration — a mouse already resting on a
+  // nav item can replay onMouseEnter mid-hydration and cause a markup mismatch.
+  const hydrated = useRef(false);
 
-  useEffect(() => {
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    setLastPath(pathname);
     setOpen(null);
     setAccountOpen(false);
     setMobileOpen(false);
-  }, [pathname]);
+  }
+
+  useEffect(() => {
+    hydrated.current = true;
+  }, []);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
@@ -169,20 +178,26 @@ export function SiteHeader() {
             const isOpen = open === item.label;
             const active =
               pathname === item.href ||
-              item.children.some((c) => pathname === c.href.split("?")[0]);
+              pathname.startsWith(`${item.href}/`) ||
+              item.children.some((c) => {
+                const base = c.href.split("?")[0];
+                return pathname === base || pathname.startsWith(`${base}/`);
+              });
 
             return (
               <div
                 key={item.label}
-                className="relative"
-                onMouseEnter={() => setOpen(item.label)}
+                className="group relative"
+                onMouseEnter={() => {
+                  if (hydrated.current) setOpen(item.label);
+                }}
                 onMouseLeave={() => setOpen(null)}
               >
                 <div
                   className={`flex items-center rounded-md transition ${
-                    isOpen || active
+                    active
                       ? "bg-[var(--surface)] text-[var(--ink)]"
-                      : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+                      : "text-[var(--muted)] group-hover:bg-[var(--surface)] group-hover:text-[var(--ink)]"
                   }`}
                 >
                   <Link
@@ -198,6 +213,7 @@ export function SiteHeader() {
                     aria-expanded={isOpen}
                     onClick={(e) => {
                       e.preventDefault();
+                      if (!hydrated.current) return;
                       setOpen((prev) =>
                         prev === item.label ? null : item.label,
                       );
