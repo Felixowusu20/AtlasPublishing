@@ -10,6 +10,12 @@ import {
   articleDownloadPath,
 } from "@/lib/submission-utils";
 import { compileAtlasTypstPdf } from "@/lib/typst-atlas";
+import {
+  allocateNextAtlasDoi,
+  atlasDoiPath,
+  doiToUrl,
+  normalizeDoi,
+} from "@/lib/doi";
 
 /** Accepted manuscripts waiting to be published into the journal template. */
 export async function GET() {
@@ -137,6 +143,19 @@ export async function POST(request: Request) {
       ? new Date(body.receivedAt)
       : submission.submittedAt;
 
+    const publishYear = acceptedAt.getFullYear();
+    let doi = body.doi?.trim() ? normalizeDoi(body.doi) : null;
+    if (!doi) {
+      doi = await allocateNextAtlasDoi(prisma, submission.journal, publishYear);
+    }
+
+    const doiClash = await prisma.publishedArticle.findFirst({
+      where: { doi },
+    });
+    if (doiClash) {
+      return jsonError(`DOI already in use: ${doi}`, 400);
+    }
+
     // Prefer client-provided PDF URL, otherwise generate Atlas Typst PDF now
     let publishedPdfUrl = body.pdfUrl || null;
     if (!publishedPdfUrl) {
@@ -151,7 +170,7 @@ export async function POST(request: Request) {
           abstract: body.abstract,
           keywords: body.keywords ?? submission.keywords,
           articleType: body.articleType,
-          doi: body.doi,
+          doi,
           volume: body.volume,
           issue: body.issue,
           pages: body.pages,
@@ -187,7 +206,7 @@ export async function POST(request: Request) {
           data: {
             title: body.title,
             slug,
-            doi: body.doi || undefined,
+            doi,
             authors: body.authors,
             affiliations: body.affiliations ?? [],
             journalId: submission.journalId,
@@ -237,6 +256,7 @@ export async function POST(request: Request) {
 
     const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const articleUrl = `${base}/articles/${result.slug}`;
+    const doiUrl = result.doi ? `${base}${atlasDoiPath(result.doi)}` : null;
     const pdfDownloadUrl = publishedPdfUrl
       ? `${base}${articleDownloadPath(result.slug)}`
       : null;
@@ -263,6 +283,9 @@ export async function POST(request: Request) {
     return jsonCreated({
       article: result,
       articleUrl,
+      doi: result.doi,
+      doiUrl: result.doi ? doiToUrl(result.doi) : null,
+      atlasDoiUrl: doiUrl,
       pdfUrl: publishedPdfUrl,
       downloadUrl: pdfDownloadUrl,
       emailSent,

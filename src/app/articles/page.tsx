@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArticleMetrics } from "@/components/article-metrics";
+import { ArticleListingCard } from "@/components/article-listing-card";
 import { publishedArticles } from "@/data/mock";
 import { prisma } from "@/lib/db";
 
@@ -21,6 +21,8 @@ type ArticleCard = {
   journalSlug: string;
   views: number;
   downloads: number;
+  keywords: string[];
+  hasPdf: boolean;
 };
 
 async function getArticles(): Promise<ArticleCard[]> {
@@ -47,6 +49,8 @@ async function getArticles(): Promise<ArticleCard[]> {
       journalSlug: a.journal.slug,
       views: a.views,
       downloads: a.downloads,
+      keywords: a.keywords,
+      hasPdf: Boolean(a.manuscriptUrl),
     }));
   } catch {
     published = [];
@@ -71,6 +75,8 @@ async function getArticles(): Promise<ArticleCard[]> {
       journalSlug: a.journalSlug,
       views: a.views,
       downloads: a.downloads,
+      keywords: a.keywords,
+      hasPdf: false,
     }));
 
   return [...published, ...demo];
@@ -86,89 +92,84 @@ export default async function ArticlesPage({
   const list = access === "oa" ? all.filter((a) => a.openAccess) : all;
 
   return (
-    <div className="page-wrap">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="page-title">Articles</h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Published and Early View content across Atlas journals, with full
-            reading pages and article metrics.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link
-            href="/articles"
-            className={`rounded-lg px-3 py-2 text-sm font-medium ${!access ? "bg-[var(--accent)] text-white" : "bg-white border border-[var(--line)]"}`}
-          >
-            All
-          </Link>
-          <Link
-            href="/articles?access=oa"
-            className={`rounded-lg px-3 py-2 text-sm font-medium ${access === "oa" ? "bg-[var(--accent)] text-white" : "bg-white border border-[var(--line)]"}`}
-          >
-            Open access
-          </Link>
-        </div>
-      </div>
+    <div className="relative min-h-screen">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_top,_rgba(15,107,106,0.07),_transparent_60%)]"
+        aria-hidden
+      />
 
-      <div className="mt-8 space-y-4">
-        {list.length === 0 && (
-          <p className="card p-6 text-sm text-[var(--muted)]">
-            No articles published yet.
-          </p>
-        )}
-        {list.map((article) => (
-          <article key={article.id} className="card p-5 sm:p-6">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-              <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 font-medium text-[var(--accent)]">
-                {article.articleType}
-              </span>
-              {article.openAccess && (
-                <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 font-medium text-emerald-700">
-                  Open Access
-                </span>
-              )}
-              <span>
-                Vol. {article.volume}, Issue {article.issue}
-              </span>
-            </div>
-            <Link href={`/articles/${article.slug}`}>
-              <h2 className="mt-3 text-lg font-semibold text-[var(--ink)] hover:text-[var(--accent)]">
-                {article.title}
-              </h2>
+      <div className="relative page-wrap">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+              Atlas journals
+            </p>
+            <h1 className="page-title mt-1">Articles</h1>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
+              Published and Early View content. Each listing matches the live
+              article page — journal bar, open-access badge, DOI, and metrics.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/articles"
+              className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition ${
+                !access
+                  ? "bg-[var(--accent)] text-white"
+                  : "border border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--accent)]/40"
+              }`}
+            >
+              All
             </Link>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              {article.authors.join(", ")}
+            <Link
+              href="/articles?access=oa"
+              className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition ${
+                access === "oa"
+                  ? "bg-[var(--accent)] text-white"
+                  : "border border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--accent)]/40"
+              }`}
+            >
+              Open access
+            </Link>
+            <Link
+              href="/search"
+              className="rounded-lg border border-[var(--line)] bg-white px-3.5 py-2 text-sm font-semibold text-[var(--ink)] transition hover:border-[var(--accent)]/40"
+            >
+              Search by DOI
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-8 space-y-4">
+          {list.length === 0 && (
+            <p className="rounded-2xl bg-white p-6 text-sm text-[var(--muted)] ring-1 ring-[var(--line)]">
+              No articles published yet.
             </p>
-            <p className="mt-3 text-sm leading-relaxed text-[var(--muted)]">
-              {article.abstract}
-            </p>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-4 text-xs text-[var(--muted)]">
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href={`/journals/${article.journalSlug}`}
-                  className="font-medium text-[var(--accent)] hover:underline"
-                >
-                  {article.journalTitle}
-                </Link>
-                <span>DOI: {article.doi}</span>
-                <span>{article.publishedAt}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <ArticleMetrics
-                  views={article.views}
-                  downloads={article.downloads}
-                />
-                <Link
-                  href={`/articles/${article.slug}`}
-                  className="font-semibold text-[var(--accent)]"
-                >
-                  Read article →
-                </Link>
-              </div>
-            </div>
-          </article>
-        ))}
+          )}
+          {list.map((article) => (
+            <ArticleListingCard
+              key={article.id}
+              article={{
+                slug: article.slug,
+                title: article.title,
+                authors: article.authors,
+                abstract: article.abstract,
+                articleType: article.articleType,
+                openAccess: article.openAccess,
+                doi: article.doi,
+                publishedAt: article.publishedAt,
+                journalTitle: article.journalTitle,
+                journalSlug: article.journalSlug,
+                volume: article.volume,
+                issue: article.issue,
+                views: article.views,
+                downloads: article.downloads,
+                keywords: article.keywords,
+                hasPdf: article.hasPdf,
+              }}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

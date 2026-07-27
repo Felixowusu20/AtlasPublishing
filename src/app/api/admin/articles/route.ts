@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
 import { progressForStatus, slugify } from "@/lib/submission-utils";
+import { allocateNextAtlasDoi, normalizeDoi } from "@/lib/doi";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -53,15 +54,27 @@ export async function POST(request: Request) {
   try {
     const body = schema.parse(await request.json());
     const slug = body.slug?.trim() || slugify(body.title);
+
+    const journal = await prisma.journal.findUnique({
+      where: { id: body.journalId },
+    });
+    if (!journal) return jsonError("Journal not found", 404);
+
+    const publishedAt = body.publishedAt ? new Date(body.publishedAt) : new Date();
+    let doi = body.doi?.trim() ? normalizeDoi(body.doi) : null;
+    if (!doi) {
+      doi = await allocateNextAtlasDoi(prisma, journal, publishedAt.getFullYear());
+    }
+
     const article = await prisma.publishedArticle.create({
       data: {
         title: body.title,
         slug,
-        doi: body.doi,
+        doi,
         authors: body.authors,
         affiliations: body.affiliations ?? [],
         journalId: body.journalId,
-        publishedAt: body.publishedAt ? new Date(body.publishedAt) : undefined,
+        publishedAt,
         volume: body.volume,
         issue: body.issue,
         pages: body.pages,
