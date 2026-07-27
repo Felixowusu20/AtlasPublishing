@@ -1,4 +1,5 @@
-import { ArticleMetrics, formatMetric } from "@/components/article-metrics";
+import { ArticleListingCard } from "@/components/article-listing-card";
+import { formatMetric } from "@/components/article-metrics";
 import { HeroSlider } from "@/components/hero-slider";
 import { publishingWorkflow } from "@/data/mock";
 import { prisma } from "@/lib/db";
@@ -69,7 +70,7 @@ export default async function HomePage() {
 
       {stats && (
         <section className="border-b border-[var(--line)] bg-white">
-          <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-px overflow-hidden px-4 py-6 sm:grid-cols-4 sm:px-6">
+          <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-px overflow-hidden px-4 py-7 sm:grid-cols-4 sm:px-6">
             {(
               [
                 ["Published articles", stats.articleCount],
@@ -79,7 +80,7 @@ export default async function HomePage() {
               ] as const
             ).map(([label, value]) => (
               <div key={label} className="px-4 py-2 text-center sm:py-0">
-                <dd className="font-[family-name:var(--font-display)] text-2xl font-semibold text-[var(--ink)] sm:text-3xl">
+                <dd className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[var(--ink)] sm:text-3xl">
                   {formatMetric(value)}
                 </dd>
                 <dt className="mt-1 text-[11px] font-medium uppercase tracking-wider text-[var(--muted)]">
@@ -91,24 +92,66 @@ export default async function HomePage() {
         </section>
       )}
 
-      <section className="border-b border-[var(--line)] bg-[var(--surface)]/60">
+      {/* Find by DOI — mirrors live article DOI tools */}
+      <section className="border-b border-[var(--line)] bg-[linear-gradient(180deg,var(--accent-soft)_0%,white_100%)]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="max-w-xl">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+              Discover research
+            </p>
+            <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)] sm:text-2xl">
+              Search by title, author, or DOI
+            </h2>
+            <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)]">
+              Paste an Atlas DOI such as{" "}
+              <code className="rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-[var(--accent)] ring-1 ring-[var(--line)]">
+                10.58000/ajs.2026.0142
+              </code>{" "}
+              to open the full article page and download the PDF.
+            </p>
+          </div>
+          <form
+            action="/search"
+            method="get"
+            className="flex w-full max-w-md gap-2"
+          >
+            <input
+              name="q"
+              type="search"
+              placeholder="Title, author, or DOI…"
+              className="min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+            />
+            <button type="submit" className="btn-primary shrink-0 text-sm">
+              Search
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section className="border-b border-[var(--line)] bg-[var(--surface)]/50">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
           <div className="max-w-2xl">
-            <h2 className="font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+              Publishing pathway
+            </p>
+            <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
               How publishing works on Atlas
             </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              A clear path from manuscript upload to publication.
+              A clear path from manuscript upload to open publication.
             </p>
           </div>
 
-          <ol className="relative mt-10 grid gap-8 sm:grid-cols-5 sm:gap-4">
+          <ol className="relative mt-10 grid gap-6 sm:grid-cols-5 sm:gap-3">
             <div
               className="pointer-events-none absolute left-[10%] right-[10%] top-5 hidden h-px bg-[var(--line)] sm:block"
               aria-hidden
             />
             {publishingWorkflow.map((item, index) => (
-              <li key={item.step} className="relative flex flex-col items-center text-center">
+              <li
+                key={item.step}
+                className="relative flex flex-col items-center text-center"
+              >
                 <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-[var(--accent)] bg-white text-sm font-semibold text-[var(--accent)] shadow-[0_0_0_6px_var(--paper)]">
                   {item.step}
                 </div>
@@ -118,7 +161,7 @@ export default async function HomePage() {
                     aria-hidden
                   />
                 )}
-                <div className="mt-4 w-full rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm">
+                <div className="mt-4 w-full rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[var(--line)]">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
                     Step {item.step}
                   </p>
@@ -136,84 +179,83 @@ export default async function HomePage() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-        <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr]">
+        <div className="grid gap-10 lg:grid-cols-[1.55fr_1fr]">
           <div>
             <div className="flex items-end justify-between gap-3">
               <div>
-                <h2 className="font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                  Recently published
+                </p>
+                <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
                   Latest articles
                 </h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">
-                  Newly published and Early View
+                  Same layout you see on the full article page — type, DOI, and
+                  metrics.
                 </p>
               </div>
               <Link
                 href="/articles"
-                className="text-sm font-semibold text-[var(--accent)] hover:underline"
+                className="shrink-0 text-sm font-semibold text-[var(--accent)] hover:underline"
               >
-                View all
+                View all →
               </Link>
             </div>
-            <div className="mt-5 space-y-3">
+
+            <div className="mt-6 space-y-4">
               {articles.length === 0 && (
-                <p className="rounded-xl border border-[var(--line)] bg-white p-6 text-sm text-[var(--muted)]">
-                  No published articles yet. Add them from the admin Latest Articles CMS.
+                <p className="rounded-2xl bg-white p-6 text-sm text-[var(--muted)] ring-1 ring-[var(--line)]">
+                  No published articles yet. Publish from the admin queue to see
+                  them here.
                 </p>
               )}
               {articles.map((article) => (
-                <Link
+                <ArticleListingCard
                   key={article.id}
-                  href={`/articles/${article.slug}`}
-                  className="block card p-4 transition hover:border-[var(--accent)]/40 sm:p-5"
-                >
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 font-medium text-[var(--accent)]">
-                      {article.articleType}
-                    </span>
-                    {article.openAccess && (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 font-medium text-emerald-700">
-                        Open Access
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="mt-2 text-base font-semibold text-[var(--ink)]">
-                    {article.title}
-                  </h3>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    {article.authors.join(", ")}
-                  </p>
-                  <p className="mt-2 line-clamp-2 text-sm text-[var(--muted)]">
-                    {article.abstract}
-                  </p>
-                  <p className="mt-3 text-xs text-[var(--muted)]">
-                    {article.journal.title},{" "}
-                    {article.publishedAt.toISOString().slice(0, 10)}
-                    {article.doi ? `, DOI ${article.doi}` : ""}
-                  </p>
-                  <ArticleMetrics
-                    views={article.views}
-                    downloads={article.downloads}
-                    className="mt-2"
-                  />
-                </Link>
+                  compact
+                  article={{
+                    slug: article.slug,
+                    title: article.title,
+                    authors: article.authors,
+                    abstract: article.abstract,
+                    articleType: article.articleType,
+                    openAccess: article.openAccess,
+                    doi: article.doi,
+                    publishedAt: article.publishedAt.toISOString().slice(0, 10),
+                    journalTitle: article.journal.title,
+                    journalSlug: article.journal.slug,
+                    volume: article.volume ?? undefined,
+                    issue: article.issue ?? undefined,
+                    views: article.views,
+                    downloads: article.downloads,
+                    keywords: article.keywords,
+                    hasPdf: Boolean(article.manuscriptUrl),
+                  }}
+                />
               ))}
             </div>
           </div>
 
           <aside className="space-y-8">
             <div>
-              <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                News
+              </p>
+              <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
                 Announcements
               </h2>
               <ul className="mt-4 space-y-3">
                 {announcements.length === 0 && (
-                  <li className="card p-4 text-sm text-[var(--muted)]">
+                  <li className="rounded-2xl bg-white p-4 text-sm text-[var(--muted)] ring-1 ring-[var(--line)]">
                     No announcements yet.
                   </li>
                 )}
                 {announcements.map((a) => (
-                  <li key={a.id} className="card p-4">
-                    <p className="text-xs text-[var(--muted)]">
+                  <li
+                    key={a.id}
+                    className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[var(--line)]"
+                  >
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">
                       {a.publishedAt.toISOString().slice(0, 10)}
                     </p>
                     {a.href ? (
@@ -237,20 +279,25 @@ export default async function HomePage() {
             </div>
 
             <div>
-              <div className="flex items-end justify-between">
-                <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
-                  Our journals
-                </h2>
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                    Portfolio
+                  </p>
+                  <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+                    Our journals
+                  </h2>
+                </div>
                 <Link
                   href="/journals"
-                  className="text-sm font-semibold text-[var(--accent)]"
+                  className="text-sm font-semibold text-[var(--accent)] hover:underline"
                 >
-                  All
+                  All →
                 </Link>
               </div>
               <div className="mt-4 space-y-2">
                 {journals.length === 0 && (
-                  <p className="rounded-xl border border-[var(--line)] bg-white p-4 text-sm text-[var(--muted)]">
+                  <p className="rounded-2xl bg-white p-4 text-sm text-[var(--muted)] ring-1 ring-[var(--line)]">
                     Add journals in the admin CMS.
                   </p>
                 )}
@@ -258,21 +305,23 @@ export default async function HomePage() {
                   <Link
                     key={j.id}
                     href={`/journals/${j.slug}`}
-                    className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white p-3 hover:border-[var(--accent)]/40"
+                    className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-[var(--line)] transition hover:ring-[var(--accent)]/30"
                   >
                     <span
-                      className="flex h-12 w-9 items-end justify-center rounded pb-1.5 text-[9px] font-bold text-white"
-                      style={{ background: journalCardColor(j.coverColor, index) }}
+                      className="flex h-12 w-9 shrink-0 items-end justify-center rounded-md pb-1.5 text-[9px] font-bold text-white"
+                      style={{
+                        background: journalCardColor(j.coverColor, index),
+                      }}
                     >
                       {j.shortTitle}
                     </span>
-                    <span>
-                      <span className="block text-sm font-semibold text-[var(--ink)]">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-[var(--ink)]">
                         {j.title}
                       </span>
-                      <span className="block text-xs text-[var(--muted)]">
+                      <span className="mt-0.5 block text-xs text-[var(--muted)]">
                         {j.openAccess ? "Open Access" : "Subscription"}
-                        {j.impactFactor ? `, IF ${j.impactFactor}` : ""}
+                        {j.doiPrefix ? ` · ${j.doiPrefix}` : ""}
                       </span>
                     </span>
                   </Link>
@@ -283,22 +332,31 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="border-t border-[var(--line)] bg-[var(--surface)]">
-        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-4 py-10 sm:flex-row sm:items-center sm:px-6">
+      <section className="border-t border-[var(--line)] bg-[var(--ink)] text-white">
+        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-5 px-4 py-12 sm:flex-row sm:items-center sm:px-6">
           <div>
-            <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50">
+              For authors
+            </p>
+            <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl">
               Ready to submit?
             </h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Create an account, pick a journal, and track your manuscript end to
-              end.
+            <p className="mt-2 max-w-lg text-sm leading-relaxed text-white/70">
+              Create an account, choose a journal, and track your manuscript from
+              peer review through DOI assignment and publication.
             </p>
           </div>
-          <div className="flex gap-3">
-            <Link href="/register" className="btn-secondary">
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/register"
+              className="inline-flex items-center justify-center rounded-lg border border-white/25 bg-transparent px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
               Register
             </Link>
-            <Link href="/submissions/new" className="btn-primary">
+            <Link
+              href="/submissions/new"
+              className="inline-flex items-center justify-center rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0c5756]"
+            >
               Start submission
             </Link>
           </div>

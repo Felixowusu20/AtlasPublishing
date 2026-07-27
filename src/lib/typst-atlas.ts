@@ -442,7 +442,7 @@ export function buildAtlasTypstSource(
           .map((a, i) => `~${i + 1}~ ${escapeTypst(a)}`)
           .join(" \\\n")
       : "";
-  const keywords = input.keywords.map(escapeTypst).join(" · ") || "—";
+  const keywords = input.keywords.map(escapeTypst).join(", ") || "—";
   const year = new Date().getFullYear().toString();
   const typeLabel = escapeTypst(
     (input.articleType || "Article").replace(/\s+Article$/i, "").slice(0, 18) ||
@@ -618,7 +618,18 @@ export function buildAtlasTypstSource(
 )
 
 #v(8pt)
-#text(size: 9pt)[*Keywords:* #text(fill: rgb("#5b6b7c"))[${keywords}]]
+#block(
+  width: 100%,
+  inset: (x: 10pt, y: 8pt),
+  stroke: (left: 2.5pt + rgb("#0f6b6a"), rest: 0.5pt + rgb("#d7dee7")),
+  fill: rgb("#f5f7fa"),
+  radius: 3pt,
+  [
+    #text(size: 8pt, weight: "bold", fill: rgb("#0f6b6a"), tracking: 0.08em)[KEYWORDS]
+    #v(4pt)
+    #text(size: 9pt, fill: rgb("#0b1f33"))[${keywords}]
+  ],
+)
 
 #v(14pt)
 

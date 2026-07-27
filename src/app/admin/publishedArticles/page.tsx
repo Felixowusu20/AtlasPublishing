@@ -196,6 +196,18 @@ export default function PublishedArticlesPage() {
       figures: parseFigures(sub.productionFigures),
       pdfUrl: "",
     });
+
+    void fetch(
+      `/api/admin/publish-queue/doi?journalId=${encodeURIComponent(sub.journal.id)}`,
+      { cache: "no-store" },
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.doi) {
+          setForm((f) => ({ ...f, doi: data.doi as string }));
+        }
+      })
+      .catch(() => undefined);
   }
 
   async function load(preferId?: string | null) {
@@ -394,8 +406,8 @@ export default function PublishedArticlesPage() {
 
     setSuccess(
       data.emailSent
-        ? `Published. Congratulations email sent to ${selected.author.email} with the article link.`
-        : `Published at ${data.articleUrl}. Email was not sent. Check SMTP settings.`,
+        ? `Published${data.doi ? ` with DOI ${data.doi}` : ""}. Congratulations email sent to ${selected.author.email}.`
+        : `Published at ${data.articleUrl}${data.doi ? ` · DOI ${data.doi}` : ""}. Email was not sent — check SMTP settings.`,
     );
     setSelectedId(null);
     setForm(emptyForm());
@@ -909,15 +921,27 @@ export default function PublishedArticlesPage() {
                         }
                       />
                     </label>
-                    <label className="field">
-                      <span>DOI (optional)</span>
+                    <label className="field sm:col-span-2">
+                      <span>DOI (auto-assigned)</span>
                       <input
                         value={form.doi}
                         onChange={(e) =>
                           setForm((f) => ({ ...f, doi: e.target.value }))
                         }
-                        placeholder="10.xxxx/xxxxx"
+                        placeholder="10.58000/ajs.2026.0142"
                       />
+                      <p className="text-[11px] text-[var(--muted)]">
+                        Assigned automatically on publish. Readers can search this
+                        DOI or open{" "}
+                        {form.doi ? (
+                          <code className="rounded bg-[var(--surface)] px-1">
+                            /doi/{form.doi}
+                          </code>
+                        ) : (
+                          "the Atlas DOI link"
+                        )}{" "}
+                        to view or download the PDF.
+                      </p>
                     </label>
                     <label className="field">
                       <span>Volume</span>

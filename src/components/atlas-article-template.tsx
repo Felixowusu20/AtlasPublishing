@@ -270,12 +270,12 @@ export function AtlasArticleTemplate({
             >
               ◎
             </span>
-            <p className="text-[12px] font-bold text-[#0f6b6a]">Read Online</p>
+            <p className="text-[12px] font-bold text-[#0f6b6a]">Read More</p>
           </div>
         </div>
 
         {/* Secondary metrics row */}
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[#d7dee7] pb-3 text-[10px] font-semibold uppercase tracking-wide text-[#5b6b7c]">
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 pb-3 text-[10px] font-semibold uppercase tracking-wide text-[#5b6b7c]">
           <span className="text-[#0f6b6a]">
             {openAccess ? "Open Access" : "Access"}
           </span>
@@ -312,12 +312,17 @@ export function AtlasArticleTemplate({
         </section>
 
         {keywords.length > 0 && (
-          <section className="mt-5">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0f6b6a]">
+          <section className="mt-5 rounded border border-[#d7dee7] border-l-[3px] border-l-[#0f6b6a] bg-[#f5f7fa] px-3.5 py-3">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#0f6b6a]">
               Keywords
             </h2>
-            <p className="mt-2 text-[12px] text-[#5b6b7c]">
-              {keywords.join(" · ")}
+            <p className="mt-2 text-[12px] leading-relaxed text-[#0b1f33]">
+              {keywords.map((k, i) => (
+                <span key={`${k}-${i}`}>
+                  {i > 0 ? ", " : ""}
+                  <span className="font-medium">{k}</span>
+                </span>
+              ))}
             </p>
           </section>
         )}

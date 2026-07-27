@@ -19,10 +19,8 @@
   --font-display: var(--font-display);
 }
 
-body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-body), system-ui, sans-serif;
+html {
+  scroll-behavior: smooth;
 }
 
 .btn-primary {
