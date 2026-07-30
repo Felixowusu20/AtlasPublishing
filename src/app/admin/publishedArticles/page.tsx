@@ -25,7 +25,7 @@ type QueueItem = {
   productionBody?: string | null;
   productionFigures?: ManuscriptFigure[] | null;
   manuscriptReadyAt?: string | null;
-  journal: { id: string; title: string; shortTitle: string };
+  journal: { id: string; title: string; shortTitle: string; slug: string; coverColor: string };
   author: {
     id: string;
     name: string;
@@ -177,12 +177,13 @@ export default function PublishedArticlesPage() {
     const savedBody = sub.productionBody?.trim()
       ? sub.productionBody
       : emptyForm().body;
+    // Title, abstract, keywords always come from the accepted submission
     setForm({
-      title: sub.title,
+      title: sub.title?.trim() || "",
       authors: authorsFromSubmission(sub),
       affiliations: affiliationsFromSubmission(sub),
-      abstract: sub.abstract,
-      keywords: sub.keywords.join(", "),
+      abstract: sub.abstract?.trim() || "",
+      keywords: (sub.keywords ?? []).join(", "),
       articleType: sub.articleType || "Research Article",
       doi: "",
       volume: "",
@@ -285,6 +286,8 @@ export default function PublishedArticlesPage() {
       submissionId: selected.id,
       journalTitle: selected.journal.title,
       journalShortTitle: selected.journal.shortTitle,
+      journalSlug: selected.journal.slug,
+      coverColor: selected.journal.coverColor,
       manuscriptId: selected.manuscriptId,
       title: form.title,
       authors: splitList(form.authors, ","),
@@ -785,6 +788,9 @@ export default function PublishedArticlesPage() {
                         setForm((f) => ({ ...f, title: e.target.value }))
                       }
                     />
+                    <span className="mt-1 block text-[11px] text-[var(--muted)]">
+                      Pre-filled from the accepted submission
+                    </span>
                   </label>
                   <label className="field">
                     <span>Authors (comma-separated)</span>
@@ -819,6 +825,9 @@ export default function PublishedArticlesPage() {
                         setForm((f) => ({ ...f, abstract: e.target.value }))
                       }
                     />
+                    <span className="mt-1 block text-[11px] text-[var(--muted)]">
+                      Pre-filled from the accepted submission
+                    </span>
                   </label>
                   <label className="field">
                     <span>Keywords (comma-separated)</span>
@@ -1063,6 +1072,9 @@ export default function PublishedArticlesPage() {
                     <AtlasArticleTemplate
                       journalTitle={selected.journal.title}
                       journalShortTitle={selected.journal.shortTitle}
+                      journalSlug={selected.journal.slug}
+                      coverColor={selected.journal.coverColor}
+                      journalUrl={`/journals/${selected.journal.slug}`}
                       manuscriptId={selected.manuscriptId}
                       title={form.title}
                       authors={previewAuthors}

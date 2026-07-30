@@ -58,6 +58,9 @@ export async function GET(request: Request) {
 const saveSchema = z.object({
   submissionId: z.string().min(1),
   body: z.string(),
+  title: z.string().min(2).optional(),
+  abstract: z.string().min(10).optional(),
+  keywords: z.array(z.string()).optional(),
   figures: z
     .array(
       z.object({
@@ -75,6 +78,9 @@ const saveSchema = z.object({
 type SavedRow = {
   id: string;
   manuscriptId: string;
+  title: string;
+  abstract: string;
+  keywords: string[];
   productionBody: string | null;
   productionFigures: unknown;
   manuscriptReadyAt: Date | null;
@@ -93,15 +99,24 @@ async function saveProductionFields(args: {
   figures: unknown;
   done: boolean;
   existingReadyAt: Date | null;
+  title?: string;
+  abstract?: string;
+  keywords?: string[];
 }): Promise<SavedRow> {
   const readyAt = args.done ? new Date() : args.existingReadyAt;
   const nextStatus = args.done ? ("IN_PRODUCTION" as const) : undefined;
   const progress = nextStatus ? progressForStatus(nextStatus) : undefined;
+  const meta = {
+    ...(args.title ? { title: args.title } : {}),
+    ...(args.abstract ? { abstract: args.abstract } : {}),
+    ...(args.keywords ? { keywords: args.keywords } : {}),
+  };
 
   try {
     return await prisma.submission.update({
       where: { id: args.id },
       data: {
+        ...meta,
         productionBody: args.body,
         productionFigures: args.figures as Prisma.InputJsonValue,
         manuscriptReadyAt: readyAt,
@@ -115,6 +130,9 @@ async function saveProductionFields(args: {
       select: {
         id: true,
         manuscriptId: true,
+        title: true,
+        abstract: true,
+        keywords: true,
         productionBody: true,
         productionFigures: true,
         manuscriptReadyAt: true,
@@ -139,6 +157,8 @@ async function saveProductionFields(args: {
           "manuscriptReadyAt" = ${readyAt},
           "status" = 'IN_PRODUCTION'::"SubmissionStatus",
           "progress" = ${progress ?? 85},
+          "title" = COALESCE(${args.title ?? null}, "title"),
+          "abstract" = COALESCE(${args.abstract ?? null}, "abstract"),
           "updatedAt" = NOW()
         WHERE id = ${args.id}
       `;
@@ -148,6 +168,8 @@ async function saveProductionFields(args: {
         SET
           "productionBody" = ${args.body},
           "productionFigures" = ${JSON.stringify(args.figures)}::jsonb,
+          "title" = COALESCE(${args.title ?? null}, "title"),
+          "abstract" = COALESCE(${args.abstract ?? null}, "abstract"),
           "updatedAt" = NOW()
         WHERE id = ${args.id}
       `;
@@ -157,6 +179,9 @@ async function saveProductionFields(args: {
       SELECT
         id,
         "manuscriptId",
+        title,
+        abstract,
+        keywords,
         "productionBody",
         "productionFigures",
         "manuscriptReadyAt",
@@ -212,6 +237,9 @@ export async function PATCH(request: Request) {
       figures: data.figures ?? [],
       done: Boolean(data.done),
       existingReadyAt,
+      title: data.title?.trim(),
+      abstract: data.abstract?.trim(),
+      keywords: data.keywords,
     });
 
     return jsonOk({

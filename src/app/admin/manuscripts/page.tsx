@@ -70,6 +70,9 @@ function ManuscriptsPageInner() {
   const searchParams = useSearchParams();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [abstractText, setAbstractText] = useState("");
+  const [keywords, setKeywords] = useState("");
   const [body, setBody] = useState(DEFAULT_BODY);
   const [figures, setFigures] = useState<ManuscriptFigure[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +88,10 @@ function ManuscriptsPageInner() {
   function selectItem(sub: QueueItem) {
     setSelectedId(sub.id);
     setError("");
+    // Always pull title + abstract from the accepted submission record
+    setTitle(sub.title?.trim() || "");
+    setAbstractText(sub.abstract?.trim() || "");
+    setKeywords((sub.keywords ?? []).join(", "));
     setBody(sub.productionBody?.trim() ? sub.productionBody : DEFAULT_BODY);
     setFigures(parseFigures(sub.productionFigures));
     setDirty(false);
@@ -134,6 +141,14 @@ function ManuscriptsPageInner() {
 
   async function save(opts: { done: boolean }) {
     if (!selected) return;
+    if (!title.trim()) {
+      setError("Title from the submission is required.");
+      return;
+    }
+    if (!abstractText.trim()) {
+      setError("Abstract from the submission is required.");
+      return;
+    }
     if (!body.trim()) {
       setError("Add the full manuscript text before continuing.");
       return;
@@ -146,6 +161,12 @@ function ManuscriptsPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           submissionId: selected.id,
+          title: title.trim(),
+          abstract: abstractText.trim(),
+          keywords: keywords
+            .split(",")
+            .map((k) => k.trim())
+            .filter(Boolean),
           body,
           figures,
           done: opts.done,
@@ -160,6 +181,9 @@ function ManuscriptsPageInner() {
           q.id === selected.id
             ? {
                 ...q,
+                title: data.submission?.title ?? title.trim(),
+                abstract: data.submission?.abstract ?? abstractText.trim(),
+                keywords: data.submission?.keywords ?? q.keywords,
                 productionBody: body,
                 productionFigures: figures,
                 manuscriptReadyAt:
@@ -192,8 +216,8 @@ function ManuscriptsPageInner() {
           Full manuscripts
         </h1>
         <p className="text-xs text-[var(--muted)]">
-          {queue.length} paper{queue.length === 1 ? "" : "s"} · Select one and
-          write the full article
+          {queue.length} paper{queue.length === 1 ? "" : "s"} · Title and
+          abstract load from the accepted submission
         </p>
       </div>
 
@@ -253,9 +277,9 @@ function ManuscriptsPageInner() {
             <div className="space-y-4">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
-                    {selected.title}
-                  </h2>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
+                    From accepted submission
+                  </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
                     {selected.manuscriptId} · {selected.author.name}
                     {dirty ? " · Unsaved" : ""}
@@ -291,6 +315,42 @@ function ManuscriptsPageInner() {
                 </div>
               </div>
 
+              <div className="space-y-3 rounded-xl border border-[var(--line)] bg-white p-4">
+                <label className="field">
+                  <span>Title</span>
+                  <input
+                    value={title}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      setDirty(true);
+                    }}
+                    placeholder="Loaded from the submitted manuscript"
+                  />
+                </label>
+                <label className="field">
+                  <span>Abstract</span>
+                  <textarea
+                    rows={5}
+                    value={abstractText}
+                    onChange={(e) => {
+                      setAbstractText(e.target.value);
+                      setDirty(true);
+                    }}
+                    placeholder="Loaded from the submitted manuscript"
+                  />
+                </label>
+                <label className="field">
+                  <span>Keywords (comma-separated)</span>
+                  <input
+                    value={keywords}
+                    onChange={(e) => {
+                      setKeywords(e.target.value);
+                      setDirty(true);
+                    }}
+                  />
+                </label>
+              </div>
+
               <ManuscriptEditor
                 value={body}
                 onChange={(next) => {
@@ -304,8 +364,8 @@ function ManuscriptsPageInner() {
                 }}
                 onError={setError}
                 rows={24}
-                label=""
-                hint=""
+                label="Full manuscript body"
+                hint="Title and abstract above are taken from the accepted submission. Write the article sections here."
               />
 
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">

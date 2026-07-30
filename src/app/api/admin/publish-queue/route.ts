@@ -163,6 +163,10 @@ export async function POST(request: Request) {
         const pdf = await compileAtlasTypstPdf({
           journalTitle: submission.journal.title,
           journalShortTitle: submission.journal.shortTitle,
+          journalSlug: submission.journal.slug,
+          coverColor: submission.journal.coverColor,
+          articleSlug: slug,
+          siteBaseUrl: process.env.NEXT_PUBLIC_APP_URL || undefined,
           manuscriptId: submission.manuscriptId,
           title: body.title,
           authors: body.authors,

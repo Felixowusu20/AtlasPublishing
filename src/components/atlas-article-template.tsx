@@ -1,5 +1,8 @@
 "use client";
 
+import type { CSSProperties, ReactNode } from "react";
+import { journalArticlePalette } from "@/lib/journal-colors";
+
 type Props = {
   journalTitle: string;
   journalShortTitle: string;
@@ -18,52 +21,89 @@ type Props = {
   openAccess?: boolean;
   logoUrl?: string | null;
   publishedAt?: string;
+  receivedAt?: string;
+  acceptedAt?: string;
   body?: string;
+  journalSlug?: string;
+  coverColor?: string;
+  articleUrl?: string;
+  journalUrl?: string;
 };
+
+function parseWidthFlag(raw: string): { text: string; fullWidth: boolean } {
+  const fullWidth = /\|\s*full\s*$/i.test(raw);
+  const text = raw.replace(/\|\s*(full|col|column)\s*$/i, "").trim();
+  return { text, fullWidth };
+}
 
 function renderBodyPreview(body?: string) {
   if (!body?.trim()) return null;
-  const blocks = body.trim().split(/\n{2,}/);
-  return blocks.map((block, i) => {
-    const lines = block.split("\n");
-    const first = lines[0]?.trim() ?? "";
+  const lines = body.replace(/\r\n/g, "\n").split("\n");
+  const nodes: ReactNode[] = [];
+  let i = 0;
+  let key = 0;
 
-    if (/^#{1,3}\s+/.test(first)) {
-      const level = (first.match(/^#+/)?.[0].length ?? 1) as 1 | 2 | 3;
-      const text = first.replace(/^#{1,3}\s+/, "");
-      const Tag = level === 1 ? "h2" : level === 2 ? "h3" : "h4";
-      const sizes = {
-        1: "mt-6 text-base font-semibold text-[#0b1f33]",
-        2: "mt-5 text-sm font-semibold text-[#0b1f33]",
-        3: "mt-4 text-[13px] font-semibold text-[#0b1f33]",
-      } as const;
-      return (
-        <Tag key={i} className={sizes[level]}>
-          {text}
-        </Tag>
-      );
+  while (i < lines.length) {
+    const trimmed = lines[i]?.trim() ?? "";
+
+    if (!trimmed) {
+      i += 1;
+      continue;
     }
 
-    if (/^\|.+\|$/.test(first) && lines.length >= 2) {
-      const rows = lines
-        .filter((l) => /^\|/.test(l.trim()) && !/^\|[\s:|-]+\|$/.test(l.trim()))
-        .map((l) =>
-          l
-            .trim()
-            .replace(/^\|/, "")
-            .replace(/\|$/, "")
-            .split("|")
-            .map((c) => c.trim()),
-        );
-      if (rows.length === 0) return null;
+    if (/^#{1,3}\s+/.test(trimmed)) {
+      const level = (trimmed.match(/^#+/)?.[0].length ?? 1) as 1 | 2 | 3;
+      const text = trimmed.replace(/^#{1,3}\s+/, "");
+      const Tag = level === 1 ? "h2" : level === 2 ? "h3" : "h4";
+      const sizes = {
+        1: "col-span-full mt-5 text-[13px] font-bold uppercase tracking-[0.08em]",
+        2: "mt-4 text-[14px] font-bold text-[#0b1f33]",
+        3: "mt-3 text-[13px] font-semibold italic text-[#5b6b7c]",
+      } as const;
+      nodes.push(
+        <Tag
+          key={key++}
+          className={sizes[level]}
+          style={level === 1 ? { color: "var(--j-primary)" } : undefined}
+        >
+          {text}
+        </Tag>,
+      );
+      i += 1;
+      continue;
+    }
+
+    if (/^\|.+\|$/.test(trimmed) && i + 1 < lines.length) {
+      const start = i;
+      const rows: string[][] = [];
+      while (i < lines.length && /^\|.+\|$/.test(lines[i].trim())) {
+        const row = lines[i].trim();
+        if (!/^\|[\s:|-]+\|$/.test(row)) {
+          rows.push(
+            row
+              .replace(/^\|/, "")
+              .replace(/\|$/, "")
+              .split("|")
+              .map((c) => c.trim()),
+          );
+        }
+        i += 1;
+      }
+      if (rows.length === 0) {
+        i = start + 1;
+        continue;
+      }
       const [header, ...bodyRows] = rows;
-      return (
-        <div key={i} className="mt-4 overflow-x-auto">
+      nodes.push(
+        <div key={key++} className="col-span-full my-3 overflow-x-auto">
           <table className="w-full border-collapse text-left text-[11px]">
             <thead>
-              <tr className="border-b border-[#d7dee7] bg-[#f5f7fa]">
+              <tr className="border-y border-[#0b1f33]">
                 {header.map((cell, ci) => (
-                  <th key={ci} className="px-2 py-1.5 font-semibold text-[#0b1f33]">
+                  <th
+                    key={ci}
+                    className="px-2 py-1.5 font-semibold text-[#0b1f33]"
+                  >
                     {cell}
                   </th>
                 ))}
@@ -71,7 +111,14 @@ function renderBodyPreview(body?: string) {
             </thead>
             <tbody>
               {bodyRows.map((row, ri) => (
-                <tr key={ri} className="border-b border-[#e8edf2]">
+                <tr
+                  key={ri}
+                  className={
+                    ri === bodyRows.length - 1
+                      ? "border-b border-[#0b1f33]"
+                      : "border-b border-[#e8edf2]"
+                  }
+                >
                   {row.map((cell, ci) => (
                     <td key={ci} className="px-2 py-1.5 text-[#0b1f33]">
                       {cell}
@@ -81,75 +128,109 @@ function renderBodyPreview(body?: string) {
               ))}
             </tbody>
           </table>
-        </div>
+        </div>,
       );
+      continue;
     }
 
-    const img = first.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (img && lines.length === 1) {
-      const caption = img[1].replace(/\|\s*full\s*$/i, "").trim();
-      return (
-        <figure key={i} className="mt-5">
+    const img = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (img) {
+      const { text: caption, fullWidth } = parseWidthFlag(img[1]);
+      nodes.push(
+        <figure
+          key={key++}
+          className={fullWidth ? "col-span-full my-4" : "my-3"}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={img[2]}
             alt={caption}
-            className="mx-auto h-auto w-full max-w-full rounded border border-[#d7dee7] object-contain"
+            className="mx-auto h-auto w-full max-w-full object-contain"
           />
           {caption ? (
-            <figcaption className="mt-2 text-center text-[11px] text-[#5b6b7c]">
+            <figcaption className="mt-1.5 text-left text-[10px] leading-snug text-[#5b6b7c]">
               {caption}
             </figcaption>
           ) : null}
-        </figure>
+        </figure>,
       );
+      i += 1;
+      continue;
     }
 
-    if (first === "$$" || block.startsWith("$$")) {
-      const math = block.replace(/^\$\$\n?/, "").replace(/\n?\$\$$/, "");
-      return (
+    if (trimmed === "$$") {
+      const math: string[] = [];
+      i += 1;
+      while (i < lines.length && lines[i].trim() !== "$$") {
+        math.push(lines[i]);
+        i += 1;
+      }
+      i += 1;
+      nodes.push(
         <pre
-          key={i}
-          className="mt-4 overflow-x-auto rounded bg-[#f5f7fa] px-3 py-2 text-center font-mono text-[12px] text-[#0b1f33]"
+          key={key++}
+          className="col-span-full my-3 overflow-x-auto bg-[#f3f6f7] px-3 py-2 text-center font-mono text-[11px] text-[#0b1f33]"
         >
-          {math}
-        </pre>
+          {math.join("\n")}
+        </pre>,
       );
+      continue;
     }
 
-    return (
+    const para: string[] = [trimmed];
+    i += 1;
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^#{1,3}\s+/.test(lines[i].trim()) &&
+      !/^\|.+\|$/.test(lines[i].trim()) &&
+      !/^!\[[^\]]*]\([^)]+\)$/.test(lines[i].trim()) &&
+      lines[i].trim() !== "$$"
+    ) {
+      para.push(lines[i].trim());
+      i += 1;
+    }
+    nodes.push(
       <p
-        key={i}
-        className="mt-3 whitespace-pre-wrap text-[13px] leading-relaxed text-[#0b1f33]"
+        key={key++}
+        className="text-[14px] leading-[1.7] text-[#0b1f33] [text-indent:1.1em]"
       >
-        {block
+        {para
+          .join(" ")
           .replace(/\*\*([^*]+)\*\*/g, "$1")
           .replace(/\*([^*]+)\*/g, "$1")
           .replace(/^>\s?/gm, "")}
-      </p>
+      </p>,
+    );
+  }
+
+  return nodes;
+}
+
+function formatAuthors(authors: string[], linkColor: string) {
+  if (authors.length === 0) return "Author names";
+  return authors.map((a, i) => {
+    const isLast = i === authors.length - 1;
+    const sep = isLast
+      ? ""
+      : i === authors.length - 2
+        ? " and "
+        : ", ";
+    return (
+      <span key={`${a}-${i}`}>
+        {a}
+        {isLast ? (
+          <span style={{ color: linkColor, fontWeight: 700 }}>*</span>
+        ) : null}
+        {sep}
+      </span>
     );
   });
 }
 
-function AtlasMark() {
-  return (
-    <div
-      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
-      style={{
-        background:
-          "conic-gradient(from 210deg, #0f6b6a, #1a8f8c, #0b1f33, #0f6b6a)",
-      }}
-      aria-hidden
-    >
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[15px] font-bold tracking-tight text-[#0f6b6a]">
-        A
-      </div>
-    </div>
-  );
-}
-
 /**
- * Branded Atlas HTML article template — ACS-style masthead for admin preview.
+ * HTML preview aligned with the ACS-level Typst publication engine.
+ * Colors follow the journal cover/brand palette.
  */
 export function AtlasArticleTemplate({
   journalTitle,
@@ -169,8 +250,18 @@ export function AtlasArticleTemplate({
   openAccess = true,
   logoUrl,
   publishedAt,
+  receivedAt,
+  acceptedAt,
   body,
+  journalSlug,
+  coverColor,
+  articleUrl,
+  journalUrl,
 }: Props) {
+  const palette = journalArticlePalette(
+    coverColor,
+    journalSlug || journalShortTitle || "atlas",
+  );
   const dateLabel =
     publishedAt ||
     new Date().toLocaleDateString(undefined, {
@@ -179,168 +270,315 @@ export function AtlasArticleTemplate({
       day: "numeric",
     });
 
-  const citeLine = `${authors[0] ? `${authors[0]}${authors.length > 1 ? " et al." : ""}` : "Author"}. ${title || "Article"}. ${journalShortTitle || "Atlas"} ${volume ? `${volume}` : ""}${issue ? ` (${issue})` : ""}. ${dateLabel}.`;
+  const typeLabel =
+    (articleType || "Article").replace(/\s+Article$/i, "") || "Article";
 
-  const typeLabel = (articleType || "Article").replace(/\s+Article$/i, "") || "Article";
+  const year = new Date().getFullYear().toString();
+  const citeBits = [year, volume || null, pages || null].filter(Boolean);
+  const citeLine = `${journalShortTitle || "Journal"} ${citeBits.join(", ")}`;
+
+  const doiHref = doi
+    ? doi.startsWith("http")
+      ? doi
+      : `https://doi.org/${doi}`
+    : articleUrl || "#";
+  const jUrl =
+    journalUrl ||
+    (journalSlug ? `/journals/${journalSlug}` : "/journals");
+  const readUrl = articleUrl || doiHref;
+  const licenseHref = "https://creativecommons.org/licenses/by/4.0/";
+  const licenseLabel = license.replace(/\s+/g, "-");
+
+  const journalPathLabel = (() => {
+    if (!jUrl || jUrl === "/journals") {
+      return journalShortTitle || journalTitle || "Journal";
+    }
+    if (jUrl.startsWith("/")) {
+      return journalShortTitle || journalTitle || "Journal";
+    }
+    try {
+      const u = new URL(jUrl);
+      const host = u.hostname.toLowerCase();
+      if (
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host.endsWith(".local")
+      ) {
+        return journalShortTitle || journalTitle || "Journal";
+      }
+      return `${u.host}${u.pathname}`.replace(/\/$/, "");
+    } catch {
+      return journalShortTitle || journalTitle || "Journal";
+    }
+  })();
 
   return (
     <article
       id="atlas-article-template"
-      className="atlas-article mx-auto max-w-[760px] bg-white text-[#0b1f33] shadow-sm"
+      className="atlas-article mx-auto max-w-[820px] bg-white text-[#0b1f33] shadow-sm"
+      style={
+        {
+          fontFamily: "Georgia, 'Times New Roman', serif",
+          "--j-primary": palette.primary,
+          "--j-link": palette.link,
+          "--j-soft-link": palette.softLink,
+          "--j-soft": palette.soft,
+          "--j-wordmark": palette.wordmark,
+          "--j-cite": palette.cite,
+          "--j-oa": palette.openAccess,
+        } as CSSProperties
+      }
     >
-      {/* ACS-style journal masthead */}
-      <header className="px-8 pt-7">
+      <header className="px-8 pt-6">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={logoUrl}
-                alt="Atlas Academic Publishing"
-                className="h-11 w-auto max-w-[120px] object-contain"
+                alt=""
+                className="h-9 w-auto max-w-[100px] object-contain"
               />
-            ) : (
-              <AtlasMark />
-            )}
-            <div className="min-w-0 pt-0.5">
-              <p className="text-[15px] font-bold uppercase tracking-[0.12em] text-[#5b6b7c]">
-                Atlas{" "}
-                <span className="text-[#0b1f33]">
-                  {journalShortTitle || "Journal"}
-                </span>
-              </p>
-              <p className="mt-0.5 truncate text-[11px] text-[#5b6b7c]">
-                {journalTitle || "Journal"}
-              </p>
-            </div>
+            ) : null}
+            <p
+              className="font-[family-name:var(--font-display)] text-[1.85rem] font-bold italic leading-none sm:text-[2.1rem]"
+              style={{ color: "var(--j-wordmark)" }}
+            >
+              {journalShortTitle || journalTitle || "Journal"}
+            </p>
           </div>
-          <div className="hidden shrink-0 text-right text-[10px] leading-relaxed text-[#5b6b7c] sm:block">
-            <p className="font-semibold text-[#0b1f33]">{manuscriptId}</p>
-            <p>{dateLabel}</p>
+          <div className="shrink-0 text-right">
+            {openAccess ? (
+              <span
+                className="inline-block rounded px-2.5 py-1 text-[10px] font-bold text-white"
+                style={{ background: "var(--j-oa)" }}
+              >
+                Open Access
+              </span>
+            ) : null}
+            <p className="mt-1.5 text-[10px] text-[#0b1f33]">
+              This article is licensed under{" "}
+              <a
+                href={licenseHref}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold underline-offset-2 hover:underline"
+                style={{ color: "var(--j-link)" }}
+              >
+                {licenseLabel}
+              </a>
+            </p>
           </div>
         </div>
 
-        {/* Accent rule + article badge (ACS-like) */}
-        <div className="relative mt-5">
-          <div className="h-[3px] w-full bg-[#0f6b6a]" />
-          <span className="absolute -top-[11px] right-0 rounded-sm bg-[#0f6b6a] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
-            {typeLabel.length > 18 ? "Article" : typeLabel}
+        <div className="mt-4 flex items-end justify-between gap-3">
+          <a
+            href={jUrl}
+            className="text-[11px] font-medium hover:underline"
+            style={{ color: "var(--j-link)" }}
+          >
+            {journalPathLabel}
+          </a>
+          <span
+            className="px-3 py-1.5 text-[11px] font-bold text-white"
+            style={{ background: "var(--j-primary)" }}
+          >
+            {typeLabel.length > 22 ? "Article" : typeLabel}
           </span>
         </div>
+        <div
+          className="mt-1 h-[2.5px] w-full"
+          style={{ background: "var(--j-primary)" }}
+        />
       </header>
 
       <div className="px-8 pb-8 pt-5">
-        <h1 className="font-[family-name:var(--font-display)] text-[1.55rem] font-bold leading-snug tracking-tight text-[#0b1f33] sm:text-[1.75rem]">
+        <h1
+          className="text-[1.45rem] font-bold leading-snug tracking-tight text-[#0b1f33] sm:text-[1.65rem]"
+          style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+        >
           {title || "Article title"}
         </h1>
 
-        <p className="mt-4 text-[11px] leading-relaxed text-[#5b6b7c]">
-          {authors.length > 0 ? authors.join(", ") : "Author names"}
+        <p className="mt-3.5 text-[13px] leading-relaxed text-[#0b1f33]">
+          {formatAuthors(authors, palette.link)}
         </p>
 
         {affiliations.length > 0 && (
-          <ul className="mt-2 space-y-0.5 font-[family-name:var(--font-display)] text-[1.05rem] leading-relaxed text-[#0b1f33]">
+          <ul className="mt-2 space-y-0.5 text-[11px] leading-relaxed text-[#5b6b7c]">
             {affiliations.map((aff, i) => (
               <li key={`${aff}-${i}`}>
-                <sup className="mr-1 text-[0.7em] text-[#0f6b6a]">{i + 1}</sup>
+                <sup className="mr-1" style={{ color: "var(--j-link)" }}>
+                  {i + 1}
+                </sup>
                 {aff}
               </li>
             ))}
           </ul>
         )}
 
-        {/* Cite / Read Online action strip */}
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <div className="flex items-start gap-2.5 border-b-[3px] border-amber-500 bg-[#fafbfc] px-3 py-2.5">
-            <span
-              className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2 border-amber-500 text-[9px] font-bold text-amber-600"
-              aria-hidden
-            >
-              ✓
-            </span>
-            <p className="min-w-0 text-[11px] leading-snug text-[#0b1f33]">
-              <span className="font-semibold">Cite This: </span>
-              <span className="text-[#0f6b6a]">{citeLine}</span>
-            </p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-[1.45fr_1fr]">
+          <div>
+            <div className="flex items-center gap-2">
+              <span
+                className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[2px] text-[9px] font-bold text-white"
+                style={{ background: "var(--j-cite)" }}
+                aria-hidden
+              >
+                ✓
+              </span>
+              <p className="text-[12px]" style={{ fontFamily: "Helvetica, Arial, sans-serif" }}>
+                <span className="font-bold text-[#0b1f33]">Cite This: </span>
+                <a
+                  href={doiHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="italic hover:underline"
+                  style={{ color: "var(--j-link)" }}
+                >
+                  {citeLine}
+                </a>
+              </p>
+            </div>
+            <div
+              className="mt-2 h-[2.5px] w-full"
+              style={{ background: "var(--j-cite)" }}
+            />
           </div>
-          <div className="flex items-center gap-2.5 border-b-[3px] border-[#0f6b6a] bg-[#fafbfc] px-3 py-2.5">
+          <a
+            href={readUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 px-3 py-2 text-[12px] font-bold text-white transition hover:opacity-90"
+            style={{
+              background: "var(--j-primary)",
+              fontFamily: "Helvetica, Arial, sans-serif",
+            }}
+          >
             <span
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-[#0f6b6a] text-[8px] font-bold text-[#0f6b6a]"
+              className="flex h-3 w-3 items-center justify-center rounded-full border-[1.5px] border-white text-[7px]"
               aria-hidden
             >
               ◎
             </span>
-            <p className="text-[12px] font-bold text-[#0f6b6a]">Read More</p>
+            Read Online
+          </a>
+        </div>
+
+        <div
+          className="mt-3 border-y py-2.5"
+          style={{ borderColor: "var(--j-primary)" }}
+        >
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+            <span
+              className="text-[13px] font-bold tracking-[0.06em]"
+              style={{
+                color: "var(--j-soft-link)",
+                fontFamily: "Helvetica, Arial, sans-serif",
+              }}
+            >
+              ACCESS
+            </span>
+            <span className="text-[#c5ced8]">|</span>
+            <a
+              href={readUrl.includes("#") ? readUrl : `${readUrl}#metrics`}
+              className="text-[#0b1f33] hover:underline"
+            >
+              Metrics &amp; More
+            </a>
+            <span className="text-[#c5ced8]">|</span>
+            <a
+              href={readUrl.includes("#") ? readUrl : `${readUrl}#related`}
+              className="text-[#0b1f33] hover:underline"
+            >
+              Article Recommendations
+            </a>
+            <span className="ml-auto text-[10px] text-[#5b6b7c]">
+              {[journalShortTitle, year, volume, pages].filter(Boolean).join(", ")}
+            </span>
           </div>
         </div>
 
-        {/* Secondary metrics row */}
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 pb-3 text-[10px] font-semibold uppercase tracking-wide text-[#5b6b7c]">
-          <span className="text-[#0f6b6a]">
-            {openAccess ? "Open Access" : "Access"}
-          </span>
-          <span className="text-[#d7dee7]">|</span>
-          <span>Metrics &amp; More</span>
-          <span className="text-[#d7dee7]">|</span>
-          <span>
-            Vol. {volume || "—"} · Issue {issue || "—"}
-          </span>
-          <span className="text-[#d7dee7]">|</span>
-          <span>DOI: {doi || "Pending"}</span>
-          {pages ? (
-            <>
-              <span className="text-[#d7dee7]">|</span>
-              <span>pp. {pages}</span>
-            </>
-          ) : null}
-        </div>
-
-        <p className="mt-3 text-[11px] text-[#5b6b7c]">
-          {journalTitle}
-          {license ? ` · ${license}` : ""}
+        <p className="mt-3 text-[10px] text-[#5b6b7c]">
+          Received {receivedAt || dateLabel}
+          {" · "}Accepted {acceptedAt || dateLabel}
+          {" · "}Published {dateLabel}
           {" · "}
-          Published {dateLabel}
+          <a
+            href={doiHref}
+            className="hover:underline"
+            style={{ color: "var(--j-link)" }}
+          >
+            DOI: {doi || "Pending"}
+          </a>
+          {issue ? ` · ${issue}` : ""}
+          {" · "}
+          <span className="text-[#5b6b7c]">{manuscriptId}</span>
         </p>
 
         <section className="mt-6">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0f6b6a]">
+          <h2
+            className="text-[11px] font-bold uppercase tracking-[0.14em]"
+            style={{
+              color: "var(--j-primary)",
+              fontFamily: "Helvetica, Arial, sans-serif",
+            }}
+          >
             Abstract
           </h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-[#0b1f33]">
+          <p className="mt-2 text-[14px] leading-[1.7] text-justify text-[#0b1f33]">
             {abstract || "Abstract will appear here."}
           </p>
         </section>
 
         {keywords.length > 0 && (
-          <section className="mt-5 rounded border border-[#d7dee7] border-l-[3px] border-l-[#0f6b6a] bg-[#f5f7fa] px-3.5 py-3">
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#0f6b6a]">
+          <section
+            className="mt-5 border-l-[2.5px] px-3.5 py-2.5"
+            style={{
+              background: "var(--j-soft)",
+              borderColor: "var(--j-primary)",
+            }}
+          >
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.12em]"
+              style={{
+                color: "var(--j-primary)",
+                fontFamily: "Helvetica, Arial, sans-serif",
+              }}
+            >
               Keywords
-            </h2>
-            <p className="mt-2 text-[12px] leading-relaxed text-[#0b1f33]">
-              {keywords.map((k, i) => (
-                <span key={`${k}-${i}`}>
-                  {i > 0 ? ", " : ""}
-                  <span className="font-medium">{k}</span>
-                </span>
-              ))}
-            </p>
+            </span>
+            <span className="ml-2 text-[12px] text-[#0b1f33]">
+              {keywords.join(" · ")}
+            </span>
           </section>
         )}
 
         {body?.trim() ? (
-          <section className="mt-8 border-t border-[#d7dee7] pt-6">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0f6b6a]">
-              Article body
-            </h2>
-            <div className="mt-1">{renderBodyPreview(body)}</div>
+          <section
+            className="mt-7 border-t-[1.5px] pt-5"
+            style={{ borderColor: "var(--j-primary)" }}
+          >
+            <div className="columns-1 gap-x-5 sm:columns-2 [column-fill:_balance]">
+              {renderBodyPreview(body)}
+            </div>
           </section>
         ) : null}
 
-        <section className="mt-8 rounded-lg bg-[#f5f7fa] px-4 py-3 text-[11px] leading-relaxed text-[#5b6b7c]">
+        <section
+          className="mt-8 px-4 py-3 text-[11px] leading-relaxed text-[#5b6b7c]"
+          style={{ background: "var(--j-soft)" }}
+        >
           <p>
-            © {new Date().getFullYear()} Atlas Academic Publishing. This article
-            is published under {license}
-            {openAccess ? " as open access" : ""}. Manuscript ID: {manuscriptId}.
+            © {year} Atlas Academic Publishing · {journalTitle}. Licensed under{" "}
+            <a
+              href={licenseHref}
+              className="hover:underline"
+              style={{ color: "var(--j-link)" }}
+            >
+              {license}
+            </a>
+            .
           </p>
         </section>
       </div>

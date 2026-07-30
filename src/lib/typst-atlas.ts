@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
+import { journalArticlePalette } from "@/lib/journal-colors";
 
 export type AtlasTypstFigure = {
   url: string;
@@ -32,6 +33,14 @@ export type AtlasTypstInput = {
   receivedAt?: string;
   acceptedAt?: string;
   publishedAt?: string;
+  /** Journal slug for public URLs and color hashing. */
+  journalSlug?: string;
+  /** Journal cover / brand color (hex). */
+  coverColor?: string;
+  /** Public article path slug once known. */
+  articleSlug?: string;
+  /** Site origin, e.g. https://atlas.example.com */
+  siteBaseUrl?: string;
 };
 
 /** Escape Typst special characters in plain text. */
@@ -41,6 +50,8 @@ export function escapeTypst(text: string): string {
     .replace(/#/g, "\\#")
     .replace(/\$/g, "\\$")
     .replace(/@/g, "\\@")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]")
     .replace(/</g, "\\<")
     .replace(/>/g, "\\>")
     .replace(/\*/g, "\\*")
@@ -147,6 +158,27 @@ function inlineToTypst(text: string): string {
   );
   s = s.replace(/\*([^*]+)\*/g, (_, t: string) => hold(`_${escapeTypst(t)}_`));
 
+  // Strikethrough ~~text~~
+  s = s.replace(/~~([^~]+)~~/g, (_, t: string) =>
+    hold(`#strike[${escapeTypst(t)}]`),
+  );
+
+  // Underline ++text++ or <u>text</u>
+  s = s.replace(/\+\+([^+]+)\+\+/g, (_, t: string) =>
+    hold(`#underline[${escapeTypst(t)}]`),
+  );
+  s = s.replace(/<u>([^<]+)<\/u>/gi, (_, t: string) =>
+    hold(`#underline[${escapeTypst(t)}]`),
+  );
+
+  // Superscript ^text^ and subscript ~text~
+  s = s.replace(/\^([^^\s][^^]*)\^/g, (_, t: string) =>
+    hold(`#super[${escapeTypst(t)}]`),
+  );
+  s = s.replace(/~([^~\s][^~]*)~/g, (_, t: string) =>
+    hold(`#sub[${escapeTypst(t)}]`),
+  );
+
   // Escape remaining plain text, then restore protected Typst fragments
   s = escapeTypst(s);
   s = s.replace(/§SLOT(\d+)§/g, (_, i: string) => slots[Number(i)] ?? "");
@@ -156,9 +188,20 @@ function inlineToTypst(text: string): string {
 
 type FigureMap = Map<string, string>; // url → local path relative to workspace
 
+function parseWidthFlag(raw: string): { text: string; fullWidth: boolean } {
+  const fullWidth = /\|\s*full\s*$/i.test(raw);
+  const text = raw.replace(/\|\s*(full|col|column)\s*$/i, "").trim();
+  return { text, fullWidth };
+}
+
+/**
+ * Booktabs-style table: top/mid/bottom rules, no vertical lines.
+ * Append `|full` to a preceding **Table.** caption to span both columns.
+ */
 function convertPipeTable(
   lines: string[],
   start: number,
+  fullWidth = false,
 ): { typst: string; nextIndex: number } | null {
   const headerLine = lines[start];
   if (!/^\|.+\|$/.test(headerLine.trim())) return null;
@@ -187,31 +230,72 @@ function convertPipeTable(
     Array.from({ length: cols }, (_, c) => `[${inlineToTypst(row[c] ?? "")}]`),
   );
 
-  const typst = [
+  const tableInner = [
+    `table(`,
+    `  columns: ${cols},`,
+    `  inset: (x: 5pt, y: 4.5pt),`,
+    `  align: left,`,
+    `  stroke: none,`,
+    `  table.hline(stroke: 0.75pt + rgb("#0b1f33")),`,
+    `  ${headerCells.join(", ")},`,
+    `  table.hline(stroke: 0.45pt + rgb("#5b6b7c")),`,
+    `  ${bodyCells.join(",\n  ")},`,
+    `  table.hline(stroke: 0.75pt + rgb("#0b1f33")),`,
+    `)`,
+  ].join("\n");
+
+  const fig = [
     `#figure(`,
-    `  table(`,
-    `    columns: ${cols},`,
-    `    inset: 6pt,`,
-    `    align: left,`,
-    `    stroke: 0.4pt + rgb("#d7dee7"),`,
-    `    ${[...headerCells, ...bodyCells].join(",\n    ")}`,
-    `  ),`,
+    `  ${tableInner},`,
+    `  kind: table,`,
     `  caption: [Table],`,
     `)`,
   ].join("\n");
 
+  const typst = fullWidth
+    ? [
+        `#place(`,
+        `  auto,`,
+        `  float: true,`,
+        `  scope: "parent",`,
+        `  clearance: 1.1em,`,
+        `  [${fig}],`,
+        `)`,
+      ].join("\n")
+    : fig;
+
   return { typst, nextIndex: i };
 }
 
-function figureTypst(localPath: string, caption: string, fullWidth = true): string {
-  const width = fullWidth ? "100%" : "85%";
-  const cleanCaption = caption.replace(/\|\s*full\s*$/i, "").trim();
-  return [
+/** Column-width figure (default) or parent-scoped full-width across both columns. */
+function figureTypst(
+  localPath: string,
+  caption: string,
+  fullWidth = false,
+): string {
+  const cleanCaption = caption.replace(/\|\s*(full|col|column)\s*$/i, "").trim();
+  const fig = [
     `#figure(`,
-    `  image(${JSON.stringify(localPath)}, width: ${width}),`,
+    `  image(${JSON.stringify(localPath)}, width: 100%),`,
     `  caption: [${escapeTypst(cleanCaption || "Figure")}],`,
     `)`,
   ].join("\n");
+
+  if (!fullWidth) return fig;
+
+  return [
+    `#place(`,
+    `  auto,`,
+    `  float: true,`,
+    `  scope: "parent",`,
+    `  clearance: 1.1em,`,
+    `  [${fig}],`,
+    `)`,
+  ].join("\n");
+}
+
+function isReferencesHeading(title: string): boolean {
+  return /^(references|bibliography|literature cited)$/i.test(title.trim());
 }
 
 /**
@@ -242,9 +326,9 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
       "",
       "_Add conclusion content here._",
       "",
-      "= References",
+      "#heading(level: 1, numbering: none)[References]",
       "",
-      "_References will be listed here._",
+      "#par(hanging-indent: 1.35em, first-line-indent: 0pt)[_References will be listed here._]",
     ].join("\n");
   }
 
@@ -252,6 +336,7 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
   const out: string[] = [];
   let i = 0;
   let inList: "ul" | "ol" | null = null;
+  let inReferences = false;
 
   const closeList = () => {
     inList = null;
@@ -301,7 +386,7 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
 
     if (trimmed === "---" || trimmed === "***") {
       closeList();
-      out.push("#line(length: 100%, stroke: 0.4pt + rgb(\"#d7dee7\"))");
+      out.push("#line(length: 100%, stroke: 0.4pt + rgb(\"#c5ced8\"))");
       out.push("");
       i += 1;
       continue;
@@ -309,20 +394,26 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
 
     // Pipe table
     if (/^\|.+\|$/.test(trimmed) && i + 1 < lines.length) {
-      const table = convertPipeTable(lines, i);
+      // Optional caption from previous **Table.** line (may include |full)
+      let caption = "Table";
+      let tableFull = false;
+      if (out.length > 0) {
+        const prev = out[out.length - 1];
+        const m = prev.match(
+          /^\*?Table(?:\s*\d+)?\.?\*?\s*(.*)$/i,
+        );
+        if (m) {
+          const parsed = parseWidthFlag(m[1].replace(/^\*\*|\*\*$/g, "").trim());
+          caption = parsed.text || "Table";
+          tableFull = parsed.fullWidth;
+          out.pop();
+          if (out[out.length - 1] === "") out.pop();
+        }
+      }
+
+      const table = convertPipeTable(lines, i, tableFull);
       if (table) {
         closeList();
-        // Optional caption from previous **Table.** line
-        let caption = "Table";
-        if (out.length > 0) {
-          const prev = out[out.length - 1];
-          const m = prev.match(/^\*?Table\.?\*?\s*(.*)$/i) || prev.match(/^\*\*Table\.?\*\*\s*(.*)$/i);
-          if (m) {
-            caption = m[1].replace(/^\*\*|\*\*$/g, "").trim() || "Table";
-            out.pop();
-            if (out[out.length - 1] === "") out.pop();
-          }
-        }
         out.push(
           table.typst.replace(
             "caption: [Table]",
@@ -335,19 +426,19 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
       }
     }
 
-    // Image alone on a line (optional |full for page width)
+    // Image alone on a line (|full = span both columns; default = one column)
     const img = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (img) {
       closeList();
-      const rawCaption = img[1];
-      const fullWidth = /\|\s*full\s*$/i.test(rawCaption);
-      const caption = rawCaption.replace(/\|\s*full\s*$/i, "").trim();
+      const { text: caption, fullWidth } = parseWidthFlag(img[1]);
       const url = img[2];
       const local = figureMap.get(url);
       if (local) {
-        out.push(figureTypst(local, caption, fullWidth || true));
+        out.push(figureTypst(local, caption, fullWidth));
       } else {
-        out.push(`_Figure unavailable (upload required): ${escapeTypst(caption)}_`);
+        out.push(
+          `_Figure unavailable (upload required): ${escapeTypst(caption)}_`,
+        );
       }
       out.push("");
       i += 1;
@@ -366,7 +457,13 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
     const h2 = trimmed.match(/^##\s+(.+)$/);
     if (h2) {
       closeList();
-      out.push(`== ${escapeTypst(h2[1])}`);
+      if (isReferencesHeading(h2[1])) {
+        inReferences = true;
+        out.push(`#heading(level: 1, numbering: none)[${escapeTypst(h2[1])}]`);
+      } else {
+        inReferences = false;
+        out.push(`== ${escapeTypst(h2[1])}`);
+      }
       out.push("");
       i += 1;
       continue;
@@ -374,7 +471,13 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
     const h1 = trimmed.match(/^#\s+(.+)$/);
     if (h1) {
       closeList();
-      out.push(`= ${escapeTypst(h1[1])}`);
+      if (isReferencesHeading(h1[1])) {
+        inReferences = true;
+        out.push(`#heading(level: 1, numbering: none)[${escapeTypst(h1[1])}]`);
+      } else {
+        inReferences = false;
+        out.push(`= ${escapeTypst(h1[1])}`);
+      }
       out.push("");
       i += 1;
       continue;
@@ -392,6 +495,14 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
     // Lists
     const ul = trimmed.match(/^[-*]\s+(.+)$/);
     if (ul) {
+      if (inReferences) {
+        closeList();
+        out.push(
+          `#par(hanging-indent: 1.35em, first-line-indent: 0pt)[${inlineToTypst(ul[1])}]`,
+        );
+        i += 1;
+        continue;
+      }
       if (inList !== "ul") {
         closeList();
         inList = "ul";
@@ -402,6 +513,14 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
     }
     const ol = trimmed.match(/^\d+\.\s+(.+)$/);
     if (ol) {
+      if (inReferences) {
+        closeList();
+        out.push(
+          `#par(hanging-indent: 1.35em, first-line-indent: 0pt)[${ol[0].match(/^\d+/)?.[0] ?? ""}. ${inlineToTypst(ol[1])}]`,
+        );
+        i += 1;
+        continue;
+      }
       if (inList !== "ol") {
         closeList();
         inList = "ol";
@@ -419,222 +538,500 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
     }
 
     closeList();
-    out.push(inlineToTypst(line));
+    if (inReferences) {
+      out.push(
+        `#par(hanging-indent: 1.35em, first-line-indent: 0pt)[${inlineToTypst(line)}]`,
+      );
+    } else {
+      out.push(inlineToTypst(line));
+    }
     i += 1;
   }
 
   return out.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
+/** ACS-style author line: "A and B*" with link-colored corresponding asterisk. */
+function formatAuthorsAcsTypst(authors: string[], linkColor: string): string {
+  if (authors.length === 0) {
+    return "#text(font: serif, size: 10.5pt, fill: ink)[Author]";
+  }
+  // Strip trailing * from names — we add the corresponding-author mark ourselves
+  const cleaned = authors.map((name) => name.replace(/\*+\s*$/g, "").trim()).filter(Boolean);
+  const names = (cleaned.length ? cleaned : ["Author"]).map((name) =>
+    escapeTypst(name),
+  );
+  let line: string;
+  if (names.length === 1) line = names[0];
+  else if (names.length === 2) line = `${names[0]} and ${names[1]}`;
+  else line = `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+  // Asterisk must sit outside the author text bracket (Typst treats * as emphasis).
+  return `#text(font: serif, size: 10.5pt, fill: ink)[${line}]#text(fill: rgb("${linkColor}"), weight: "bold")[\\*]`;
+}
+
+function formatAffiliationsTypst(affiliations: string[]): string {
+  if (affiliations.length === 0) return "";
+  return affiliations
+    .map((a, i) => `#super[${i + 1}]${escapeTypst(a)}`)
+    .join(" \\\n");
+}
+
+function siteOrigin(input: AtlasTypstInput): string {
+  const raw = (input.siteBaseUrl || process.env.NEXT_PUBLIC_APP_URL || "").trim();
+  if (raw) return raw.replace(/\/$/, "");
+  return "https://atlasacademicpublishing.com";
+}
+
+/** Public site origin for printed URLs — never emit localhost on the PDF. */
+function publicSiteOrigin(input: AtlasTypstInput): string | null {
+  const origin = siteOrigin(input);
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".local") ||
+      host === "0.0.0.0"
+    ) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  return origin;
+}
+
+function displayHostPath(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.host}${u.pathname}`.replace(/\/$/, "");
+  } catch {
+    return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  }
+}
+
 /**
  * Build a complete Typst document from Atlas article metadata.
- * First page uses an ACS-style masthead (logo, accent rule, article badge).
+ * ACS Biochemistry–level first page: journal wordmark, OA badge, type bar,
+ * Cite This / Read Online hyperlinks, ACCESS strip — colored by journal brand.
+ * Typst is the sole publication engine (no LaTeX).
  */
 export function buildAtlasTypstSource(
   input: AtlasTypstInput,
   figureMap: FigureMap = new Map(),
   logoPath?: string | null,
 ): string {
-  const authors = input.authors.map(escapeTypst).join(", ") || "Author";
-  const affiliations =
-    input.affiliations.length > 0
-      ? input.affiliations
-          .map((a, i) => `~${i + 1}~ ${escapeTypst(a)}`)
-          .join(" \\\n")
-      : "";
-  const keywords = input.keywords.map(escapeTypst).join(", ") || "—";
+  const palette = journalArticlePalette(
+    input.coverColor,
+    input.journalSlug || input.journalShortTitle || "atlas",
+  );
+  const publicOrigin = publicSiteOrigin(input);
+  const journalSlug =
+    (input.journalSlug || input.journalShortTitle || "journal")
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-|-$/g, "") || "journal";
+  const journalUrl = publicOrigin
+    ? `${publicOrigin}/journals/${journalSlug}`
+    : null;
+  const journalUrlHref = journalUrl ? JSON.stringify(journalUrl) : null;
+  const journalUrlLabel = journalUrl
+    ? escapeTypst(displayHostPath(journalUrl))
+    : "";
+
+  const doiRaw = (input.doi || "").trim();
+  const doiAbsolute = !doiRaw
+    ? null
+    : doiRaw.startsWith("http")
+      ? doiRaw
+      : `https://doi.org/${doiRaw}`;
+
+  const articleUrl = input.articleSlug
+    ? publicOrigin
+      ? `${publicOrigin}/articles/${input.articleSlug}`
+      : doiAbsolute
+    : doiAbsolute || journalUrl;
+  const articleHref = articleUrl ? JSON.stringify(articleUrl) : null;
+
+  const authorsLine = formatAuthorsAcsTypst(input.authors, palette.link);
+  const affiliations = formatAffiliationsTypst(input.affiliations);
+  const keywords = input.keywords.map(escapeTypst).join(" · ") || "—";
   const year = new Date().getFullYear().toString();
   const typeLabel = escapeTypst(
-    (input.articleType || "Article").replace(/\s+Article$/i, "").slice(0, 18) ||
+    (input.articleType || "Article").replace(/\s+Article$/i, "").slice(0, 22) ||
       "Article",
   );
-  const oaLabel = input.openAccess === false ? "Access" : "Open Access";
-  const citeAuthor = escapeTypst(
-    input.authors[0]
-      ? `${input.authors[0]}${input.authors.length > 1 ? " et al." : ""}`
-      : "Author",
+  const isOpenAccess = input.openAccess !== false;
+  const licenseRaw = (input.license || "CC BY 4.0").trim();
+  const licenseLabel = escapeTypst(licenseRaw.replace(/\s+/g, "-"));
+  const licenseHref = JSON.stringify(
+    "https://creativecommons.org/licenses/by/4.0/",
   );
 
+  const doiHref = JSON.stringify(
+    doiAbsolute || articleUrl || "https://doi.org/",
+  );
+  const doiText = escapeTypst(doiRaw || "Pending");
+
+  const citeJournal = escapeTypst(input.journalShortTitle || input.journalTitle);
+  const citeParts = [
+    year,
+    input.volume ? escapeTypst(input.volume) : null,
+    input.pages ? escapeTypst(input.pages) : null,
+  ].filter(Boolean);
+  const citeMeta =
+    citeParts.length > 0
+      ? citeParts.join(", ").replace(/^(\d{4}), /, "$1, ")
+      : year;
+  // ACS: *Biochemistry* 2026, 65, 2191–2201 — avoid _italic_ if name has underscores
+  const citeDisplay = `#emph[${citeJournal}] ${citeMeta}`;
+
+  const manuscriptLink = articleHref
+    ? `#link(${articleHref})[${escapeTypst(input.manuscriptId)}]`
+    : `[${escapeTypst(input.manuscriptId)}]`;
+  const journalMastheadLink = journalUrlHref
+    ? `#text(font: sans, size: 8pt, fill: link-blue)[#link(${journalUrlHref})[${journalUrlLabel}]]`
+    : `#text(font: sans, size: 8pt, fill: link-blue)[${escapeTypst(input.journalShortTitle || input.journalTitle)}]`;
+  const footerRight = journalUrlHref
+    ? `#link(${journalUrlHref})[${journalUrlLabel}]`
+    : `[${escapeTypst(input.manuscriptId)}]`;
+  const readOnline = articleHref
+    ? `#link(${articleHref})[#text(fill: white)[Read Online]]`
+    : `#link(${doiHref})[#text(fill: white)[Read Online]]`;
+  const metricsLink = articleHref
+    ? `#link(${articleHref})[#text(fill: ink)[Metrics & More]]`
+    : `[#text(fill: ink)[Metrics & More]]`;
+  const recommendLink = articleHref
+    ? `#link(${articleHref})[#text(fill: ink)[Article Recommendations]]`
+    : `[#text(fill: ink)[Article Recommendations]]`;
+
+  const wordmark = escapeTypst(input.journalShortTitle || input.journalTitle);
+  const pubDate = escapeTypst(formatDate(input.publishedAt));
+
   const logoBlock = logoPath
-    ? `#image("${logoPath}", height: 1.15cm)`
-    : `#box(
-        width: 1.15cm,
-        height: 1.15cm,
-        fill: rgb("#0f6b6a"),
-        radius: 50%,
-        inset: 2.5pt,
-        align(center + horizon)[
-          #box(
-            width: 100%,
-            height: 100%,
-            fill: white,
-            radius: 50%,
-            align(center + horizon)[
-              #text(size: 13pt, weight: "bold", fill: rgb("#0f6b6a"))[A]
-            ],
-          )
-        ],
-      )`;
+    ? `#image("${logoPath}", height: 0.95cm)`
+    : null;
+
+  const abstractText = escapeTypst(
+    input.abstract || "Abstract will appear here.",
+  );
+
+  const body = bodyToTypst(input.body, figureMap);
 
   return `
+// Atlas Academic Publishing — ACS-level Typst journal article
+// Primary publication engine: Typst (not LaTeX)
+// Brand colors from journal coverColor
+
+#let primary = rgb("${palette.primary}")
+#let link-blue = rgb("${palette.link}")
+#let soft-link = rgb("${palette.softLink}")
+#let soft = rgb("${palette.soft}")
+#let wordmark-fill = rgb("${palette.wordmark}")
+#let cite-orange = rgb("${palette.cite}")
+#let oa-gold = rgb("${palette.openAccess}")
+#let ink = rgb("${palette.ink}")
+#let muted = rgb("${palette.muted}")
+#let rule = rgb("${palette.rule}")
+#let serif = ("Libertinus Serif", "New Computer Modern", "Georgia", "Times New Roman")
+#let sans = ("Libertinus Sans", "TeX Gyre Heros", "Helvetica", "Arial")
+
 #set page(
   paper: "a4",
-  margin: (x: 2.0cm, y: 2.2cm),
+  margin: (left: 1.7cm, right: 1.7cm, top: 1.55cm, bottom: 1.65cm),
   header: context {
-    if counter(page).get().first() > 1 {
-      set text(size: 8pt, fill: rgb("#5b6b7c"))
+    let n = counter(page).get().first()
+    if n > 1 {
+      set text(font: sans, size: 7.5pt, fill: muted)
       grid(
         columns: (1fr, auto),
-        [Atlas Academic Publishing · ${escapeTypst(input.journalShortTitle)}],
-        [${escapeTypst(input.manuscriptId)}],
+        gutter: 8pt,
+        align(left + horizon)[
+          #text(weight: "semibold", fill: primary)[${escapeTypst(input.journalShortTitle)}]
+          #h(0.35em)·#h(0.35em)
+          ${manuscriptLink}
+        ],
+        align(right + horizon)[
+          #link(${doiHref})[DOI]
+        ],
       )
-      v(2pt)
-      line(length: 100%, stroke: 0.45pt + rgb("#0f6b6a"))
+      v(3pt)
+      line(length: 100%, stroke: 0.7pt + primary)
     }
   },
   footer: context {
-    set text(size: 8pt, fill: rgb("#5b6b7c"))
-    line(length: 100%, stroke: 0.3pt + rgb("#d7dee7"))
-    v(4pt)
+    set text(font: sans, size: 7.5pt, fill: muted)
+    line(length: 100%, stroke: 0.35pt + rule)
+    v(5pt)
     grid(
-      columns: (1fr, auto),
-      [© ${year} Atlas Academic Publishing · ${escapeTypst(input.license || "CC BY 4.0")}],
-      counter(page).display("1"),
+      columns: (1fr, auto, 1fr),
+      align(left + horizon)[
+        #link(${licenseHref})[${escapeTypst(licenseRaw)}]
+      ],
+      align(center + horizon)[
+        #text(fill: primary, weight: "semibold")[#counter(page).display()]
+      ],
+      align(right + horizon)[${footerRight}],
     )
   },
 )
 
-#set text(font: ("Libertinus Serif", "New Computer Modern", "Georgia", "Times New Roman"), size: 10.5pt, fill: rgb("#0b1f33"))
-#set par(justify: true, leading: 0.72em)
-#set heading(numbering: "1.")
-#set list(indent: 1em)
-#set enum(indent: 1em)
-#show figure: set block(breakable: false)
-#show figure.caption: set text(size: 9pt, fill: rgb("#5b6b7c"))
+#set text(font: serif, size: 10.5pt, fill: ink)
+#set par(justify: true, leading: 0.78em, spacing: 0.62em)
+#set heading(numbering: "1.1")
+#set list(indent: 0.9em, marker: ([•], [–], [·]))
+#set enum(indent: 0.9em)
+#show link: set text(fill: link-blue)
+#show figure: set block(breakable: false, spacing: 1.1em)
+#show figure.caption: it => {
+  set text(font: sans, size: 9pt, fill: muted)
+  set align(left)
+  block(inset: (top: 3pt), it)
+}
+#show quote: set block(
+  stroke: (left: 2pt + primary),
+  inset: (left: 10pt, y: 4pt),
+  fill: soft,
+)
 
-// —— First-page masthead (ACS-style) ——
+#show heading.where(level: 1): it => {
+  set text(font: sans, size: 11pt, weight: "bold", fill: primary, tracking: 0.02em)
+  set par(first-line-indent: 0pt, spacing: 0pt)
+  block(breakable: false, above: 1.35em, below: 0.6em)[
+    #if it.numbering != none [
+      #counter(heading).display(it.numbering)#text[.]#h(0.4em)
+    ]
+    #upper(it.body)
+  ]
+}
+
+#show heading.where(level: 2): it => {
+  set text(font: sans, size: 10.25pt, weight: "bold", fill: ink)
+  set par(first-line-indent: 0pt, spacing: 0pt)
+  block(breakable: false, above: 1.1em, below: 0.45em)[
+    #if it.numbering != none [
+      #counter(heading).display(it.numbering)#h(0.35em)
+    ]
+    #it.body
+  ]
+}
+
+#show heading.where(level: 3): it => {
+  set text(font: sans, size: 10pt, weight: "semibold", fill: muted, style: "italic")
+  set par(first-line-indent: 0pt, spacing: 0pt)
+  block(breakable: false, above: 0.95em, below: 0.35em)[
+    #if it.numbering != none [
+      #counter(heading).display(it.numbering)#h(0.3em)
+    ]
+    #it.body
+  ]
+}
+
+// —— ACS-style first page ——
 #grid(
-  columns: (auto, 1fr, auto),
-  gutter: 10pt,
-  align(horizon)[${logoBlock}],
-  align(horizon)[
-    #text(size: 12pt, weight: "bold", fill: rgb("#5b6b7c"), tracking: 0.08em)[ATLAS ]
-    #text(size: 12pt, weight: "bold", fill: rgb("#0b1f33"), tracking: 0.06em)[${escapeTypst((input.journalShortTitle || "JOURNAL").toUpperCase())}]
-    #v(2pt)
-    #text(size: 8pt, fill: rgb("#5b6b7c"))[${escapeTypst(input.journalTitle)}]
+  columns: (1fr, auto),
+  gutter: 12pt,
+  align(left + horizon)[
+    ${
+      logoBlock
+        ? `#box(baseline: 40%)[${logoBlock}]#h(8pt)`
+        : ""
+    }
+    #text(
+      font: serif,
+      size: 26pt,
+      weight: "bold",
+      style: "italic",
+      fill: wordmark-fill,
+    )[${wordmark}]
   ],
-  align(right + horizon)[
-    #text(size: 8pt, weight: "bold", fill: rgb("#0b1f33"))[${escapeTypst(input.manuscriptId)}] \\
-    #text(size: 7.5pt, fill: rgb("#5b6b7c"))[${escapeTypst(formatDate(input.publishedAt))}]
+  align(right + top)[
+    ${
+      isOpenAccess
+        ? `#box(fill: oa-gold, radius: 3pt, inset: (x: 9pt, y: 4pt))[
+      #text(font: sans, size: 8pt, weight: "bold", fill: white)[Open Access]
+    ]
+    #v(5pt)`
+        : ""
+    }
+    #text(font: sans, size: 7pt, fill: ink)[
+      This article is licensed under #link(${licenseHref})[${licenseLabel}]
+    ]
+  ],
+)
+
+#v(10pt)
+#grid(
+  columns: (1fr, auto),
+  gutter: 8pt,
+  align(bottom + left)[
+    ${journalMastheadLink}
+  ],
+  align(bottom + right)[
+    #box(fill: primary, inset: (x: 11pt, y: 5pt))[
+      #text(font: sans, size: 9pt, weight: "bold", fill: white)[${typeLabel}]
+    ]
+  ],
+)
+#v(2pt)
+#line(length: 100%, stroke: 1.6pt + primary)
+
+#v(14pt)
+#text(font: sans, size: 17.5pt, weight: "bold", fill: ink, tracking: -0.015em)[${escapeTypst(input.title)}]
+
+#v(10pt)
+${authorsLine}
+
+${
+  affiliations
+    ? `#v(5pt)
+#text(size: 8pt, fill: muted)[
+  ${affiliations}
+]`
+    : ""
+}
+
+#v(14pt)
+#grid(
+  columns: (1.45fr, 1fr),
+  gutter: 14pt,
+  [
+    #grid(
+      columns: (auto, 1fr),
+      column-gutter: 7pt,
+      align(horizon)[
+        #box(
+          width: 13pt,
+          height: 13pt,
+          fill: cite-orange,
+          radius: 1.5pt,
+          align(center + horizon)[
+            #text(font: sans, size: 8pt, weight: "bold", fill: white)[✓]
+          ],
+        )
+      ],
+      align(horizon)[
+        #set text(font: sans, size: 9pt)
+        #text(weight: "bold", fill: ink)[Cite This:]
+        #h(0.3em)
+        #link(${doiHref})[${citeDisplay}]
+      ],
+    )
+    #v(5pt)
+    #box(width: 100%, height: 2.4pt, fill: cite-orange)
+  ],
+  [
+    #box(
+      width: 100%,
+      fill: primary,
+      inset: (x: 10pt, y: 7pt),
+    )[
+      #set text(font: sans, size: 9.5pt, weight: "bold", fill: white)
+      #grid(
+        columns: (auto, 1fr),
+        column-gutter: 7pt,
+        align(horizon)[
+          #box(
+            width: 12pt,
+            height: 12pt,
+            stroke: 1.2pt + white,
+            radius: 50%,
+            align(center + horizon)[
+              #text(size: 6.5pt, fill: white)[◎]
+            ],
+          )
+        ],
+        align(horizon)[${readOnline}],
+      )
+    ]
   ],
 )
 
 #v(8pt)
+#line(length: 100%, stroke: 0.45pt + primary)
+
+#v(6pt)
+#set text(font: sans, size: 8pt)
 #grid(
-  columns: (1fr, auto),
-  gutter: 4pt,
-  align(horizon)[#box(width: 100%, height: 2.8pt, fill: rgb("#0f6b6a"))],
+  columns: (auto, 1fr, auto),
+  column-gutter: 12pt,
   align(horizon)[
-    #box(
-      fill: rgb("#0f6b6a"),
-      inset: (x: 7pt, y: 3.5pt),
-    )[
-      #text(size: 7.5pt, weight: "bold", fill: white, tracking: 0.08em)[${typeLabel}]
-    ]
+    #text(size: 11pt, weight: "bold", fill: soft-link, tracking: 0.08em)[ACCESS]
+    #h(10pt)
+    #text(fill: rule)[|]
+    #h(10pt)
+    ${metricsLink}
+    #h(10pt)
+    #text(fill: rule)[|]
+    #h(10pt)
+    ${recommendLink}
+  ],
+  [],
+  align(right + horizon)[
+    #text(size: 7pt, fill: muted)[${volIssueLine(input, year)}]
   ],
 )
 
-#v(14pt)
-#text(size: 16pt, weight: "bold")[${escapeTypst(input.title)}]
-
-#v(10pt)
-#text(size: 8.5pt, fill: rgb("#5b6b7c"))[${authors}]
-
 #v(4pt)
-#text(size: 11.5pt)[
-  ${affiliations}
-]
+#line(length: 100%, stroke: 0.35pt + rule)
 
-#v(10pt)
-#grid(
-  columns: (1fr, 1fr),
-  gutter: 8pt,
-  [
-    #block(
-      width: 100%,
-      inset: (x: 8pt, y: 7pt),
-      fill: rgb("#fafbfc"),
-      stroke: (bottom: 2.5pt + rgb("#f59e0b")),
-    )[
-      #text(size: 8pt)[
-        #text(weight: "bold")[Cite This:]
-        #text(fill: rgb("#0f6b6a"))[${citeAuthor}. ${escapeTypst(input.title)}. ${escapeTypst(input.journalShortTitle)}.]
-      ]
-    ]
-  ],
-  [
-    #block(
-      width: 100%,
-      inset: (x: 8pt, y: 7pt),
-      fill: rgb("#fafbfc"),
-      stroke: (bottom: 2.5pt + rgb("#0f6b6a")),
-    )[
-      #text(size: 9pt, weight: "bold", fill: rgb("#0f6b6a"))[Read Online]
-    ]
-  ],
-)
-
-#v(6pt)
-#text(size: 7.5pt, weight: "bold", fill: rgb("#5b6b7c"), tracking: 0.06em)[
-  #text(fill: rgb("#0f6b6a"))[${oaLabel}]
-  #h(0.4em)|#h(0.4em) Metrics & More
-  #h(0.4em)|#h(0.4em) Vol. ${escapeTypst(input.volume || "—")} · Issue ${escapeTypst(input.issue || "—")}
-  #h(0.4em)|#h(0.4em) DOI: ${escapeTypst(input.doi || "Pending")}
-]
-
-#v(4pt)
-#line(length: 100%, stroke: 0.4pt + rgb("#d7dee7"))
-
-#v(6pt)
-#text(size: 8.5pt, fill: rgb("#5b6b7c"))[
-  ${escapeTypst(input.journalTitle)}
-  · Received ${escapeTypst(formatDate(input.receivedAt))}
+#v(8pt)
+#text(font: sans, size: 7.25pt, fill: muted)[
+  Received ${escapeTypst(formatDate(input.receivedAt))}
   · Accepted ${escapeTypst(formatDate(input.acceptedAt))}
-  · Published ${escapeTypst(formatDate(input.publishedAt))}
+  · Published ${pubDate}
+  · #link(${doiHref})[DOI: ${doiText}]
 ]
 
 #v(12pt)
+#block(width: 100%)[
+  #text(font: sans, size: 8pt, weight: "bold", fill: primary, tracking: 0.12em)[ABSTRACT]
+  #v(5pt)
+  #set text(font: serif, size: 10.25pt, fill: ink)
+  #par(
+    justify: true,
+    leading: 0.78em,
+    first-line-indent: 0pt,
+    spacing: 0.62em,
+  )[
+    ${abstractText}
+  ]
+]
+
+#v(9pt)
 #block(
   width: 100%,
-  inset: 10pt,
-  fill: rgb("#f5f7fa"),
-  radius: 4pt,
-  [
-    #text(size: 9pt, weight: "bold", fill: rgb("#0f6b6a"))[Abstract]
-    #v(4pt)
-    #set text(size: 9.5pt)
-    ${escapeTypst(input.abstract)}
-  ],
-)
+  inset: (left: 9pt, rest: 7pt),
+  stroke: (left: 2.2pt + primary),
+  fill: soft,
+)[
+  #text(font: sans, size: 7.5pt, weight: "bold", fill: primary, tracking: 0.1em)[KEYWORDS]
+  #h(0.55em)
+  #text(font: sans, size: 9pt, fill: ink)[${keywords}]
+]
 
-#v(8pt)
-#block(
-  width: 100%,
-  inset: (x: 10pt, y: 8pt),
-  stroke: (left: 2.5pt + rgb("#0f6b6a"), rest: 0.5pt + rgb("#d7dee7")),
-  fill: rgb("#f5f7fa"),
-  radius: 3pt,
-  [
-    #text(size: 8pt, weight: "bold", fill: rgb("#0f6b6a"), tracking: 0.08em)[KEYWORDS]
-    #v(4pt)
-    #text(size: 9pt, fill: rgb("#0b1f33"))[${keywords}]
-  ],
-)
+#v(13pt)
+#line(length: 100%, stroke: 0.7pt + primary)
+#v(10pt)
 
-#v(14pt)
+#set text(font: serif, size: 10.5pt, fill: ink)
+#set par(justify: true, leading: 0.78em, first-line-indent: 1.1em, spacing: 0.62em)
+#show heading: set par(first-line-indent: 0pt)
 
-${bodyToTypst(input.body, figureMap)}
+#columns(2, gutter: 0.55cm)[
+${body}
+]
 `.trim();
+}
+
+function volIssueLine(input: AtlasTypstInput, year: string): string {
+  const bits = [
+    escapeTypst(input.journalShortTitle || ""),
+    year,
+    input.volume ? escapeTypst(input.volume) : null,
+    input.pages ? escapeTypst(input.pages) : null,
+  ].filter(Boolean);
+  return bits.join(", ");
 }
 
 async function downloadBytes(url: string): Promise<Uint8Array> {
