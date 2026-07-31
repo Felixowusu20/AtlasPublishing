@@ -6,27 +6,33 @@ export async function GET() {
   const session = await requireUser(["AUTHOR"]);
   if (!session) return unauthorized();
 
-  const notifications = await prisma.notification.findMany({
-    where: { userId: session.sub },
-    include: {
-      submission: {
-        select: {
-          id: true,
-          status: true,
-          publishedArticle: {
-            select: {
-              slug: true,
-              manuscriptUrl: true,
+  const [notifications, unreadCount] = await Promise.all([
+    prisma.notification.findMany({
+      where: { userId: session.sub },
+      include: {
+        submission: {
+          select: {
+            id: true,
+            manuscriptId: true,
+            status: true,
+            publishedArticle: {
+              select: {
+                slug: true,
+                manuscriptUrl: true,
+              },
             },
           },
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    prisma.notification.count({
+      where: { userId: session.sub, unread: true },
+    }),
+  ]);
 
-  return jsonOk({ notifications });
+  return jsonOk({ notifications, unreadCount });
 }
 
 export async function PATCH(request: Request) {
@@ -46,5 +52,9 @@ export async function PATCH(request: Request) {
     });
   }
 
-  return jsonOk({ ok: true });
+  const unreadCount = await prisma.notification.count({
+    where: { userId: session.sub, unread: true },
+  });
+
+  return jsonOk({ ok: true, unreadCount });
 }

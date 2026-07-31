@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useAdminAuth } from "@/components/admin-auth-provider";
+import { AdminNotifications } from "@/components/admin-notifications";
 import { initials } from "@/lib/session-client";
 
 type NavIcon =
@@ -418,9 +419,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
               </p>
             </div>
           </div>
-          <Link href="/" className="text-xs font-semibold text-[var(--accent)]">
-            View site →
-          </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <AdminNotifications />
+            <Link href="/" className="text-xs font-semibold text-[var(--accent)]">
+              View site →
+            </Link>
+          </div>
         </header>
         <div className="flex gap-2 overflow-x-auto border-b border-[var(--line)] bg-white px-3 py-2 lg:hidden">
           {links.map((item) => {

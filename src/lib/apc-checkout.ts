@@ -5,6 +5,7 @@ import {
 } from "@/lib/apc";
 import { appBaseUrl, getStripe } from "@/lib/stripe";
 import { progressForStatus } from "@/lib/submission-utils";
+import { notifyAdmins } from "@/lib/notify-admins";
 import type { Journal, Payment, Submission } from "@/generated/prisma/client";
 
 type SubmissionWithJournal = Submission & {
@@ -241,6 +242,12 @@ export async function markApcPaid(opts: {
 
     return sub;
   });
+
+  void notifyAdmins({
+    submissionId: updated.id,
+    title: "APC payment received",
+    body: `${updated.author.name} paid the APC for “${updated.title}” (${updated.manuscriptId}). Ready for production.`,
+  }).catch((err) => console.error("[notify-admins apc]", err));
 
   return updated;
 }
