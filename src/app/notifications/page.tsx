@@ -60,7 +60,9 @@ function NotificationsInner() {
             Notifications
           </h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Review updates and publication notices also arrive by email.
+            Review updates and publication notices also arrive by email. Use the
+            bell in the header and allow alerts to get desktop or mobile
+            notifications.
           </p>
         </div>
         <button type="button" className="btn-secondary text-xs" onClick={() => void markAll()}>

@@ -177,6 +177,78 @@ export function welcomeEmailHtml(name: string) {
   });
 }
 
+/** Strip academic titles so greetings stay "Dear Jane Smith," not "Dear Dr. …". */
+export function authorGreetingName(name: string) {
+  return name
+    .replace(
+      /^(dr|doctor|prof|professor|mr|mrs|ms|miss|sir|madam|eng|rev)\.?\s+/i,
+      "",
+    )
+    .trim() || name.trim();
+}
+
+/**
+ * Sent automatically when an author submits a manuscript.
+ */
+export function submissionAcknowledgementEmailHtml(opts: {
+  authorName: string;
+  title: string;
+  manuscriptId: string;
+  journalTitle: string;
+  submissionUrl: string;
+}) {
+  const name = authorGreetingName(opts.authorName);
+  return emailDocument({
+    title: "Manuscript received",
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(name)},</p>
+      <p style="margin:0 0 14px">
+        Thank you for submitting your manuscript entitled:
+      </p>
+      <p style="margin:0 0 14px">
+        <em>“${escapeHtml(opts.title)}”</em>
+      </p>
+      <p style="margin:0 0 14px">
+        to <strong>${escapeHtml(opts.journalTitle)}</strong>.
+      </p>
+      <p style="margin:0 0 14px">
+        Your manuscript has been received successfully and has been assigned
+        the following reference number:
+      </p>
+      <p style="margin:0 0 14px">
+        <strong>Manuscript ID:</strong> ${escapeHtml(opts.manuscriptId)}
+      </p>
+      <p style="margin:0 0 14px">
+        Please use this manuscript ID in all future correspondence.
+      </p>
+      <p style="margin:0 0 14px">
+        Your submission will now undergo an initial technical and editorial
+        screening to ensure that it meets the journal’s scope, formatting
+        requirements, and ethical standards. Further stages of review will
+        follow as appropriate. You will be notified by email once each stage
+        has been completed.
+      </p>
+      <p style="margin:0 0 14px">
+        You can monitor the status of your manuscript by logging into your
+        Nahda Publications author account.
+      </p>
+      <p style="margin:0 0 14px">
+        Thank you for choosing <strong>${escapeHtml(opts.journalTitle)}</strong>.
+        We appreciate your contribution to scholarly research.
+      </p>
+      <p style="margin:18px 0 0">
+        Kind regards,<br />
+        Editorial Office<br />
+        ${escapeHtml(opts.journalTitle)}<br />
+        Nahda Publications
+      </p>
+    `,
+    cta: { href: opts.submissionUrl, label: "View your manuscript" },
+    footerNote:
+      "This acknowledgement confirms receipt only. It does not indicate acceptance for publication.",
+  });
+}
+
 export function loginAlertEmailHtml(name: string, when: string) {
   return emailDocument({
     title: "New sign-in to your account",

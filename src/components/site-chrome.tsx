@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { AuthorNotifications } from "@/components/author-notifications";
 import { BrandLogo } from "@/components/brand-logo";
 import { journals } from "@/data/mock";
 import { initials } from "@/lib/auth";
@@ -245,7 +246,9 @@ export function SiteHeader() {
           {!ready ? (
             <div className="h-9 w-20 animate-pulse rounded-lg bg-[var(--surface)]" />
           ) : user ? (
-            <div className="relative" ref={accountRef}>
+            <>
+              <AuthorNotifications />
+              <div className="relative" ref={accountRef}>
               <button
                 type="button"
                 onClick={() => {
@@ -294,6 +297,7 @@ export function SiteHeader() {
                 </div>
               )}
             </div>
+            </>
           ) : (
             <div className="flex items-center gap-2">
               <Link href="/login" className="btn-secondary !px-3 !py-2 text-sm">

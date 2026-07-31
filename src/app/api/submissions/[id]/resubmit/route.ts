@@ -9,6 +9,7 @@ import {
   sendEmail,
 } from "@/lib/mail";
 import { getAppBaseUrl } from "@/lib/app-url";
+import { notifyAdmins } from "@/lib/notify-admins";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -91,6 +92,13 @@ export async function POST(request: Request, { params }: Params) {
       });
 
       return sub;
+    });
+
+    await notifyAdmins({
+      submissionId: id,
+      extraUserIds: submission.reviewerId ? [submission.reviewerId] : [],
+      title: "Author resubmitted a manuscript",
+      body: `${submission.author.name} resubmitted “${submission.title}” (${submission.manuscriptId}).`,
     });
 
     const base = getAppBaseUrl();

@@ -3,6 +3,13 @@ import { prisma } from "@/lib/db";
 import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import { nextManuscriptId, progressForStatus } from "@/lib/submission-utils";
+import { notifyAdmins } from "@/lib/notify-admins";
+import { getAppBaseUrl } from "@/lib/app-url";
+import {
+  authorGreetingName,
+  sendEmail,
+  submissionAcknowledgementEmailHtml,
+} from "@/lib/mail";
 
 export async function GET() {
   const session = await requireUser(["AUTHOR"]);
@@ -109,6 +116,50 @@ export async function POST(request: Request) {
         body: `${manuscriptId} was received and is awaiting editorial screening.`,
       },
     });
+
+    await notifyAdmins({
+      submissionId: submission.id,
+      title: "New manuscript submitted",
+      body: `${session.name || "An author"} submitted “${submission.title}” (${manuscriptId}) to ${journal.shortTitle || journal.title}.`,
+    });
+
+    const base = getAppBaseUrl();
+    const submissionUrl = `${base}/submissions/${submission.id}`;
+    const authorEmail = session.email;
+    const authorName = session.name || "Author";
+
+    void sendEmail({
+      to: authorEmail,
+      subject: `Manuscript received: ${manuscriptId}`,
+      html: submissionAcknowledgementEmailHtml({
+        authorName,
+        title: submission.title,
+        manuscriptId,
+        journalTitle: journal.title,
+        submissionUrl,
+      }),
+      text: [
+        `Dear ${authorGreetingName(authorName)},`,
+        "",
+        `Thank you for submitting your manuscript entitled “${submission.title}” to ${journal.title}.`,
+        "",
+        `Your manuscript has been received successfully.`,
+        `Manuscript ID: ${manuscriptId}`,
+        "",
+        "Please use this manuscript ID in all future correspondence.",
+        "",
+        "Your submission will now undergo an initial technical and editorial screening to ensure that it meets the journal’s scope, formatting requirements, and ethical standards. Further stages of review will follow as appropriate. You will be notified by email once each stage has been completed.",
+        "",
+        `You can monitor the status of your manuscript here: ${submissionUrl}`,
+        "",
+        `Thank you for choosing ${journal.title}. We appreciate your contribution to scholarly research.`,
+        "",
+        "Kind regards,",
+        "Editorial Office",
+        journal.title,
+        "Nahda Publications",
+      ].join("\n"),
+    }).catch((err) => console.error("[submission-ack-email]", err));
 
     return jsonCreated({ submission });
   } catch (err) {
