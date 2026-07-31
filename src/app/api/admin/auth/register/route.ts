@@ -43,7 +43,7 @@ export async function POST(request: Request) {
         email,
         passwordHash,
         role: "SUPER_ADMIN",
-        institution: body.institution?.trim() || "Atlas Publishing House",
+        institution: body.institution?.trim() || "Nahda Publications",
       },
     });
 
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
     void sendEmail({
       to: user.email,
-      subject: "Atlas Super Admin account created",
+      subject: "Nahda Super Admin account created",
       html: welcomeEmailHtml(user.name),
     });
 

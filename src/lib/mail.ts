@@ -1,10 +1,32 @@
+import fs from "fs";
+import path from "path";
 import nodemailer from "nodemailer";
+
+const BRAND = {
+  name: "Nahda Publications",
+  green: "#1e6847",
+  ink: "#0b1f33",
+  muted: "#5b6b7c",
+  line: "#d7dee7",
+  paper: "#f7faf8",
+};
+
+function appBaseUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  );
+}
+
+function logoFilePath() {
+  return path.join(process.cwd(), "public", "brand", "logo-nahda.png");
+}
 
 function getTransporter() {
   const host = process.env.SMTP_HOST ?? "smtp.gmail.com";
   const port = Number(process.env.SMTP_PORT ?? "587");
   const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const pass = (process.env.SMTP_PASS ?? "").replace(/\s+/g, "");
 
   if (!user || !pass) {
     console.warn("[mail] SMTP_USER/SMTP_PASS not configured — emails skipped");
@@ -16,11 +38,76 @@ function getTransporter() {
     port,
     secure: port === 465,
     auth: { user, pass },
-    // Fail fast instead of hanging requests when SMTP is unreachable
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 15_000,
   });
+}
+
+/** Shared document-style letterhead with Nahda logo. */
+function emailDocument(opts: {
+  title: string;
+  bodyHtml: string;
+  cta?: { href: string; label: string };
+  footerNote?: string;
+}) {
+  const logoSrc = "cid:nahda-logo";
+  const cta = opts.cta
+    ? `<p style="margin:28px 0 8px">
+        <a href="${opts.cta.href}"
+           style="background:${BRAND.green};color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:15px">
+          ${opts.cta.label}
+        </a>
+      </p>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${opts.title}</title>
+</head>
+<body style="margin:0;padding:0;background:${BRAND.paper}">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${BRAND.paper};padding:28px 12px">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid ${BRAND.line}">
+          <tr>
+            <td style="padding:28px 36px 18px;border-bottom:1px solid ${BRAND.line}">
+              <img src="${logoSrc}" alt="Nahda Publications" width="200" style="display:block;width:200px;max-width:70%;height:auto;border:0" />
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 36px 8px;font-family:Georgia,'Times New Roman',serif;color:${BRAND.ink};font-size:16px;line-height:1.65">
+              <h1 style="margin:0 0 18px;font-size:22px;line-height:1.35;font-weight:700;color:${BRAND.ink}">
+                ${opts.title}
+              </h1>
+              ${opts.bodyHtml}
+              ${cta}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 36px 28px;border-top:1px solid ${BRAND.line};font-family:Georgia,'Times New Roman',serif;color:${BRAND.muted};font-size:13px;line-height:1.55">
+              ${opts.footerNote ? `<p style="margin:0 0 10px">${opts.footerNote}</p>` : ""}
+              <p style="margin:0;color:${BRAND.green};font-weight:600">${BRAND.name}</p>
+              <p style="margin:4px 0 0">Scholarly publishing for researchers worldwide</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 /**
@@ -41,7 +128,22 @@ export async function sendEmail(options: {
 
   const from =
     process.env.SMTP_FROM ??
-    `Atlas Academic Publishing <${process.env.SMTP_USER}>`;
+    `Nahda Publications <${process.env.SMTP_USER}>`;
+
+  const attachments: {
+    filename: string;
+    path: string;
+    cid: string;
+  }[] = [];
+
+  const logoPath = logoFilePath();
+  if (fs.existsSync(logoPath)) {
+    attachments.push({
+      filename: "logo-nahda.png",
+      path: logoPath,
+      cid: "nahda-logo",
+    });
+  }
 
   try {
     await transporter.sendMail({
@@ -50,6 +152,7 @@ export async function sendEmail(options: {
       subject: options.subject,
       html: options.html,
       text: options.text,
+      attachments,
     });
     return { ok: true, skipped: false };
   } catch (err) {
@@ -62,23 +165,34 @@ export async function sendEmail(options: {
 }
 
 export function welcomeEmailHtml(name: string) {
-  return `
-  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
-    <h1 style="font-size:22px">Welcome to Atlas, ${name}</h1>
-    <p>Your account is ready. You can sign in, submit manuscripts, and track peer review from your dashboard.</p>
-    <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/login" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Sign in</a></p>
-    <p style="color:#5b6b7c;font-size:13px">Atlas Academic Publishing</p>
-  </div>`;
+  const loginUrl = `${appBaseUrl()}/login`;
+  return emailDocument({
+    title: `Welcome to Nahda Publications`,
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(name)},</p>
+      <p style="margin:0 0 14px">
+        Your author account is ready. You may sign in to submit manuscripts,
+        track peer review, and manage your publications.
+      </p>
+    `,
+    cta: { href: loginUrl, label: "Sign in to your account" },
+  });
 }
 
 export function loginAlertEmailHtml(name: string, when: string) {
-  return `
-  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
-    <h1 style="font-size:22px">New sign-in to your Atlas account</h1>
-    <p>Hi ${name},</p>
-    <p>We noticed a successful sign-in at <strong>${when}</strong>.</p>
-    <p style="color:#5b6b7c;font-size:13px">If this was not you, reset your password or contact support.</p>
-  </div>`;
+  return emailDocument({
+    title: "New sign-in to your account",
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(name)},</p>
+      <p style="margin:0 0 14px">
+        We recorded a successful sign-in to your Nahda Publications account at
+        <strong>${escapeHtml(when)}</strong>.
+      </p>
+      <p style="margin:0 0 14px">
+        If this was not you, please reset your password or contact support.
+      </p>
+    `,
+  });
 }
 
 export function reviewFeedbackEmailHtml(opts: {
@@ -90,24 +204,29 @@ export function reviewFeedbackEmailHtml(opts: {
   submissionUrl: string;
   needsRevision?: boolean;
 }) {
-  return `
-  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
-    <h1 style="font-size:22px">Review update for ${opts.manuscriptId}</h1>
-    <p>Hi ${opts.authorName},</p>
-    <p>Your manuscript <strong>${opts.title}</strong> has a new editorial update.</p>
-    <p><strong>Status:</strong> ${opts.status}</p>
-    <div style="background:#eef2f6;padding:14px;border-radius:10px;margin:16px 0">
-      <p style="margin:0 0 8px;font-weight:600">Reviewer / editor feedback</p>
-      ${opts.message.replace(/\n/g, "<br/>")}
-    </div>
-    ${
-      opts.needsRevision
-        ? `<p>Please revise your manuscript, then use <strong>Resubmit</strong> on your author portal to send the corrected file back for review.</p>`
-        : ""
-    }
-    <p><a href="${opts.submissionUrl}" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Open manuscript &amp; feedback</a></p>
-    <p style="color:#5b6b7c;font-size:13px">Atlas Academic Publishing</p>
-  </div>`;
+  return emailDocument({
+    title: `Editorial update: ${escapeHtml(opts.manuscriptId)}`,
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(opts.authorName)},</p>
+      <p style="margin:0 0 14px">
+        Your manuscript <strong>${escapeHtml(opts.title)}</strong>
+        (${escapeHtml(opts.manuscriptId)}) has a new editorial update.
+      </p>
+      <p style="margin:0 0 8px"><strong>Status:</strong> ${escapeHtml(opts.status)}</p>
+      <div style="background:${BRAND.paper};border:1px solid ${BRAND.line};padding:16px 18px;margin:16px 0">
+        <p style="margin:0 0 8px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:${BRAND.muted}">
+          Editor / reviewer message
+        </p>
+        <p style="margin:0;white-space:pre-wrap">${escapeHtml(opts.message).replace(/\n/g, "<br/>")}</p>
+      </div>
+      ${
+        opts.needsRevision
+          ? `<p style="margin:0 0 14px">Please revise your manuscript and use <strong>Resubmit</strong> on your author portal to return the corrected file for review.</p>`
+          : ""
+      }
+    `,
+    cta: { href: opts.submissionUrl, label: "Open manuscript" },
+  });
 }
 
 export function resubmissionEmailHtml(opts: {
@@ -116,13 +235,17 @@ export function resubmissionEmailHtml(opts: {
   manuscriptId: string;
   submissionUrl: string;
 }) {
-  return `
-  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
-    <h1 style="font-size:22px">Resubmission received: ${opts.manuscriptId}</h1>
-    <p>Hi ${opts.authorName},</p>
-    <p>We received your revised manuscript <strong>${opts.title}</strong>. It is back under review.</p>
-    <p><a href="${opts.submissionUrl}" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Track progress</a></p>
-  </div>`;
+  return emailDocument({
+    title: `Resubmission received: ${escapeHtml(opts.manuscriptId)}`,
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(opts.authorName)},</p>
+      <p style="margin:0 0 14px">
+        We have received your revised manuscript
+        <strong>${escapeHtml(opts.title)}</strong>. It is now back under review.
+      </p>
+    `,
+    cta: { href: opts.submissionUrl, label: "Track progress" },
+  });
 }
 
 export function reviewerResubmissionNoticeHtml(opts: {
@@ -132,13 +255,17 @@ export function reviewerResubmissionNoticeHtml(opts: {
   manuscriptId: string;
   adminUrl: string;
 }) {
-  return `
-  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
-    <h1 style="font-size:22px">Author resubmitted ${opts.manuscriptId}</h1>
-    <p>Hi ${opts.reviewerName},</p>
-    <p>${opts.authorName} uploaded a revised file for <strong>${opts.title}</strong>.</p>
-    <p><a href="${opts.adminUrl}" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Open in inbox</a></p>
-  </div>`;
+  return emailDocument({
+    title: `Author resubmitted ${escapeHtml(opts.manuscriptId)}`,
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(opts.reviewerName)},</p>
+      <p style="margin:0 0 14px">
+        ${escapeHtml(opts.authorName)} has uploaded a revised file for
+        <strong>${escapeHtml(opts.title)}</strong>.
+      </p>
+    `,
+    cta: { href: opts.adminUrl, label: "Open in inbox" },
+  });
 }
 
 export function reviewerInviteEmailHtml(opts: {
@@ -146,29 +273,40 @@ export function reviewerInviteEmailHtml(opts: {
   email: string;
   tempNote: string;
 }) {
-  return `
-  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
-    <h1 style="font-size:22px">You have been added as a reviewer</h1>
-    <p>Hi ${opts.name},</p>
-    <p>A super admin created a reviewer account for you on Atlas Academic Publishing.</p>
-    <p><strong>Email:</strong> ${opts.email}</p>
-    <p>${opts.tempNote}</p>
-    <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/admin/login" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open admin panel</a></p>
-  </div>`;
+  return emailDocument({
+    title: "Reviewer account created",
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(opts.name)},</p>
+      <p style="margin:0 0 14px">
+        A reviewer account has been created for you on Nahda Publications.
+      </p>
+      <p style="margin:0 0 14px"><strong>Email:</strong> ${escapeHtml(opts.email)}</p>
+      <p style="margin:0 0 14px">${escapeHtml(opts.tempNote)}</p>
+    `,
+    cta: {
+      href: `${appBaseUrl()}/admin/login`,
+      label: "Open admin panel",
+    },
+  });
 }
 
 export function passwordResetEmailHtml(opts: {
   name: string;
   resetUrl: string;
 }) {
-  return `
-  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
-    <h1 style="font-size:22px">Reset your Atlas password</h1>
-    <p>Hi ${opts.name},</p>
-    <p>We received a request to reset the password for your author account. Click the button below to choose a new password. This link expires in 1 hour.</p>
-    <p><a href="${opts.resetUrl}" style="background:#0f6b6a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Reset password</a></p>
-    <p style="color:#5b6b7c;font-size:13px">If you did not request this, you can ignore this email. Your password will stay the same.</p>
-  </div>`;
+  return emailDocument({
+    title: "Reset your password",
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(opts.name)},</p>
+      <p style="margin:0 0 14px">
+        We received a request to reset the password for your Nahda Publications
+        author account. This link expires in one hour.
+      </p>
+    `,
+    cta: { href: opts.resetUrl, label: "Choose a new password" },
+    footerNote:
+      "If you did not request this change, you may ignore this message. Your password will remain unchanged.",
+  });
 }
 
 export function articlePublishedEmailHtml(opts: {
@@ -179,38 +317,71 @@ export function articlePublishedEmailHtml(opts: {
   articleUrl: string;
   pdfUrl?: string | null;
 }) {
-  const downloadBlock = opts.pdfUrl
-    ? `<p style="margin:24px 0 8px">
-      <a href="${opts.pdfUrl}" style="background:#0f6b6a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">
-        Download your published article (PDF)
-      </a>
-    </p>
-    <p style="margin:8px 0 20px">
-      <a href="${opts.articleUrl}" style="color:#0f6b6a;font-size:14px">View the article page on Atlas →</a>
-    </p>`
-    : `<p>
-      <a href="${opts.articleUrl}" style="background:#0f6b6a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">
-        View your published article
-      </a>
-    </p>`;
+  const links = opts.pdfUrl
+    ? `
+      <p style="margin:0 0 14px">
+        Your article is now available. You may download the final PDF or visit
+        the public article page.
+      </p>`
+    : `
+      <p style="margin:0 0 14px">
+        Your article is now available on the Nahda Publications website.
+      </p>`;
 
-  return `
-  <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#0b1f33">
-    <h1 style="font-size:22px">Congratulations — your article is published</h1>
-    <p>Dear ${opts.authorName},</p>
-    <p>
-      We are delighted to congratulate you on the publication of your manuscript
-      <strong>${opts.title}</strong> (${opts.manuscriptId}) in
-      <em>${opts.journalTitle}</em>.
-    </p>
-    <p>
-      Your work is now live on Atlas Academic Publishing. Use the button below to
-      download the final article PDF, and share the article page with colleagues.
-    </p>
-    ${downloadBlock}
-    <p style="margin-top:20px;color:#5b6b7c;font-size:14px">
-      Thank you for publishing with Atlas. We look forward to your future submissions.
-    </p>
-    <p style="color:#5b6b7c;font-size:13px">Atlas Academic Publishing</p>
-  </div>`;
+  const secondary = opts.pdfUrl
+    ? `<p style="margin:12px 0 0;font-size:14px">
+         <a href="${opts.articleUrl}" style="color:${BRAND.green}">View article page</a>
+       </p>`
+    : "";
+
+  return emailDocument({
+    title: "Your article is published",
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(opts.authorName)},</p>
+      <p style="margin:0 0 14px">
+        Your manuscript <strong>${escapeHtml(opts.title)}</strong>
+        (${escapeHtml(opts.manuscriptId)}) has been published in
+        <em>${escapeHtml(opts.journalTitle)}</em>.
+      </p>
+      ${links}
+      ${secondary}
+    `,
+    cta: {
+      href: opts.pdfUrl || opts.articleUrl,
+      label: opts.pdfUrl
+        ? "Download published PDF"
+        : "View published article",
+    },
+  });
+}
+
+export function apcPaymentEmailHtml(opts: {
+  authorName: string;
+  title: string;
+  manuscriptId: string;
+  journalTitle: string;
+  amountLabel: string;
+  checkoutUrl: string;
+  submissionUrl: string;
+}) {
+  return emailDocument({
+    title: "Manuscript accepted: payment required",
+    bodyHtml: `
+      <p style="margin:0 0 14px">Dear ${escapeHtml(opts.authorName)},</p>
+      <p style="margin:0 0 14px">
+        <strong>${escapeHtml(opts.title)}</strong>
+        (${escapeHtml(opts.manuscriptId)}) has been accepted for publication in
+        <em>${escapeHtml(opts.journalTitle)}</em>.
+      </p>
+      <p style="margin:0 0 14px">
+        To proceed to production, please pay the article processing charge of
+        <strong>${escapeHtml(opts.amountLabel)}</strong>.
+      </p>
+      <p style="margin:0 0 14px;font-size:14px;color:${BRAND.muted}">
+        You may also open your manuscript page:
+        <a href="${opts.submissionUrl}" style="color:${BRAND.green}">${escapeHtml(opts.submissionUrl)}</a>
+      </p>
+    `,
+    cta: { href: opts.checkoutUrl, label: "Pay article processing charge" },
+  });
 }

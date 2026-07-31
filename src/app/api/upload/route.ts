@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return jsonError("file is required");
     }
 
-    const folder = String(form.get("folder") ?? "atlas");
+    const folder = String(form.get("folder") ?? "nahda");
     const resourceType = (String(form.get("resourceType") ?? "auto") as
       | "image"
       | "raw"

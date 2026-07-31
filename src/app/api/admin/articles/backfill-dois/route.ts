@@ -3,7 +3,7 @@ import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { backfillMissingDois } from "@/lib/doi";
 import { requireAdmin } from "@/lib/session";
 
-/** Assign Atlas DOIs to published articles that are missing one. */
+/** Assign Nahda DOIs to published articles that are missing one. */
 export async function POST() {
   const admin = await requireAdmin(["SUPER_ADMIN"]);
   if (!admin) return unauthorized();

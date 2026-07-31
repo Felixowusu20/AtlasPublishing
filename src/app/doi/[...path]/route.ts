@@ -6,7 +6,7 @@ import { articleDownloadPath } from "@/lib/submission-utils";
 type Params = { params: Promise<{ path: string[] }> };
 
 /**
- * Resolve an Atlas DOI to the article page or PDF download.
+ * Resolve an Nahda DOI to the article page or PDF download.
  * Example: /doi/10.58000/ajs.2026.0142
  *          /doi/10.58000/ajs.2026.0142?download=1
  */

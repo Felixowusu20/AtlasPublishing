@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
       void sendEmail({
         to: user.email,
-        subject: "Reset your Atlas password",
+        subject: "Reset your Nahda password",
         html: passwordResetEmailHtml({
           name: user.name,
           resetUrl,

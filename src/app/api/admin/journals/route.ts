@@ -33,8 +33,8 @@ const schema = z.object({
   apc: z.string().optional(),
   editorInChief: z.string().optional(),
   coverColor: z.string().optional(),
-  coverImageUrl: z.string().optional(),
-  coverImagePublicId: z.string().optional(),
+  coverImageUrl: z.string().url().nullable().optional(),
+  coverImagePublicId: z.string().nullable().optional(),
   indexedIn: z.array(z.string()).optional(),
   foundedYear: z.number().int().optional(),
   isActive: z.boolean().optional(),
@@ -58,13 +58,28 @@ export async function POST(request: Request) {
 
     const journal = await prisma.journal.create({
       data: {
-        ...body,
+        title: body.title,
+        shortTitle: body.shortTitle,
         slug,
-        coverColor,
-        subjects: body.subjects ?? [],
-        indexedIn: body.indexedIn ?? [],
+        issn: body.issn,
+        eIssn: body.eIssn,
+        doiPrefix: body.doiPrefix,
+        frequency: body.frequency,
         reviewType: body.reviewType ?? "DOUBLE_BLIND",
+        description: body.description,
+        aims: body.aims,
+        subjects: body.subjects ?? [],
+        impactFactor: body.impactFactor,
+        acceptanceRate: body.acceptanceRate,
+        avgReviewDays: body.avgReviewDays,
         openAccess: body.openAccess ?? true,
+        apc: body.apc,
+        editorInChief: body.editorInChief,
+        coverColor,
+        coverImageUrl: body.coverImageUrl ?? undefined,
+        coverImagePublicId: body.coverImagePublicId ?? undefined,
+        indexedIn: body.indexedIn ?? [],
+        foundedYear: body.foundedYear,
         isActive: body.isActive ?? true,
         sortOrder: body.sortOrder ?? 0,
       },
@@ -86,8 +101,22 @@ export async function PATCH(request: Request) {
   try {
     const raw = await request.json();
     const id = z.string().parse(raw.id);
+
+    // Normalize empty logo fields to null before validation
+    if (raw.coverImageUrl === "") raw.coverImageUrl = null;
+    if (raw.coverImagePublicId === "") raw.coverImagePublicId = null;
+
     const data = schema.partial().parse(raw);
-    const journal = await prisma.journal.update({ where: { id }, data });
+    const journal = await prisma.journal.update({
+      where: { id },
+      data: {
+        ...data,
+        ...(raw.coverImageUrl === null ? { coverImageUrl: null } : {}),
+        ...(raw.coverImagePublicId === null
+          ? { coverImagePublicId: null }
+          : {}),
+      },
+    });
     return jsonOk({ journal });
   } catch (err) {
     if (err instanceof z.ZodError) {

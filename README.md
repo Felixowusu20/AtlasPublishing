@@ -1,4 +1,4 @@
-# Atlas Academic Publishing
+# Nahda Publications
 
 Next.js journal platform with Prisma (Neon PostgreSQL), Cloudinary uploads, Google SMTP email, author auth, and an admin panel for CMS + peer review.
 

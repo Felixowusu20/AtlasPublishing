@@ -7,7 +7,12 @@ import { articleTypes, submissionSteps } from "@/data/mock";
 import { useAuth } from "@/components/auth-provider";
 import type { ArticleType } from "@/lib/types";
 
-type JournalOption = { id: string; title: string; shortTitle: string };
+type JournalOption = {
+  id: string;
+  title: string;
+  shortTitle: string;
+  slug: string;
+};
 
 type FormState = {
   journalId: string;
@@ -61,12 +66,15 @@ export function SubmissionWizard() {
       .then((data) => {
         const list = (data.journals ?? []) as JournalOption[];
         setJournals(list);
-        if (preselectedJournal) {
-          setForm((prev) =>
-            prev.journalId
-              ? prev
-              : { ...prev, journalId: preselectedJournal },
-          );
+        if (!preselectedJournal) return;
+        const match = list.find(
+          (j) =>
+            j.id === preselectedJournal ||
+            j.slug === preselectedJournal ||
+            j.shortTitle.toLowerCase() === preselectedJournal.toLowerCase(),
+        );
+        if (match) {
+          setForm((prev) => ({ ...prev, journalId: match.id }));
         }
       });
   }, [preselectedJournal]);
@@ -262,6 +270,11 @@ export function SubmissionWizard() {
                 ))}
               </select>
             </label>
+            {selectedJournal && preselectedJournal && (
+              <p className="rounded-lg border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent)]">
+                Pre-selected: {selectedJournal.title} ({selectedJournal.shortTitle})
+              </p>
+            )}
             {journals.length === 0 && (
               <p className="text-xs text-amber-800">
                 No journals yet. Ask an admin to add journals in the CMS.

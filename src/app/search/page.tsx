@@ -87,7 +87,7 @@ function SearchPageInner() {
           </p>
           <h1 className="page-title mt-1">Search</h1>
           <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
-            Find articles by title, author, keyword, or Atlas DOI. Results open
+            Find articles by title, author, keyword, or Nahda DOI. Results open
             the same professional article page used across the site.
           </p>
         </div>

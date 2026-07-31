@@ -32,6 +32,14 @@ enum ReviewType {
   OPEN_REVIEW
 }
 
+/// APC / article-processing charge payment state for an accepted manuscript.
+enum ApcPaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  WAIVED
+}
+
 model User {
   id                String   @id @default(cuid())
   name              String
@@ -145,6 +153,8 @@ model PublishedArticle {
   journal       Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
   submissionId  String?  @unique
   submission    Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  /// Preserved when moved to recycle bin so restore can re-link the submission.
+  trashedSubmissionId String?
   publishedAt   DateTime @default(now())
   receivedAt    DateTime?
   acceptedAt    DateTime?
@@ -164,12 +174,16 @@ model PublishedArticle {
   views         Int      @default(0)
   isFeatured    Boolean  @default(false)
   isActive      Boolean  @default(true)
+  /// Soft-delete: set when moved to the recycle bin (hidden from public site).
+  deletedAt     DateTime?
+  deletedById   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([publishedAt])
   @@index([journalId])
   @@index([isFeatured])
+  @@index([deletedAt])
 }
 
 model Submission {
@@ -201,10 +215,17 @@ model Submission {
   manuscriptReadyAt  DateTime?
   actionRequired     String?
   authorsJson        Json?
+  /// APC payment gate between ACCEPTED and production/publish.
+  apcPaymentStatus   ApcPaymentStatus @default(NOT_REQUIRED)
+  apcPaidAt          DateTime?
   submittedAt        DateTime         @default(now())
   feedback           ReviewFeedback[]
   notifications      Notification[]
   publishedArticle   PublishedArticle?
+  payment            Payment?
+  /// Soft-delete: set when moved to the recycle bin (hidden from inbox/dashboard).
+  deletedAt          DateTime?
+  deletedById        String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
@@ -212,6 +233,29 @@ model Submission {
   @@index([reviewerId])
   @@index([status])
   @@index([journalId])
+  @@index([apcPaymentStatus])
+  @@index([deletedAt])
+}
+
+model Payment {
+  id                      String           @id @default(cuid())
+  submissionId            String           @unique
+  submission              Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  amountCents             Int
+  currency                String           @default("usd")
+  status                  ApcPaymentStatus @default(PENDING)
+  stripeCheckoutSessionId String?          @unique
+  stripePaymentIntentId   String?
+  stripeCustomerEmail     String?
+  receiptUrl              String?
+  paidAt                  DateTime?
+  waivedAt                DateTime?
+  waivedById              String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  @@index([status])
+  @@index([stripeCheckoutSessionId])
 }
 
 model ReviewFeedback {

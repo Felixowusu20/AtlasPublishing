@@ -13,33 +13,66 @@ type Counts = {
   publishQueue: number;
 };
 
+async function readJson(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function listLength(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
 export default function AdminHomePage() {
   const { user } = useAdminAuth();
   const [counts, setCounts] = useState<Counts | null>(null);
 
   useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
     void (async () => {
-      const [subs, journals, articles, announcements, reviewers, publish] =
-        await Promise.all([
-          fetch("/api/admin/submissions").then((r) => r.json()),
-          fetch("/api/admin/journals").then((r) => r.json()),
-          fetch("/api/admin/articles").then((r) => r.json()),
-          fetch("/api/admin/announcements").then((r) => r.json()),
-          user?.role === "SUPER_ADMIN"
-            ? fetch("/api/admin/reviewers").then((r) => r.json())
-            : Promise.resolve({ reviewers: [] }),
-          fetch("/api/admin/publish-queue").then((r) => r.json()),
-        ]);
-      setCounts({
-        submissions: subs.submissions?.length ?? 0,
-        journals: journals.journals?.length ?? 0,
-        articles: articles.articles?.length ?? 0,
-        announcements: announcements.announcements?.length ?? 0,
-        reviewers: reviewers.reviewers?.length ?? 0,
-        publishQueue: publish.queue?.length ?? 0,
-      });
+      try {
+        const [subs, journals, articles, announcements, reviewers, publish] =
+          await Promise.all([
+            fetch("/api/admin/submissions").then(readJson),
+            fetch("/api/admin/journals").then(readJson),
+            fetch("/api/admin/articles").then(readJson),
+            fetch("/api/admin/announcements").then(readJson),
+            user.role === "SUPER_ADMIN"
+              ? fetch("/api/admin/reviewers").then(readJson)
+              : Promise.resolve({ reviewers: [] as unknown[] }),
+            fetch("/api/admin/publish-queue").then(readJson),
+          ]);
+        if (cancelled) return;
+        setCounts({
+          submissions: listLength(subs.submissions),
+          journals: listLength(journals.journals),
+          articles: listLength(articles.articles),
+          announcements: listLength(announcements.announcements),
+          reviewers: listLength(reviewers.reviewers),
+          publishQueue: listLength(publish.queue),
+        });
+      } catch {
+        if (!cancelled) {
+          setCounts({
+            submissions: 0,
+            journals: 0,
+            articles: 0,
+            announcements: 0,
+            reviewers: 0,
+            publishQueue: 0,
+          });
+        }
+      }
     })();
-  }, [user?.role]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   if (!user) return null;
 
@@ -89,6 +122,7 @@ export default function AdminHomePage() {
               href="/admin/reviewers"
             />
             <Stat label="Hero slides" value="CMS" href="/admin/hero" />
+            <Stat label="Recycle bin" value="Bin" href="/admin/recycle-bin" />
           </>
         )}
       </div>

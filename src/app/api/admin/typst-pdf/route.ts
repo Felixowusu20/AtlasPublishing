@@ -12,6 +12,10 @@ const schema = z.object({
   submissionId: z.string().optional(),
   journalTitle: z.string().min(1),
   journalShortTitle: z.string().min(1),
+  journalSlug: z.string().optional(),
+  coverColor: z.string().optional(),
+  articleSlug: z.string().optional(),
+  siteBaseUrl: z.string().optional(),
   manuscriptId: z.string().min(1),
   title: z.string().min(2),
   authors: z.array(z.string()).min(1),
@@ -40,7 +44,7 @@ const schema = z.object({
 });
 
 /**
- * Generate an Atlas-branded Typst PDF.
+ * Generate a Nahda-branded Typst PDF.
  * - Default: returns application/pdf bytes for download/preview
  * - upload=true: stores on Cloudinary and returns { url, publicId }
  */
@@ -53,20 +57,43 @@ export async function POST(request: Request) {
 
     let receivedAt: string | undefined;
     let acceptedAt: string | undefined;
+    let journalSlug = body.journalSlug;
+    let coverColor = body.coverColor;
+    let logoUrl = body.logoUrl;
     if (body.submissionId) {
       const sub = await prisma.submission.findUnique({
         where: { id: body.submissionId },
-        select: { submittedAt: true, updatedAt: true },
+        select: {
+          submittedAt: true,
+          updatedAt: true,
+          journal: {
+            select: {
+              slug: true,
+              coverColor: true,
+              coverImageUrl: true,
+            },
+          },
+        },
       });
       if (sub) {
         receivedAt = sub.submittedAt.toISOString();
         acceptedAt = sub.updatedAt.toISOString();
+        journalSlug = journalSlug || sub.journal.slug;
+        coverColor = coverColor || sub.journal.coverColor;
+        logoUrl = logoUrl || sub.journal.coverImageUrl || undefined;
       }
     }
 
     const input: AtlasTypstInput = {
       journalTitle: body.journalTitle,
       journalShortTitle: body.journalShortTitle,
+      journalSlug,
+      coverColor,
+      articleSlug: body.articleSlug,
+      siteBaseUrl:
+        body.siteBaseUrl ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        undefined,
       manuscriptId: body.manuscriptId,
       title: body.title,
       authors: body.authors,
@@ -82,7 +109,7 @@ export async function POST(request: Request) {
       openAccess: body.openAccess,
       body: body.body,
       figures: body.figures,
-      logoUrl: body.logoUrl,
+      logoUrl,
       receivedAt,
       acceptedAt,
       publishedAt: new Date().toISOString(),

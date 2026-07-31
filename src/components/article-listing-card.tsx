@@ -131,7 +131,7 @@ export function ArticleListingCard({
               <Link
                 href={`/doi/${doi}`}
                 className="font-semibold text-[var(--accent)] hover:underline"
-                title="Open via Atlas DOI"
+                title="Open via Nahda DOI"
               >
                 DOI {doi}
               </Link>

@@ -42,7 +42,7 @@ export function uiStatus(status: SubmissionStatus): string {
 }
 
 export function nextManuscriptId(shortTitle: string, year: number, seq: number) {
-  const prefix = shortTitle.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6) || "ATL";
+  const prefix = shortTitle.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6) || "NHD";
   return `${prefix}-${year}-${String(seq).padStart(4, "0")}`;
 }
 

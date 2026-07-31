@@ -1,9 +1,9 @@
 export default function AboutPage() {
   return (
     <div className="page-wrap">
-      <h1 className="page-title">About Atlas</h1>
+      <h1 className="page-title">About Nahda</h1>
       <p className="mt-4 max-w-2xl text-base leading-relaxed text-[var(--muted)]">
-        Atlas Academic Publishing is a multi-journal platform for manuscript
+        Nahda Publications is a multi-journal platform for manuscript
         submission and scholarly publishing. This demo focuses on the author
         experience with mock data.
       </p>

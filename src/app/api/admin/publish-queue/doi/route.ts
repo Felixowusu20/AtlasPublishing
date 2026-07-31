@@ -3,7 +3,7 @@ import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { allocateNextAtlasDoi } from "@/lib/doi";
 import { requireAdmin } from "@/lib/session";
 
-/** Preview the next Atlas DOI for a journal (used in the publish form). */
+/** Preview the next Nahda DOI for a journal (used in the publish form). */
 export async function GET(request: Request) {
   const admin = await requireAdmin();
   if (!admin) return unauthorized();

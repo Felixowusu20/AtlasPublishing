@@ -9,9 +9,10 @@ export async function GET() {
   if (!session) return unauthorized();
 
   const submissions = await prisma.submission.findMany({
-    where: { authorId: session.sub },
+    where: { authorId: session.sub, deletedAt: null },
     include: {
       journal: true,
+      payment: true,
       publishedArticle: {
         select: {
           id: true,

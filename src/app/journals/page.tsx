@@ -24,7 +24,7 @@ export default async function JournalsPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
-                Atlas Publishing House
+                Nahda Publications
               </p>
               <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-[var(--ink)]">
                 Journals
@@ -67,23 +67,43 @@ export default async function JournalsPage() {
                   <Link
                     href={`/journals/${journal.slug}`}
                     className="relative flex h-[7.5rem] w-14 shrink-0 flex-col justify-between overflow-hidden rounded-lg text-white shadow-inner sm:h-28 sm:w-16"
-                    style={{ background: color }}
+                    style={
+                      journal.coverImageUrl
+                        ? { background: "#fff" }
+                        : { background: color }
+                    }
                     aria-label={journal.title}
                   >
-                    <span className="px-1.5 pt-2 text-[9px] font-semibold uppercase tracking-wide text-white/70">
-                      {journal.shortTitle}
-                    </span>
-                    <span className="bg-black/20 px-1.5 py-1.5 text-[8px] leading-tight text-white/90">
-                      {journal.openAccess ? "OA" : "Sub"}
-                    </span>
+                    {journal.coverImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={journal.coverImageUrl}
+                        alt=""
+                        className="h-full w-full object-contain p-1.5"
+                      />
+                    ) : (
+                      <>
+                        <span className="px-1.5 pt-2 text-[9px] font-semibold uppercase tracking-wide text-white/70">
+                          {journal.shortTitle}
+                        </span>
+                        <span className="bg-black/20 px-1.5 py-1.5 text-[8px] leading-tight text-white/90">
+                          {journal.openAccess ? "OA" : "Sub"}
+                        </span>
+                      </>
+                    )}
                   </Link>
                   <div className="min-w-0 flex-1 py-1">
-                    <Link
-                      href={`/journals/${journal.slug}`}
-                      className="text-base font-semibold text-[var(--ink)] group-hover:text-[var(--accent)]"
-                    >
-                      {journal.title}
-                    </Link>
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <Link
+                        href={`/journals/${journal.slug}`}
+                        className="text-base font-semibold text-[var(--ink)] group-hover:text-[var(--accent)]"
+                      >
+                        {journal.title}
+                      </Link>
+                      <span className="text-xs font-medium text-[var(--muted)]">
+                        ({journal.shortTitle})
+                      </span>
+                    </div>
                     <p className="mt-1 line-clamp-2 text-sm text-[var(--muted)]">
                       {journal.description}
                     </p>
@@ -95,7 +115,7 @@ export default async function JournalsPage() {
                     </p>
                     <div className="mt-3">
                       <Link
-                        href="/submissions/new"
+                        href={`/submissions/new?journal=${journal.id}`}
                         className="text-xs font-semibold text-[var(--accent)]"
                       >
                         Submit to this journal →

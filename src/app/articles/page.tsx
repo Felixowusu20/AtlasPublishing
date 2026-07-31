@@ -102,7 +102,7 @@ export default async function ArticlesPage({
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-              Atlas journals
+              Nahda journals
             </p>
             <h1 className="page-title mt-1">Articles</h1>
             <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
