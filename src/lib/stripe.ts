@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { getAppBaseUrl } from "@/lib/app-url";
 
 let stripeClient: Stripe | null = null;
 
@@ -6,7 +7,7 @@ export function getStripe(): Stripe {
   const key = (process.env.STRIPE_SECRET_KEY ?? "").trim();
   if (!key) {
     throw new Error(
-      "STRIPE_SECRET_KEY is not configured. Add your Stripe test secret key to .env.",
+      "STRIPE_SECRET_KEY is not configured. Add your Stripe secret key in Vercel env.",
     );
   }
   if (!stripeClient) {
@@ -18,11 +19,9 @@ export function getStripe(): Stripe {
   return stripeClient;
 }
 
+/** Public site origin for Stripe success/cancel URLs. */
 export function appBaseUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
+  return getAppBaseUrl();
 }
 
 export function stripeConfigured(): boolean {

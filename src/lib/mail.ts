@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import nodemailer from "nodemailer";
+import { getAppBaseUrl } from "@/lib/app-url";
 
 const BRAND = {
   name: "Nahda Publications",
@@ -12,10 +13,7 @@ const BRAND = {
 };
 
 function appBaseUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
+  return getAppBaseUrl();
 }
 
 function logoFilePath() {

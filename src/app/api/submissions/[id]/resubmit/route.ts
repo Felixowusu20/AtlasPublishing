@@ -8,6 +8,7 @@ import {
   reviewerResubmissionNoticeHtml,
   sendEmail,
 } from "@/lib/mail";
+import { getAppBaseUrl } from "@/lib/app-url";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -92,7 +93,7 @@ export async function POST(request: Request, { params }: Params) {
       return sub;
     });
 
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const base = getAppBaseUrl();
 
     try {
       await sendEmail({

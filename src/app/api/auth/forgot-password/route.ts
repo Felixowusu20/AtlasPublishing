@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, jsonOk } from "@/lib/api";
+import { getAppBaseUrl } from "@/lib/app-url";
 import { passwordResetEmailHtml, sendEmail } from "@/lib/mail";
 
 const schema = z.object({
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
         },
       });
 
-      const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const base = getAppBaseUrl();
       const resetUrl = `${base}/reset-password?token=${token}`;
 
       void sendEmail({

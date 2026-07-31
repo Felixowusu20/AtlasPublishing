@@ -16,6 +16,7 @@ import {
   doiToUrl,
   normalizeDoi,
 } from "@/lib/doi";
+import { getAppBaseUrl } from "@/lib/app-url";
 
 /** Accepted manuscripts waiting to be published into the journal template. */
 export async function GET() {
@@ -180,7 +181,9 @@ export async function POST(request: Request) {
           journalSlug: submission.journal.slug,
           coverColor: submission.journal.coverColor,
           articleSlug: slug,
-          siteBaseUrl: process.env.NEXT_PUBLIC_APP_URL || undefined,
+          siteBaseUrl: process.env.NEXT_PUBLIC_APP_URL
+            ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
+            : getAppBaseUrl(),
           manuscriptId: submission.manuscriptId,
           title: body.title,
           authors: body.authors,
@@ -275,7 +278,7 @@ export async function POST(request: Request) {
       { maxWait: 20_000, timeout: 30_000 },
     );
 
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const base = getAppBaseUrl();
     const articleUrl = `${base}/articles/${result.slug}`;
     const doiUrl = result.doi ? `${base}${atlasDoiPath(result.doi)}` : null;
     const pdfDownloadUrl = publishedPdfUrl

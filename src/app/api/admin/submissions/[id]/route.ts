@@ -10,6 +10,7 @@ import {
 } from "@/lib/mail";
 import { formatApcAmount } from "@/lib/apc";
 import { ensureApcCheckout } from "@/lib/apc-checkout";
+import { getAppBaseUrl } from "@/lib/app-url";
 import { stripeConfigured } from "@/lib/stripe";
 import type { SubmissionStatus } from "@/generated/prisma/client";
 
@@ -146,7 +147,7 @@ export async function POST(request: Request, { params }: Params) {
       return { feedback, sub };
     });
 
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const base = getAppBaseUrl();
     const needsRevision =
       status === "MAJOR_REVISION" || status === "MINOR_REVISION";
 
