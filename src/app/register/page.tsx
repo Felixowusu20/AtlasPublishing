@@ -59,8 +59,8 @@ export default function RegisterPage() {
     <AuthSplitLayout
       imageSrc={AUTH_IMAGES.authorRegister}
       imageAlt="Writer’s desk with notebook and coffee"
-      brand="Atlas Academic Publishing"
-      headline="Join authors publishing across Atlas journals."
+      brand="Nahda Publications"
+      headline="Join authors publishing across Nahda journals."
       subhead="Submit manuscripts and track peer review."
     >
       <div className="auth-card">

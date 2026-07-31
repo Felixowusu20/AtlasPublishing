@@ -44,7 +44,7 @@ const schema = z.object({
 });
 
 /**
- * Generate an Atlas-branded Typst PDF.
+ * Generate a Nahda-branded Typst PDF.
  * - Default: returns application/pdf bytes for download/preview
  * - upload=true: stores on Cloudinary and returns { url, publicId }
  */
@@ -59,13 +59,20 @@ export async function POST(request: Request) {
     let acceptedAt: string | undefined;
     let journalSlug = body.journalSlug;
     let coverColor = body.coverColor;
+    let logoUrl = body.logoUrl;
     if (body.submissionId) {
       const sub = await prisma.submission.findUnique({
         where: { id: body.submissionId },
         select: {
           submittedAt: true,
           updatedAt: true,
-          journal: { select: { slug: true, coverColor: true } },
+          journal: {
+            select: {
+              slug: true,
+              coverColor: true,
+              coverImageUrl: true,
+            },
+          },
         },
       });
       if (sub) {
@@ -73,6 +80,7 @@ export async function POST(request: Request) {
         acceptedAt = sub.updatedAt.toISOString();
         journalSlug = journalSlug || sub.journal.slug;
         coverColor = coverColor || sub.journal.coverColor;
+        logoUrl = logoUrl || sub.journal.coverImageUrl || undefined;
       }
     }
 
@@ -101,7 +109,7 @@ export async function POST(request: Request) {
       openAccess: body.openAccess,
       body: body.body,
       figures: body.figures,
-      logoUrl: body.logoUrl,
+      logoUrl,
       receivedAt,
       acceptedAt,
       publishedAt: new Date().toISOString(),

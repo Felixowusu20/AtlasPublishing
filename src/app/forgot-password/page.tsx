@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
         </h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
           Enter the email for your author account. We will send a reset link if
-          it matches an Atlas author account.
+          it matches an Nahda author account.
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">

@@ -122,7 +122,7 @@ export function journalColorFromKey(
 /** Derive ACS-style article chrome colors from a journal cover color. */
 export function journalArticlePalette(
   coverColor?: string | null,
-  fallbackKey = "atlas",
+  fallbackKey = "nahda",
 ): JournalArticlePalette {
   const primary = journalColorFromKey(fallbackKey, coverColor);
   return {

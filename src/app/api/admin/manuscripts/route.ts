@@ -18,14 +18,18 @@ export async function GET(request: Request) {
 
     const queue = await prisma.submission.findMany({
       where: {
+        deletedAt: null,
         status: { in: ["ACCEPTED", "IN_PRODUCTION"] },
         publishedArticle: null,
+        // APC must be cleared before production work
+        apcPaymentStatus: { in: ["PAID", "WAIVED", "NOT_REQUIRED"] },
       },
       include: {
         journal: { select: { id: true, title: true, shortTitle: true } },
         author: {
           select: { id: true, name: true, email: true, institution: true },
         },
+        payment: true,
       },
       orderBy: { updatedAt: "desc" },
     });
@@ -35,14 +39,17 @@ export async function GET(request: Request) {
       const focused = await prisma.submission.findFirst({
         where: {
           id: focusId,
+          deletedAt: null,
           publishedArticle: null,
           status: { in: ["ACCEPTED", "IN_PRODUCTION"] },
+          apcPaymentStatus: { in: ["PAID", "WAIVED", "NOT_REQUIRED"] },
         },
         include: {
           journal: { select: { id: true, title: true, shortTitle: true } },
           author: {
             select: { id: true, name: true, email: true, institution: true },
           },
+          payment: true,
         },
       });
       if (focused) queue.unshift(focused);
@@ -209,7 +216,7 @@ export async function PATCH(request: Request) {
 
     const submission = await prisma.submission.findUnique({
       where: { id: data.submissionId },
-      include: { publishedArticle: true },
+      include: { publishedArticle: true, payment: true },
     });
 
     if (!submission) return jsonError("Submission not found", 404);
@@ -222,6 +229,16 @@ export async function PATCH(request: Request) {
     ) {
       return jsonError(
         "Only accepted manuscripts can be prepared for publication.",
+        400,
+      );
+    }
+    if (
+      submission.apcPaymentStatus !== "PAID" &&
+      submission.apcPaymentStatus !== "WAIVED" &&
+      submission.apcPaymentStatus !== "NOT_REQUIRED"
+    ) {
+      return jsonError(
+        "APC payment is still pending. The author must pay (or an admin must waive) before production.",
         400,
       );
     }

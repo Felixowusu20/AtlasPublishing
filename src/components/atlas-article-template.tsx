@@ -232,7 +232,7 @@ function formatAuthors(authors: string[], linkColor: string) {
  * HTML preview aligned with the ACS-level Typst publication engine.
  * Colors follow the journal cover/brand palette.
  */
-export function AtlasArticleTemplate({
+export function NahdaArticleTemplate({
   journalTitle,
   journalShortTitle,
   manuscriptId,
@@ -260,7 +260,7 @@ export function AtlasArticleTemplate({
 }: Props) {
   const palette = journalArticlePalette(
     coverColor,
-    journalSlug || journalShortTitle || "atlas",
+    journalSlug || journalShortTitle || "nahda",
   );
   const dateLabel =
     publishedAt ||
@@ -314,8 +314,8 @@ export function AtlasArticleTemplate({
 
   return (
     <article
-      id="atlas-article-template"
-      className="atlas-article mx-auto max-w-[820px] bg-white text-[#0b1f33] shadow-sm"
+      id="nahda-article-template"
+      className="nahda-article mx-auto max-w-[820px] bg-white text-[#0b1f33] shadow-sm"
       style={
         {
           fontFamily: "Georgia, 'Times New Roman', serif",
@@ -570,7 +570,7 @@ export function AtlasArticleTemplate({
           style={{ background: "var(--j-soft)" }}
         >
           <p>
-            © {year} Atlas Academic Publishing · {journalTitle}. Licensed under{" "}
+            © {year} Nahda Publications · {journalTitle}. Licensed under{" "}
             <a
               href={licenseHref}
               className="hover:underline"

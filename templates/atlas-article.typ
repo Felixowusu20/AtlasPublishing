@@ -1,4 +1,4 @@
-// Atlas Academic Publishing — ACS-level Typst journal article template.
+// Nahda Publications — ACS-level Typst journal article template.
 // Runtime fills this via `buildAtlasTypstSource()` in src/lib/typst-atlas.ts.
 // Brand colors come from each journal's coverColor. Typst only (not LaTeX).
 

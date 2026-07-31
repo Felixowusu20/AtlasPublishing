@@ -39,7 +39,7 @@ export type AtlasTypstInput = {
   coverColor?: string;
   /** Public article path slug once known. */
   articleSlug?: string;
-  /** Site origin, e.g. https://atlas.example.com */
+  /** Site origin, e.g. https://nahdapublications.com */
   siteBaseUrl?: string;
 };
 
@@ -579,7 +579,7 @@ function formatAffiliationsTypst(affiliations: string[]): string {
 function siteOrigin(input: AtlasTypstInput): string {
   const raw = (input.siteBaseUrl || process.env.NEXT_PUBLIC_APP_URL || "").trim();
   if (raw) return raw.replace(/\/$/, "");
-  return "https://atlasacademicpublishing.com";
+  return "https://nahdapublications.com";
 }
 
 /** Public site origin for printed URLs — never emit localhost on the PDF. */
@@ -611,7 +611,7 @@ function displayHostPath(url: string): string {
 }
 
 /**
- * Build a complete Typst document from Atlas article metadata.
+ * Build a complete Typst document from Nahda article metadata.
  * ACS Biochemistry–level first page: journal wordmark, OA badge, type bar,
  * Cite This / Read Online hyperlinks, ACCESS strip — colored by journal brand.
  * Typst is the sole publication engine (no LaTeX).
@@ -623,7 +623,7 @@ export function buildAtlasTypstSource(
 ): string {
   const palette = journalArticlePalette(
     input.coverColor,
-    input.journalSlug || input.journalShortTitle || "atlas",
+    input.journalSlug || input.journalShortTitle || "nahda",
   );
   const publicOrigin = publicSiteOrigin(input);
   const journalSlug =
@@ -719,7 +719,7 @@ export function buildAtlasTypstSource(
   const body = bodyToTypst(input.body, figureMap);
 
   return `
-// Atlas Academic Publishing — ACS-level Typst journal article
+// Nahda Publications — ACS-level Typst journal article
 // Primary publication engine: Typst (not LaTeX)
 // Brand colors from journal coverColor
 
@@ -1128,8 +1128,8 @@ export async function compileAtlasTypstPdf(
       console.error("[typst] compile failed", detail || "(no diagnostics)");
       throw new Error(
         detail
-          ? `Typst could not compile the Atlas article PDF: ${detail.slice(0, 500)}`
-          : "Typst could not compile the Atlas article PDF",
+          ? `Typst could not compile the Nahda article PDF: ${detail.slice(0, 500)}`
+          : "Typst could not compile the Nahda article PDF",
       );
     }
 

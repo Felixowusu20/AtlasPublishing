@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
     void sendEmail({
       to: user.email,
-      subject: "Atlas admin sign-in notification",
+      subject: "Nahda admin sign-in notification",
       html: loginAlertEmailHtml(user.name, new Date().toUTCString()),
     });
 

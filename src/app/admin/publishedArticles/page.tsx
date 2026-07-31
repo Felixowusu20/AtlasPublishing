@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AtlasArticleTemplate } from "@/components/atlas-article-template";
+import { NahdaArticleTemplate } from "@/components/atlas-article-template";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   ManuscriptEditor,
@@ -25,7 +25,14 @@ type QueueItem = {
   productionBody?: string | null;
   productionFigures?: ManuscriptFigure[] | null;
   manuscriptReadyAt?: string | null;
-  journal: { id: string; title: string; shortTitle: string; slug: string; coverColor: string };
+  journal: {
+    id: string;
+    title: string;
+    shortTitle: string;
+    slug: string;
+    coverColor: string;
+    coverImageUrl?: string | null;
+  };
   author: {
     id: string;
     name: string;
@@ -192,7 +199,7 @@ export default function PublishedArticlesPage() {
       license: "CC BY 4.0",
       openAccess: true,
       isFeatured: true,
-      logoUrl: "",
+      logoUrl: sub.journal.coverImageUrl || "",
       body: savedBody,
       figures: parseFigures(sub.productionFigures),
       pdfUrl: "",
@@ -267,7 +274,7 @@ export default function PublishedArticlesPage() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("folder", "atlas/branding");
+      fd.append("folder", "nahda/branding");
       fd.append("resourceType", "image");
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const data = await res.json();
@@ -307,7 +314,7 @@ export default function PublishedArticlesPage() {
         filename: f.filename,
         caption: f.caption,
       })),
-      logoUrl: form.logoUrl || undefined,
+      logoUrl: form.logoUrl || selected.journal.coverImageUrl || undefined,
     };
   }
 
@@ -341,7 +348,7 @@ export default function PublishedArticlesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "PDF upload failed");
       setForm((f) => ({ ...f, pdfUrl: data.url as string }));
-      setSuccess("Atlas PDF generated and ready. You can publish now.");
+      setSuccess("Nahda PDF generated and ready. You can publish now.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "PDF generation failed");
     } finally {
@@ -383,7 +390,8 @@ export default function PublishedArticlesPage() {
         license: form.license || undefined,
         openAccess: form.openAccess,
         isFeatured: form.isFeatured,
-        coverImageUrl: form.logoUrl || undefined,
+        coverImageUrl:
+          form.logoUrl || selected.journal.coverImageUrl || undefined,
         body: form.body || undefined,
         figures: form.figures.map((f) => ({
           url: f.url,
@@ -445,7 +453,7 @@ export default function PublishedArticlesPage() {
         return;
       }
       setSuccess(
-        "Article deleted. It is no longer live or visible to the author as published.",
+        "Moved to recycle bin. It is no longer live or visible to the author as published.",
       );
       await load();
     } catch (err) {
@@ -465,7 +473,7 @@ export default function PublishedArticlesPage() {
         title={
           pending?.forEdit
             ? "Open in Full manuscripts?"
-            : "Delete this article?"
+            : "Move to recycle bin?"
         }
         description={
           pending?.forEdit ? (
@@ -494,21 +502,21 @@ export default function PublishedArticlesPage() {
           ) : (
             <>
               <p>
-                Permanently remove{" "}
+                Move{" "}
                 <span className="font-medium text-[var(--ink)]">
                   “{pending?.title}”
                 </span>{" "}
-                from Atlas.
+                to the recycle bin.
               </p>
               <p className="mt-2 text-xs">
-                It disappears from the public site and the author’s published
-                list.
+                It leaves the public site and the author’s published list. You
+                can restore it later from Recycle bin.
               </p>
             </>
           )
         }
         confirmLabel={
-          pending?.forEdit ? "Unpublish & edit" : "Delete article"
+          pending?.forEdit ? "Unpublish & edit" : "Move to bin"
         }
         cancelLabel="Keep published"
         busy={actionBusy}
@@ -522,11 +530,11 @@ export default function PublishedArticlesPage() {
           body * {
             visibility: hidden !important;
           }
-          #atlas-article-template,
-          #atlas-article-template * {
+          #nahda-article-template,
+          #nahda-article-template * {
             visibility: visible !important;
           }
-          #atlas-article-template {
+          #nahda-article-template {
             position: absolute;
             left: 0;
             top: 0;
@@ -542,7 +550,7 @@ export default function PublishedArticlesPage() {
             Publish accepted papers
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Edit metadata, generate the Atlas Typst PDF from the full
+            Edit metadata, generate the Nahda Typst PDF from the full
             manuscript, then publish and email the author.
           </p>
         </div>
@@ -665,7 +673,7 @@ export default function PublishedArticlesPage() {
                 Select an accepted paper
               </p>
               <p className="mt-1 max-w-sm text-xs text-[var(--muted)]">
-                Load it into the Atlas article template to edit authors, logo,
+                Load it into the Nahda article template to edit authors, logo,
                 and metadata, then preview and publish.
               </p>
             </div>
@@ -674,7 +682,7 @@ export default function PublishedArticlesPage() {
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line)] pb-4 print:hidden">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
-                    Atlas article template
+                    Nahda article template
                   </p>
                   <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
                     {selected.manuscriptId}
@@ -733,28 +741,31 @@ export default function PublishedArticlesPage() {
                 <form onSubmit={onPublish} className="mt-5 space-y-3 print:hidden">
                   <div className="rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 p-4">
                     <p className="text-xs font-semibold text-[var(--ink)]">
-                      Publisher logo
+                      Journal logo
                     </p>
                     <p className="mt-1 text-[11px] text-[var(--muted)]">
-                      Upload Atlas logo (PNG/SVG preferred). Shown top-left on
-                      the manuscript like a journal mark. Leave empty for the
-                      default Atlas badge.
+                      Uses this journal&apos;s logo from Admin → Journals when
+                      available. You can override it for this article.
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-3">
-                      {form.logoUrl ? (
+                      {form.logoUrl || selected.journal.coverImageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={form.logoUrl}
+                          src={
+                            form.logoUrl ||
+                            selected.journal.coverImageUrl ||
+                            ""
+                          }
                           alt="Logo preview"
                           className="h-10 w-auto max-w-[140px] rounded border border-[var(--line)] bg-white object-contain p-1"
                         />
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--ink)] text-sm font-semibold text-white">
-                          A
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-semibold text-white">
+                          N
                         </div>
                       )}
                       <label className="btn-secondary cursor-pointer !px-3 !py-2 text-xs">
-                        {uploadingLogo ? "Uploading…" : "Upload logo"}
+                        {uploadingLogo ? "Uploading…" : "Override logo"}
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp,image/svg+xml"
@@ -765,17 +776,22 @@ export default function PublishedArticlesPage() {
                           }
                         />
                       </label>
-                      {form.logoUrl && (
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-rose-700"
-                          onClick={() =>
-                            setForm((f) => ({ ...f, logoUrl: "" }))
-                          }
-                        >
-                          Remove
-                        </button>
-                      )}
+                      {form.logoUrl &&
+                        form.logoUrl !==
+                          (selected.journal.coverImageUrl || "") && (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-[var(--muted)] underline"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                logoUrl: selected.journal.coverImageUrl || "",
+                              }))
+                            }
+                          >
+                            Use journal logo
+                          </button>
+                        )}
                     </div>
                   </div>
 
@@ -877,7 +893,7 @@ export default function PublishedArticlesPage() {
 
                   <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 p-4">
                     <p className="text-xs font-semibold text-[var(--ink)]">
-                      Atlas Typst PDF
+                      Nahda Typst PDF
                     </p>
                     <p className="mt-1 text-[11px] text-[var(--muted)]">
                       Generate the branded downloadable article PDF the author
@@ -947,7 +963,7 @@ export default function PublishedArticlesPage() {
                             /doi/{form.doi}
                           </code>
                         ) : (
-                          "the Atlas DOI link"
+                          "the Nahda DOI link"
                         )}{" "}
                         to view or download the PDF.
                       </p>
@@ -1069,7 +1085,7 @@ export default function PublishedArticlesPage() {
                     </div>
                   </div>
                   <div className="overflow-hidden rounded-xl border border-[var(--line)] bg-[#e8edf2] p-4 sm:p-6">
-                    <AtlasArticleTemplate
+                    <NahdaArticleTemplate
                       journalTitle={selected.journal.title}
                       journalShortTitle={selected.journal.shortTitle}
                       journalSlug={selected.journal.slug}
@@ -1088,7 +1104,9 @@ export default function PublishedArticlesPage() {
                       pages={form.pages}
                       license={form.license}
                       openAccess={form.openAccess}
-                      logoUrl={form.logoUrl || null}
+                      logoUrl={
+                        form.logoUrl || selected.journal.coverImageUrl || null
+                      }
                       body={form.body}
                     />
                   </div>

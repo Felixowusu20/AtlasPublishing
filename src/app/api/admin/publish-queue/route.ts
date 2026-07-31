@@ -26,18 +26,22 @@ export async function GET() {
     const [queue, recentlyPublished] = await Promise.all([
       prisma.submission.findMany({
         where: {
+          deletedAt: null,
           status: { in: ["ACCEPTED", "IN_PRODUCTION"] },
           publishedArticle: null,
+          apcPaymentStatus: { in: ["PAID", "WAIVED", "NOT_REQUIRED"] },
         },
         include: {
           journal: true,
           author: {
             select: { id: true, name: true, email: true, institution: true },
           },
+          payment: true,
         },
         orderBy: { updatedAt: "desc" },
       }),
       prisma.publishedArticle.findMany({
+        where: { deletedAt: null },
         include: {
           journal: true,
           submission: {
@@ -125,6 +129,16 @@ export async function POST(request: Request) {
         400,
       );
     }
+    if (
+      submission.apcPaymentStatus !== "PAID" &&
+      submission.apcPaymentStatus !== "WAIVED" &&
+      submission.apcPaymentStatus !== "NOT_REQUIRED"
+    ) {
+      return jsonError(
+        "APC payment is still pending. Publish is blocked until payment or waiver.",
+        400,
+      );
+    }
 
     let slug = (body.slug?.trim() || slugify(body.title)).slice(0, 80);
     const existing = await prisma.publishedArticle.findUnique({
@@ -156,7 +170,7 @@ export async function POST(request: Request) {
       return jsonError(`DOI already in use: ${doi}`, 400);
     }
 
-    // Prefer client-provided PDF URL, otherwise generate Atlas Typst PDF now
+    // Prefer client-provided PDF URL, otherwise generate Nahda Typst PDF now
     let publishedPdfUrl = body.pdfUrl || null;
     if (!publishedPdfUrl) {
       try {
@@ -182,7 +196,7 @@ export async function POST(request: Request) {
           openAccess: body.openAccess,
           body: body.body,
           figures: body.figures,
-          logoUrl: body.coverImageUrl,
+          logoUrl: body.coverImageUrl || submission.journal.coverImageUrl || undefined,
           receivedAt: receivedAt.toISOString(),
           acceptedAt: acceptedAt.toISOString(),
           publishedAt: new Date().toISOString(),
@@ -226,9 +240,12 @@ export async function POST(request: Request) {
             license: body.license || "CC BY 4.0",
             abstract: body.abstract,
             keywords: body.keywords ?? submission.keywords,
-            // Downloadable Atlas-formatted PDF (Typst)
+            // Downloadable Nahda-formatted PDF (Typst)
             manuscriptUrl: publishedPdfUrl,
-            coverImageUrl: body.coverImageUrl || undefined,
+            coverImageUrl:
+              body.coverImageUrl ||
+              submission.journal.coverImageUrl ||
+              undefined,
             isFeatured: body.isFeatured ?? true,
             isActive: true,
           },
@@ -269,7 +286,7 @@ export async function POST(request: Request) {
     try {
       const mail = await sendEmail({
         to: submission.author.email,
-        subject: `Congratulations — “${result.title}” is published`,
+        subject: `Published: “${result.title}”`,
         html: articlePublishedEmailHtml({
           authorName: submission.author.name,
           title: result.title,

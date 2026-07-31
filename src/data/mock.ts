@@ -47,47 +47,47 @@ export const articleTypes: ArticleType[] = [
 export const journals: Journal[] = [
   {
     id: "j-001",
-    slug: "atlas-journal-of-science",
-    title: "Atlas Journal of Science",
-    shortTitle: "AJS",
+    slug: "nahda-journal-of-science-and-technology",
+    title: "Nahda Journal of Science and Technology and Technology",
+    shortTitle: "NJST",
     issn: "2456-1120",
     eIssn: "2456-1139",
-    doiPrefix: "10.58000/ajs",
+    doiPrefix: "10.58000/njst",
     frequency: "Monthly",
     reviewType: "Double Blind",
     description:
-      "A multidisciplinary journal publishing original research across the natural and applied sciences.",
-    aims: "To advance rigorous scientific discovery and open scholarly communication worldwide.",
-    subjects: ["Biology", "Chemistry", "Physics", "Earth Sciences"],
+      "Original research across the natural sciences, engineering, and emerging technologies.",
+    aims: "To advance rigorous scientific and technological discovery with open scholarly communication.",
+    subjects: ["Science", "Engineering", "Technology", "Applied Research"],
     impactFactor: "3.42",
     acceptanceRate: "22%",
     avgReviewDays: 28,
     openAccess: true,
     apc: "$1,200",
     editorInChief: "Prof. Helen Markovic",
-    coverColor: "#0B3A53",
+    coverColor: "#1E6847",
     indexedIn: ["DOAJ", "Google Scholar", "CrossRef", "OpenAlex"],
     foundedYear: 2014,
   },
   {
     id: "j-002",
-    slug: "african-health-systems-review",
-    title: "African Health Systems Review",
-    shortTitle: "AHSR",
+    slug: "nahda-journal-of-health-and-biomedical-research",
+    title: "Nahda Journal of Health and Biomedical Research",
+    shortTitle: "NJHBR",
     issn: "2789-4412",
     eIssn: "2789-4420",
-    doiPrefix: "10.58000/ahsr",
+    doiPrefix: "10.58000/njhbr",
     frequency: "Quarterly",
-    reviewType: "Single Blind",
+    reviewType: "Double Blind",
     description:
-      "Peer-reviewed research on health systems, policy, epidemiology, and clinical practice in Africa.",
-    aims: "To strengthen evidence-based health policy and practice across African health systems.",
-    subjects: ["Public Health", "Epidemiology", "Health Policy", "Clinical Medicine"],
+      "Peer-reviewed work in clinical science, public health, biomedicine, and health systems.",
+    aims: "To strengthen evidence-based health research and biomedical innovation.",
+    subjects: ["Public Health", "Biomedicine", "Clinical Research", "Health Systems"],
     impactFactor: "2.18",
-    acceptanceRate: "31%",
-    avgReviewDays: 35,
+    acceptanceRate: "28%",
+    avgReviewDays: 32,
     openAccess: true,
-    apc: "$850",
+    apc: "$1,000",
     editorInChief: "Prof. Kwame Mensah",
     coverColor: "#1A5F4A",
     indexedIn: ["DOAJ", "Google Scholar", "CrossRef", "BASE"],
@@ -95,42 +95,41 @@ export const journals: Journal[] = [
   },
   {
     id: "j-003",
-    slug: "journal-of-computational-methods",
-    title: "Journal of Computational Methods",
-    shortTitle: "JCM",
-    issn: "2610-8893",
-    eIssn: "2610-8907",
-    doiPrefix: "10.58000/jcm",
-    frequency: "Bimonthly",
+    slug: "nahda-journal-of-agriculture-food-and-sustainability",
+    title: "Nahda Journal of Agriculture, Food and Sustainability",
+    shortTitle: "NJAFS",
+    issn: "2810-2201",
+    eIssn: "2810-221X",
+    doiPrefix: "10.58000/njafs",
+    frequency: "Quarterly",
     reviewType: "Double Blind",
     description:
-      "Algorithms, modeling, simulation, and computational approaches across science and engineering.",
-    aims: "To publish high-quality computational research with reproducible methods and open data.",
-    subjects: ["Computer Science", "Applied Math", "AI", "Simulation"],
-    impactFactor: "4.05",
-    acceptanceRate: "18%",
-    avgReviewDays: 24,
-    openAccess: false,
-    apc: "Subscription",
-    editorInChief: "Prof. Sofia Almeida",
-    coverColor: "#1E3A5F",
-    indexedIn: ["Scopus", "Google Scholar", "CrossRef", "Dimensions"],
-    foundedYear: 2007,
+      "Research on agriculture, food systems, nutrition, climate-smart practice, and sustainability.",
+    aims: "To publish solutions that strengthen food security and sustainable agriculture.",
+    subjects: ["Agriculture", "Food Science", "Sustainability", "Environment"],
+    acceptanceRate: "30%",
+    avgReviewDays: 30,
+    openAccess: true,
+    apc: "$900",
+    editorInChief: "Prof. Amina Diallo",
+    coverColor: "#3D6B3A",
+    indexedIn: ["DOAJ", "Google Scholar", "CrossRef"],
+    foundedYear: 2020,
   },
   {
     id: "j-004",
-    slug: "education-and-society",
-    title: "Education & Society",
-    shortTitle: "E&S",
+    slug: "nahda-journal-of-education-learning-and-development",
+    title: "Nahda Journal of Education, Learning and Development",
+    shortTitle: "NJELD",
     issn: "2398-0044",
     eIssn: "2398-0052",
-    doiPrefix: "10.58000/es",
+    doiPrefix: "10.58000/njeld",
     frequency: "Continuous",
     reviewType: "Open Review",
     description:
-      "Research on pedagogy, higher education, curriculum design, and learning technologies.",
+      "Research on pedagogy, higher education, curriculum design, learning technologies, and human development.",
     aims: "To connect educational research with classroom practice and institutional policy.",
-    subjects: ["Education", "Pedagogy", "EdTech", "Sociology"],
+    subjects: ["Education", "Pedagogy", "EdTech", "Development"],
     acceptanceRate: "27%",
     avgReviewDays: 30,
     openAccess: true,
@@ -140,12 +139,83 @@ export const journals: Journal[] = [
     indexedIn: ["DOAJ", "Google Scholar", "CrossRef", "ERIC"],
     foundedYear: 2021,
   },
+  {
+    id: "j-005",
+    slug: "nahda-journal-of-business-economics-and-innovation",
+    title: "Nahda Journal of Business, Economics and Innovation",
+    shortTitle: "NJBEI",
+    issn: "2822-1104",
+    eIssn: "2822-1112",
+    doiPrefix: "10.58000/njbei",
+    frequency: "Bimonthly",
+    reviewType: "Double Blind",
+    description:
+      "Scholarship in management, economics, entrepreneurship, finance, and innovation studies.",
+    aims: "To advance research that informs markets, policy, and entrepreneurial practice.",
+    subjects: ["Business", "Economics", "Innovation", "Management"],
+    impactFactor: "2.65",
+    acceptanceRate: "24%",
+    avgReviewDays: 28,
+    openAccess: true,
+    apc: "$1,100",
+    editorInChief: "Prof. Elena Vargas",
+    coverColor: "#0B3A53",
+    indexedIn: ["DOAJ", "Google Scholar", "CrossRef", "Dimensions"],
+    foundedYear: 2016,
+  },
+  {
+    id: "j-006",
+    slug: "nahda-journal-of-social-sciences-and-humanities",
+    title: "Nahda Journal of Social Sciences and Humanities",
+    shortTitle: "NJSSH",
+    issn: "2831-4408",
+    eIssn: "2831-4416",
+    doiPrefix: "10.58000/njssh",
+    frequency: "Quarterly",
+    reviewType: "Double Blind",
+    description:
+      "Research across sociology, anthropology, history, languages, culture, and the humanities.",
+    aims: "To foster critical inquiry into society, culture, and the human experience.",
+    subjects: ["Sociology", "Humanities", "Culture", "History"],
+    acceptanceRate: "29%",
+    avgReviewDays: 35,
+    openAccess: true,
+    apc: "$800",
+    editorInChief: "Prof. Samuel Okeke",
+    coverColor: "#5C3D2E",
+    indexedIn: ["DOAJ", "Google Scholar", "CrossRef"],
+    foundedYear: 2019,
+  },
+  {
+    id: "j-007",
+    slug: "nahda-journal-of-interdisciplinary-research",
+    title: "Nahda Journal of Interdisciplinary Research",
+    shortTitle: "NJIR",
+    issn: "2610-8893",
+    eIssn: "2610-8907",
+    doiPrefix: "10.58000/njir",
+    frequency: "Continuous",
+    reviewType: "Double Blind",
+    description:
+      "Cross-cutting research that bridges disciplines, methods, and applied problem spaces.",
+    aims: "To publish high-quality interdisciplinary work with clear methods and societal relevance.",
+    subjects: ["Interdisciplinary Studies", "Methods", "Applied Research", "Innovation"],
+    impactFactor: "3.10",
+    acceptanceRate: "20%",
+    avgReviewDays: 26,
+    openAccess: true,
+    apc: "$1,200",
+    editorInChief: "Prof. Sofia Almeida",
+    coverColor: "#1E3A5F",
+    indexedIn: ["Scopus", "Google Scholar", "CrossRef", "Dimensions"],
+    foundedYear: 2007,
+  },
 ];
 
 export const submissions: Submission[] = [
   {
     id: "s-001",
-    manuscriptId: "AJS-2026-0142",
+    manuscriptId: "NJST-2026-0142",
     title:
       "Deep Learning Approaches for Early Detection of Malaria from Thin Blood Smear Images",
     abstract:
@@ -153,7 +223,7 @@ export const submissions: Submission[] = [
     keywords: ["malaria", "deep learning", "medical imaging", "diagnosis"],
     articleType: "Research Article",
     journalId: "j-001",
-    journalTitle: "Atlas Journal of Science",
+    journalTitle: "Nahda Journal of Science and Technology",
     status: "Under Review",
     authors: [
       {
@@ -182,7 +252,7 @@ export const submissions: Submission[] = [
   },
   {
     id: "s-002",
-    manuscriptId: "AHSR-2026-0087",
+    manuscriptId: "NJHBR-2026-0087",
     title:
       "Primary Care Capacity and Maternal Outcomes in Rural Nigerian Health Facilities",
     abstract:
@@ -190,7 +260,7 @@ export const submissions: Submission[] = [
     keywords: ["maternal health", "primary care", "Nigeria", "health systems"],
     articleType: "Research Article",
     journalId: "j-002",
-    journalTitle: "African Health Systems Review",
+    journalTitle: "Nahda Journal of Health and Biomedical Research",
     status: "Minor Revision",
     authors: [
       {
@@ -209,14 +279,14 @@ export const submissions: Submission[] = [
   },
   {
     id: "s-003",
-    manuscriptId: "JCM-2026-DRAFT",
+    manuscriptId: "NJIR-2026-DRAFT",
     title: "Graph Neural Networks for Climate Station Interpolation",
     abstract:
       "We propose a graph neural network framework for interpolating sparse climate station observations across West Africa.",
     keywords: ["GNN", "climate", "interpolation", "geospatial"],
     articleType: "Research Article",
     journalId: "j-003",
-    journalTitle: "Journal of Computational Methods",
+    journalTitle: "Nahda Journal of Interdisciplinary Research",
     status: "Draft",
     authors: [
       {
@@ -234,14 +304,14 @@ export const submissions: Submission[] = [
   },
   {
     id: "s-004",
-    manuscriptId: "AJS-2025-0911",
+    manuscriptId: "NJST-2025-0911",
     title: "Open Datasets for African Urban Mobility Research: A Review",
     abstract:
       "A structured review of publicly available mobility datasets covering African cities, with recommendations for FAIR data practices.",
     keywords: ["open data", "mobility", "Africa", "review"],
     articleType: "Review Article",
     journalId: "j-001",
-    journalTitle: "Atlas Journal of Science",
+    journalTitle: "Nahda Journal of Science and Technology",
     status: "Published",
     authors: [
       {
@@ -300,7 +370,7 @@ export function statusColor(status: string) {
 }
 
 export const platformStats = {
-  journals: 4,
+  journals: 7,
   articlesPublished: 1862,
   authors: 9400,
   countries: 78,
@@ -314,7 +384,7 @@ export const announcements: Announcement[] = [
     date: "2026-07-01",
     summary:
       "AHSR invites submissions on climate-sensitive health systems through 30 September 2026.",
-    href: "/journals/african-health-systems-review",
+    href: "/journals/nahda-journal-of-health-and-biomedical-research",
   },
   {
     id: "an-2",
@@ -330,12 +400,12 @@ export const announcements: Announcement[] = [
     date: "2026-05-20",
     summary:
       "Accepted articles now appear online as Early View within days of proof approval.",
-    href: "/journals/education-and-society",
+    href: "/journals/nahda-journal-of-education-learning-and-development",
   },
 ];
 
 export const editorialBoards: Record<string, EditorialMember[]> = {
-  "atlas-journal-of-science": [
+  "nahda-journal-of-science-and-technology": [
     {
       name: "Prof. Helen Markovic",
       role: "Editor-in-Chief",
@@ -361,7 +431,7 @@ export const editorialBoards: Record<string, EditorialMember[]> = {
       country: "Poland",
     },
   ],
-  "african-health-systems-review": [
+  "nahda-journal-of-health-and-biomedical-research": [
     {
       name: "Prof. Kwame Mensah",
       role: "Editor-in-Chief",
@@ -381,7 +451,7 @@ export const editorialBoards: Record<string, EditorialMember[]> = {
       country: "Egypt",
     },
   ],
-  "journal-of-computational-methods": [
+  "nahda-journal-of-interdisciplinary-research": [
     {
       name: "Prof. Sofia Almeida",
       role: "Editor-in-Chief",
@@ -401,7 +471,7 @@ export const editorialBoards: Record<string, EditorialMember[]> = {
       country: "Russia",
     },
   ],
-  "education-and-society": [
+  "nahda-journal-of-education-learning-and-development": [
     {
       name: "Dr. Priya Natarajan",
       role: "Editor-in-Chief",
@@ -415,12 +485,36 @@ export const editorialBoards: Record<string, EditorialMember[]> = {
       country: "Brazil",
     },
   ],
+  "nahda-journal-of-agriculture-food-and-sustainability": [
+    {
+      name: "Prof. Amina Diallo",
+      role: "Editor-in-Chief",
+      affiliation: "Université Cheikh Anta Diop",
+      country: "Senegal",
+    },
+  ],
+  "nahda-journal-of-business-economics-and-innovation": [
+    {
+      name: "Prof. Elena Vargas",
+      role: "Editor-in-Chief",
+      affiliation: "IE Business School",
+      country: "Spain",
+    },
+  ],
+  "nahda-journal-of-social-sciences-and-humanities": [
+    {
+      name: "Prof. Samuel Okeke",
+      role: "Editor-in-Chief",
+      affiliation: "University of Ibadan",
+      country: "Nigeria",
+    },
+  ],
 };
 
 export const journalIssues: JournalIssue[] = [
   {
     id: "iss-1",
-    journalSlug: "atlas-journal-of-science",
+    journalSlug: "nahda-journal-of-science-and-technology",
     volume: "12",
     issue: "3",
     year: "2026",
@@ -431,7 +525,7 @@ export const journalIssues: JournalIssue[] = [
   },
   {
     id: "iss-2",
-    journalSlug: "atlas-journal-of-science",
+    journalSlug: "nahda-journal-of-science-and-technology",
     volume: "12",
     issue: "2",
     year: "2026",
@@ -442,7 +536,7 @@ export const journalIssues: JournalIssue[] = [
   },
   {
     id: "iss-3",
-    journalSlug: "african-health-systems-review",
+    journalSlug: "nahda-journal-of-health-and-biomedical-research",
     volume: "8",
     issue: "4",
     year: "2025",
@@ -453,7 +547,7 @@ export const journalIssues: JournalIssue[] = [
   },
   {
     id: "iss-4",
-    journalSlug: "journal-of-computational-methods",
+    journalSlug: "nahda-journal-of-interdisciplinary-research",
     volume: "19",
     issue: "1",
     year: "2026",
@@ -464,7 +558,7 @@ export const journalIssues: JournalIssue[] = [
   },
   {
     id: "iss-5",
-    journalSlug: "education-and-society",
+    journalSlug: "nahda-journal-of-education-learning-and-development",
     volume: "5",
     issue: "Early View",
     year: "2026",
@@ -483,8 +577,8 @@ export const publishedArticles: PublishedArticle[] = [
     title: "Open Datasets for African Urban Mobility Research: A Review",
     authors: ["Amara Okonkwo", "Lena Hartmann"],
     affiliations: ["University of Lagos, Nigeria", "ETH Zurich, Switzerland"],
-    journalTitle: "Atlas Journal of Science",
-    journalSlug: "atlas-journal-of-science",
+    journalTitle: "Nahda Journal of Science and Technology",
+    journalSlug: "nahda-journal-of-science-and-technology",
     journalId: "j-001",
     publishedAt: "2026-03-15",
     receivedAt: "2025-11-02",
@@ -535,8 +629,8 @@ export const publishedArticles: PublishedArticle[] = [
       "Kwame Nkrumah University of Science and Technology, Ghana",
       "University of Nairobi, Kenya",
     ],
-    journalTitle: "African Health Systems Review",
-    journalSlug: "african-health-systems-review",
+    journalTitle: "Nahda Journal of Health and Biomedical Research",
+    journalSlug: "nahda-journal-of-health-and-biomedical-research",
     journalId: "j-002",
     publishedAt: "2025-11-02",
     receivedAt: "2025-04-18",
@@ -579,8 +673,8 @@ export const publishedArticles: PublishedArticle[] = [
     title: "Sparse Tensor Factorization for Multi-Sensor Climate Assimilation",
     authors: ["Chen Wei", "Sofia Almeida"],
     affiliations: ["Tsinghua University, China", "IST Lisbon, Portugal"],
-    journalTitle: "Journal of Computational Methods",
-    journalSlug: "journal-of-computational-methods",
+    journalTitle: "Nahda Journal of Interdisciplinary Research",
+    journalSlug: "nahda-journal-of-interdisciplinary-research",
     journalId: "j-003",
     publishedAt: "2026-01-20",
     receivedAt: "2025-08-01",
@@ -619,8 +713,8 @@ export const publishedArticles: PublishedArticle[] = [
     title: "Blended Learning Outcomes in First-Year STEM Courses",
     authors: ["Priya Natarajan", "Omar Hassan"],
     affiliations: ["University of Toronto, Canada", "American University in Cairo, Egypt"],
-    journalTitle: "Education & Society",
-    journalSlug: "education-and-society",
+    journalTitle: "Nahda Journal of Education, Learning and Development",
+    journalSlug: "nahda-journal-of-education-learning-and-development",
     journalId: "j-004",
     publishedAt: "2026-02-08",
     receivedAt: "2025-09-14",
@@ -659,8 +753,8 @@ export const publishedArticles: PublishedArticle[] = [
     title: "Benchmarking Lightweight CNNs for Field Malaria Microscopy",
     authors: ["James Adeyemi", "Amara Okonkwo"],
     affiliations: ["University of Lagos, Nigeria"],
-    journalTitle: "Atlas Journal of Science",
-    journalSlug: "atlas-journal-of-science",
+    journalTitle: "Nahda Journal of Science and Technology",
+    journalSlug: "nahda-journal-of-science-and-technology",
     journalId: "j-001",
     publishedAt: "2026-03-08",
     receivedAt: "2025-10-11",
@@ -737,14 +831,14 @@ export function getBoardByJournal(journalSlug: string) {
 export const notifications = [
   {
     id: "n-1",
-    title: "Peer review in progress: AJS-2026-0142",
+    title: "Peer review in progress: NJST-2026-0142",
     body: "Your manuscript is with reviewers. Expected decision window: 14 days.",
     time: "2 hours ago",
     unread: true,
   },
   {
     id: "n-2",
-    title: "Action required: AHSR-2026-0087",
+    title: "Action required: NJHBR-2026-0087",
     body: "Minor revisions due by 10 August 2026.",
     time: "5 days ago",
     unread: true,

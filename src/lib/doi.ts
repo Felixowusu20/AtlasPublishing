@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 
-/** Atlas house DOI prefix (replace with your Crossref prefix when registered). */
+/** Nahda house DOI prefix (replace with your Crossref prefix when registered). */
 export const ATLAS_DOI_PREFIX = "10.58000";
 
 type JournalLike = {
@@ -22,7 +22,7 @@ export function doiToUrl(doi: string): string {
   return `https://doi.org/${normalizeDoi(doi)}`;
 }
 
-/** Public Atlas landing path for a DOI (resolves to article / PDF). */
+/** Public Nahda landing path for a DOI (resolves to article / PDF). */
 export function atlasDoiPath(doi: string): string {
   return `/doi/${normalizeDoi(doi)}`;
 }
@@ -62,7 +62,7 @@ function serialFromDoi(doi: string, journalCode: string, year: number): number {
   return m ? Number.parseInt(m[1], 10) : 0;
 }
 
-/** Next Atlas DOI for a journal in the given publication year. */
+/** Next Nahda DOI for a journal in the given publication year. */
 export async function allocateNextAtlasDoi(
   db: Prisma.TransactionClient | typeof import("@/lib/db").prisma,
   journal: JournalLike,
@@ -114,7 +114,7 @@ export async function findArticleByDoi(
   });
 }
 
-/** Assign Atlas DOIs to published articles that do not have one yet. */
+/** Assign Nahda DOIs to published articles that do not have one yet. */
 export async function backfillMissingDois(
   db: Prisma.TransactionClient | typeof import("@/lib/db").prisma,
 ) {

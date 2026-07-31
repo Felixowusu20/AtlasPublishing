@@ -2,13 +2,15 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
-import { progressForStatus, slugify } from "@/lib/submission-utils";
+import { slugify } from "@/lib/submission-utils";
 import { allocateNextAtlasDoi, normalizeDoi } from "@/lib/doi";
+import { trashPublishedArticle } from "@/lib/recycle-bin";
 
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return unauthorized();
   const articles = await prisma.publishedArticle.findMany({
+    where: { deletedAt: null },
     include: {
       journal: true,
       submission: {
@@ -127,9 +129,8 @@ export async function PATCH(request: Request) {
 }
 
 /**
- * Delete a published article from the public site.
- * If it came from a submission, revert that submission to IN_PRODUCTION so
- * the author no longer sees a published / downloadable article.
+ * Move a published article to the recycle bin (soft-delete).
+ * If it came from a submission, revert that submission to IN_PRODUCTION.
  * Pass ?edit=1 to return the submissionId for opening Full manuscripts.
  */
 export async function DELETE(request: Request) {
@@ -142,60 +143,20 @@ export async function DELETE(request: Request) {
   if (!id) return jsonError("Missing id");
 
   try {
-    const article = await prisma.publishedArticle.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        title: true,
-        submissionId: true,
-        submission: {
-          select: {
-            id: true,
-            authorId: true,
-            manuscriptId: true,
-            title: true,
-          },
-        },
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      return trashPublishedArticle(tx, {
+        articleId: id,
+        deletedById: admin.sub,
+        forEdit,
+      });
     });
 
-    if (!article) return jsonError("Article not found", 404);
+    if (!result) return jsonError("Article not found", 404);
 
-    const submissionId = article.submissionId;
-    const submission = article.submission;
-
-    await prisma.$transaction(async (tx) => {
-      await tx.publishedArticle.delete({ where: { id: article.id } });
-
-      if (submissionId) {
-        await tx.submission.update({
-          where: { id: submissionId },
-          data: {
-            status: "IN_PRODUCTION",
-            progress: progressForStatus("IN_PRODUCTION"),
-            // Keep productionBody / figures so Edit can continue the manuscript
-          },
-        });
-
-        if (submission) {
-          await tx.notification.create({
-            data: {
-              userId: submission.authorId,
-              submissionId: submission.id,
-              title: forEdit
-                ? "Article returned to editing"
-                : "Published article removed",
-              body: forEdit
-                ? `“${submission.title}” (${submission.manuscriptId}) was unpublished so editors can revise the full manuscript. It is no longer live on Atlas.`
-                : `“${submission.title}” (${submission.manuscriptId}) was removed from Atlas and is no longer available to download.`,
-            },
-          });
-        }
-      }
-    });
-
+    const submissionId = result.submissionId;
     return jsonOk({
       ok: true,
+      recycled: true,
       submissionId: submissionId ?? null,
       editUrl: submissionId
         ? `/admin/manuscripts?id=${submissionId}`

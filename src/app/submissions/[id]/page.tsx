@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { RequireAuth } from "@/components/require-auth";
 import { ManuscriptViewer } from "@/components/manuscript-viewer";
 import { ResubmitPanel } from "@/components/resubmit-panel";
+import { ApcPayPanel } from "@/components/apc-pay-panel";
 import {
   articleDownloadPath,
   canAuthorResubmit,
@@ -30,9 +31,14 @@ type Submission = {
   status: string;
   progress: number;
   actionRequired?: string | null;
+  apcPaymentStatus?: string | null;
   manuscriptUrl?: string | null;
   manuscriptPublicId?: string | null;
-  journal: { title: string };
+  journal: { title: string; apc?: string | null };
+  payment?: {
+    amountCents: number;
+    status: string;
+  } | null;
   feedback: Feedback[];
   updatedAt: string;
   submittedAt?: string | null;
@@ -113,7 +119,7 @@ function Detail({ id }: { id: string }) {
           </h2>
           <p className="mt-2 max-w-xl text-sm text-emerald-950/80">
             Editorial tracking and resubmission are closed. Download the final
-            Atlas PDF below, or open the public article page.
+            Nahda PDF below, or open the public article page.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             {downloadHref ? (
@@ -135,7 +141,7 @@ function Detail({ id }: { id: string }) {
                 href={`/articles/${published.slug}`}
                 className="btn-secondary !px-4 !py-2.5 text-sm"
               >
-                View on Atlas
+                View on Nahda
               </Link>
             )}
             <span
@@ -161,10 +167,23 @@ function Detail({ id }: { id: string }) {
         </div>
       )}
 
-      {!isPublished && sub.actionRequired && (
+      {!isPublished && sub.actionRequired && sub.apcPaymentStatus !== "PENDING" && (
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           {sub.actionRequired}
         </div>
+      )}
+
+      {(sub.status === "ACCEPTED" ||
+        sub.apcPaymentStatus === "PENDING" ||
+        sub.apcPaymentStatus === "PAID" ||
+        sub.apcPaymentStatus === "WAIVED") && (
+        <ApcPayPanel
+          submissionId={sub.id}
+          manuscriptId={sub.manuscriptId}
+          apcPaymentStatus={sub.apcPaymentStatus}
+          amountCents={sub.payment?.amountCents}
+          onPaid={() => void load()}
+        />
       )}
 
       {showResubmit && (
