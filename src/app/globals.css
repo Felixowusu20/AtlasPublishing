@@ -6,8 +6,9 @@
   --ink: #0b1f33;
   --muted: #5b6b7c;
   --line: #d7dee7;
-  --accent: #0f6b6a;
-  --accent-soft: #e4f3f2;
+  --accent: #1e6847;
+  --accent-soft: #e6f2ec;
+  --brand-orange: #d65c33;
   --background: var(--paper);
   --foreground: var(--ink);
 }
@@ -37,7 +38,7 @@ html {
 }
 
 .btn-primary:hover {
-  background: #0c5756;
+  background: #185538;
 }
 
 .btn-secondary {

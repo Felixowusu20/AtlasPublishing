@@ -64,8 +64,8 @@ export function HeroSlider() {
     return (
       <section className="relative isolate border-b border-[var(--line)] bg-[var(--ink)] text-white">
         <div className="relative z-10 mx-auto flex min-h-[50vh] max-w-6xl flex-col justify-end px-4 py-16 sm:px-6 sm:py-20">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">
-            Atlas Academic Publishing
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
+            Nahda Publications
           </p>
           <h1 className="mt-4 max-w-2xl font-[family-name:var(--font-display)] text-4xl leading-tight sm:text-5xl">
             Hero content coming soon
@@ -126,8 +126,8 @@ export function HeroSlider() {
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-[70vh] max-w-6xl flex-col justify-end px-4 py-16 sm:px-6 sm:py-20">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">
-          Atlas Academic Publishing
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
+          Nahda Publications
         </p>
         <h1 className="mt-4 max-w-2xl font-[family-name:var(--font-display)] text-4xl leading-tight sm:text-5xl">
           {current.title}

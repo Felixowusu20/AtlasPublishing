@@ -33,11 +33,17 @@ type Submission = {
   articleType: string;
   status: (typeof statuses)[number] | "SUBMITTED" | "DRAFT";
   progress: number;
+  apcPaymentStatus?: string | null;
   manuscriptUrl?: string | null;
   manuscriptPublicId?: string | null;
   coverLetter?: string | null;
   author: { name: string; email: string; institution?: string | null };
-  journal: { title: string };
+  journal: { title: string; apc?: string | null };
+  payment?: {
+    amountCents: number;
+    status: string;
+    paidAt?: string | null;
+  } | null;
   feedback: Feedback[];
 };
 
@@ -54,6 +60,8 @@ export default function AdminSubmissionDetailPage({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
+
+  const [waiving, setWaiving] = useState(false);
 
   async function load() {
     const res = await fetch(`/api/admin/submissions/${id}`);
@@ -73,6 +81,28 @@ export default function AdminSubmissionDetailPage({
   useEffect(() => {
     void load();
   }, [id]);
+
+  async function waiveApc() {
+    if (!submission) return;
+    setWaiving(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch("/api/admin/payments/waive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submissionId: submission.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not waive APC");
+      setSubmission(data.submission);
+      setSuccess("APC waived. Status set to In Production.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Waive failed");
+    } finally {
+      setWaiving(false);
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -100,16 +130,14 @@ export default function AdminSubmissionDetailPage({
     setSubmission(data.submission);
     if (status === "ACCEPTED") {
       setSuccess(
-        data.emailSent
-          ? "Accepted and emailed. Next: write the full manuscript, then publish."
-          : "Accepted (email skipped — check SMTP). Next: write the full manuscript, then publish.",
+        data.checkoutUrl
+          ? `Accepted. Payment link sent${data.apcAmountLabel ? ` (${data.apcAmountLabel})` : ""}.`
+          : data.emailSent
+            ? "Accepted. No APC due; moved toward production."
+            : "Accepted.",
       );
     } else {
-      setSuccess(
-        data.emailSent
-          ? "Feedback saved and emailed to the author."
-          : "Feedback saved. Email was not sent — check SMTP settings in .env.",
-      );
+      setSuccess(data.emailSent ? "Feedback sent." : "Feedback saved.");
     }
   }
 
@@ -246,49 +274,58 @@ export default function AdminSubmissionDetailPage({
           {success && (
             <div className="space-y-2 rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
               <p>{success}</p>
-              {(status === "ACCEPTED" || submission.status === "ACCEPTED") && (
+              {(submission.status === "IN_PRODUCTION" ||
+                (submission.status === "ACCEPTED" &&
+                  submission.apcPaymentStatus !== "PENDING")) && (
                 <Link
-                  href={`/admin/manuscripts?id=${submission.id}`}
+                  href={`/admin/publishedArticles?id=${submission.id}`}
                   className="btn-primary inline-flex !px-3 !py-2 text-xs"
                 >
-                  Write full manuscript →
+                  Open Publish papers
                 </Link>
               )}
             </div>
           )}
           {(submission.status === "ACCEPTED" ||
-            submission.status === "IN_PRODUCTION") &&
-            !success && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
-                <p className="font-medium">Ready for production</p>
-                <p className="mt-1 text-xs text-amber-900/80">
-                  Write the full article in Full manuscripts, then publish from
-                  Publish papers.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-3">
+            submission.status === "IN_PRODUCTION") && (
+            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+              <p className="font-medium">
+                {submission.apcPaymentStatus === "PENDING"
+                  ? "Waiting for APC payment"
+                  : submission.status === "IN_PRODUCTION"
+                    ? "In production"
+                    : "Ready for production"}
+              </p>
+              {submission.apcPaymentStatus === "PENDING" ? (
+                <button
+                  type="button"
+                  disabled={waiving}
+                  onClick={() => void waiveApc()}
+                  className="text-xs font-semibold text-[var(--accent)] underline disabled:opacity-50"
+                >
+                  {waiving ? "Waiving…" : "Waive APC"}
+                </button>
+              ) : (
+                <div className="flex flex-wrap gap-3">
                   <Link
                     href={`/admin/manuscripts?id=${submission.id}`}
                     className="text-xs font-semibold text-[var(--accent)] underline"
                   >
-                    Open Full manuscripts →
+                    Full manuscripts
                   </Link>
                   <Link
                     href={`/admin/publishedArticles?id=${submission.id}`}
                     className="text-xs font-semibold text-[var(--accent)] underline"
                   >
-                    Go to Publish papers →
+                    Publish papers
                   </Link>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          )}
           <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading ? "Sending…" : "Send feedback"}
           </button>
-          <p className="text-[11px] text-[var(--muted)]">
-            Feedback is saved to the author dashboard and emailed to the author
-            immediately. Acceptance does not publish the paper yet — use Publish
-            papers for that.
-          </p>
         </form>
       </div>
     </div>

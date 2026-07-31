@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { BrandLogo } from "@/components/brand-logo";
 import { journals } from "@/data/mock";
 import { initials } from "@/lib/auth";
 
@@ -75,7 +76,7 @@ function useNavItems(): NavItem[] {
         children: [
           { label: "Help centre & FAQ", href: "/help" },
           { label: "Contact support", href: "/help#contact" },
-          { label: "About Atlas", href: "/about" },
+          { label: "About Nahda", href: "/about" },
         ],
       },
     ],
@@ -147,7 +148,7 @@ export function SiteHeader() {
       <div className="border-b border-[var(--line)] bg-[var(--ink)] text-xs text-slate-300">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-1.5 sm:px-6">
           <p className="truncate">
-            Atlas Publishing House | Peer reviewed journals | Demo environment
+            Nahda Publications | Peer reviewed journals
           </p>
           <div className="hidden items-center gap-4 sm:flex">
             <Link href="/search" className="hover:text-white">
@@ -161,17 +162,7 @@ export function SiteHeader() {
       </div>
 
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--ink)] text-sm font-semibold text-white">
-            A
-          </span>
-          <span className="font-[family-name:var(--font-display)] text-lg tracking-tight text-[var(--ink)]">
-            Atlas
-            <span className="ml-1.5 hidden font-[family-name:var(--font-body)] text-sm font-normal text-[var(--muted)] lg:inline">
-              Academic Publishing
-            </span>
-          </span>
-        </Link>
+        <BrandLogo variant="full" priority />
 
         <nav ref={navRef} className="relative hidden items-center gap-0.5 lg:flex">
           {nav.map((item) => {
@@ -419,10 +410,8 @@ export function SiteFooter() {
     <footer className="mt-auto border-t border-[var(--line)] bg-[var(--ink)] text-slate-300">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
         <div>
-          <p className="font-[family-name:var(--font-display)] text-lg text-white">
-            Atlas Academic Publishing
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-slate-400">
+          <BrandLogo href="/" variant="onDark" className="h-10 sm:h-11" />
+          <p className="mt-3 text-sm leading-relaxed text-slate-400">
             Submission and publishing for researchers worldwide.
           </p>
         </div>
@@ -456,8 +445,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-white/10">
         <p className="mx-auto max-w-6xl px-4 py-4 text-xs text-slate-500 sm:px-6">
-          © {new Date().getFullYear()} Atlas Publishing House. Demo UI with mock
-          data.
+          © {new Date().getFullYear()} Nahda Publications.
         </p>
       </div>
     </footer>

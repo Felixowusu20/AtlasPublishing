@@ -5,7 +5,7 @@ export default function AuthorGuidelinesPage() {
     <div className="page-wrap">
       <h1 className="page-title">Author guidelines</h1>
       <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-        Follow these steps to prepare and submit a manuscript to any Atlas
+        Follow these steps to prepare and submit a manuscript to any Nahda
         journal.
       </p>
 

@@ -20,11 +20,13 @@ type ApiSubmission = {
   status: string;
   progress: number;
   actionRequired?: string | null;
+  apcPaymentStatus?: string | null;
   submittedAt?: string | null;
   updatedAt: string;
   journal: { title: string };
   authorsJson?: { name: string }[] | null;
   feedback?: { message: string; createdAt: string }[];
+  payment?: { amountCents: number; status: string } | null;
   publishedArticle?: {
     id: string;
     slug: string;
@@ -65,6 +67,9 @@ function canResubmit(sub: ApiSubmission) {
 
 function needsAuthorAction(sub: ApiSubmission) {
   if (sub.status === "PUBLISHED" || sub.status === "REJECTED") return false;
+  if (sub.status === "ACCEPTED" && sub.apcPaymentStatus === "PENDING") {
+    return true;
+  }
   return (
     Boolean(sub.actionRequired) ||
     sub.status === "MAJOR_REVISION" ||
@@ -183,7 +188,7 @@ function DashboardInner() {
           <StatCard label="Needs action" value={needsAction.length} hint="Deadlines and revisions" tone="amber" />
           <StatCard label="In progress" value={drafts.length + active.length} hint="Drafts and active reviews" tone="teal" />
           <StatCard label="Under review" value={active.length} hint="With editors or reviewers" tone="sky" />
-          <StatCard label="Published" value={published.length} hint="Live on Atlas journals" tone="emerald" />
+          <StatCard label="Published" value={published.length} hint="Live on Nahda journals" tone="emerald" />
         </div>
 
         {needsAction.length > 0 && (
@@ -345,10 +350,13 @@ function DashboardInner() {
                             <StatusBadge status={toUiStatus(sub.status)} />
                             {!isPublished &&
                               (sub.actionRequired ||
+                                sub.apcPaymentStatus === "PENDING" ||
                                 sub.status === "MAJOR_REVISION" ||
                                 sub.status === "MINOR_REVISION") && (
                                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
-                                  Action needed
+                                  {sub.apcPaymentStatus === "PENDING"
+                                    ? "Pay APC"
+                                    : "Action needed"}
                                 </span>
                               )}
                           </div>
@@ -388,6 +396,15 @@ function DashboardInner() {
                             </>
                           ) : (
                             <>
+                              {sub.status === "ACCEPTED" &&
+                                sub.apcPaymentStatus === "PENDING" && (
+                                  <Link
+                                    href={`/submissions/${sub.id}`}
+                                    className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                                  >
+                                    Pay APC
+                                  </Link>
+                                )}
                               {showResubmit && (
                                 <Link
                                   href={`/submissions/${sub.id}#resubmit`}
@@ -413,7 +430,7 @@ function DashboardInner() {
 
                       {isPublished && published?.slug && (
                         <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2.5 text-xs text-emerald-950">
-                          Live on Atlas.{" "}
+                          Live on Nahda.{" "}
                           <Link
                             href={`/articles/${published.slug}`}
                             className="font-semibold underline"

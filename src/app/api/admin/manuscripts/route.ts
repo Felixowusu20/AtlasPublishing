@@ -18,14 +18,18 @@ export async function GET(request: Request) {
 
     const queue = await prisma.submission.findMany({
       where: {
+        deletedAt: null,
         status: { in: ["ACCEPTED", "IN_PRODUCTION"] },
         publishedArticle: null,
+        // APC must be cleared before production work
+        apcPaymentStatus: { in: ["PAID", "WAIVED", "NOT_REQUIRED"] },
       },
       include: {
         journal: { select: { id: true, title: true, shortTitle: true } },
         author: {
           select: { id: true, name: true, email: true, institution: true },
         },
+        payment: true,
       },
       orderBy: { updatedAt: "desc" },
     });
@@ -35,14 +39,17 @@ export async function GET(request: Request) {
       const focused = await prisma.submission.findFirst({
         where: {
           id: focusId,
+          deletedAt: null,
           publishedArticle: null,
           status: { in: ["ACCEPTED", "IN_PRODUCTION"] },
+          apcPaymentStatus: { in: ["PAID", "WAIVED", "NOT_REQUIRED"] },
         },
         include: {
           journal: { select: { id: true, title: true, shortTitle: true } },
           author: {
             select: { id: true, name: true, email: true, institution: true },
           },
+          payment: true,
         },
       });
       if (focused) queue.unshift(focused);
@@ -58,6 +65,9 @@ export async function GET(request: Request) {
 const saveSchema = z.object({
   submissionId: z.string().min(1),
   body: z.string(),
+  title: z.string().min(2).optional(),
+  abstract: z.string().min(10).optional(),
+  keywords: z.array(z.string()).optional(),
   figures: z
     .array(
       z.object({
@@ -75,6 +85,9 @@ const saveSchema = z.object({
 type SavedRow = {
   id: string;
   manuscriptId: string;
+  title: string;
+  abstract: string;
+  keywords: string[];
   productionBody: string | null;
   productionFigures: unknown;
   manuscriptReadyAt: Date | null;
@@ -93,15 +106,24 @@ async function saveProductionFields(args: {
   figures: unknown;
   done: boolean;
   existingReadyAt: Date | null;
+  title?: string;
+  abstract?: string;
+  keywords?: string[];
 }): Promise<SavedRow> {
   const readyAt = args.done ? new Date() : args.existingReadyAt;
   const nextStatus = args.done ? ("IN_PRODUCTION" as const) : undefined;
   const progress = nextStatus ? progressForStatus(nextStatus) : undefined;
+  const meta = {
+    ...(args.title ? { title: args.title } : {}),
+    ...(args.abstract ? { abstract: args.abstract } : {}),
+    ...(args.keywords ? { keywords: args.keywords } : {}),
+  };
 
   try {
     return await prisma.submission.update({
       where: { id: args.id },
       data: {
+        ...meta,
         productionBody: args.body,
         productionFigures: args.figures as Prisma.InputJsonValue,
         manuscriptReadyAt: readyAt,
@@ -115,6 +137,9 @@ async function saveProductionFields(args: {
       select: {
         id: true,
         manuscriptId: true,
+        title: true,
+        abstract: true,
+        keywords: true,
         productionBody: true,
         productionFigures: true,
         manuscriptReadyAt: true,
@@ -139,6 +164,8 @@ async function saveProductionFields(args: {
           "manuscriptReadyAt" = ${readyAt},
           "status" = 'IN_PRODUCTION'::"SubmissionStatus",
           "progress" = ${progress ?? 85},
+          "title" = COALESCE(${args.title ?? null}, "title"),
+          "abstract" = COALESCE(${args.abstract ?? null}, "abstract"),
           "updatedAt" = NOW()
         WHERE id = ${args.id}
       `;
@@ -148,6 +175,8 @@ async function saveProductionFields(args: {
         SET
           "productionBody" = ${args.body},
           "productionFigures" = ${JSON.stringify(args.figures)}::jsonb,
+          "title" = COALESCE(${args.title ?? null}, "title"),
+          "abstract" = COALESCE(${args.abstract ?? null}, "abstract"),
           "updatedAt" = NOW()
         WHERE id = ${args.id}
       `;
@@ -157,6 +186,9 @@ async function saveProductionFields(args: {
       SELECT
         id,
         "manuscriptId",
+        title,
+        abstract,
+        keywords,
         "productionBody",
         "productionFigures",
         "manuscriptReadyAt",
@@ -184,7 +216,7 @@ export async function PATCH(request: Request) {
 
     const submission = await prisma.submission.findUnique({
       where: { id: data.submissionId },
-      include: { publishedArticle: true },
+      include: { publishedArticle: true, payment: true },
     });
 
     if (!submission) return jsonError("Submission not found", 404);
@@ -200,6 +232,16 @@ export async function PATCH(request: Request) {
         400,
       );
     }
+    if (
+      submission.apcPaymentStatus !== "PAID" &&
+      submission.apcPaymentStatus !== "WAIVED" &&
+      submission.apcPaymentStatus !== "NOT_REQUIRED"
+    ) {
+      return jsonError(
+        "APC payment is still pending. The author must pay (or an admin must waive) before production.",
+        400,
+      );
+    }
 
     // Prefer column from DB even if Prisma types omit it on a stale client
     const existingReadyAt =
@@ -212,6 +254,9 @@ export async function PATCH(request: Request) {
       figures: data.figures ?? [],
       done: Boolean(data.done),
       existingReadyAt,
+      title: data.title?.trim(),
+      abstract: data.abstract?.trim(),
+      keywords: data.keywords,
     });
 
     return jsonOk({

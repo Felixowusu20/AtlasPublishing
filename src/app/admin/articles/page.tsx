@@ -157,7 +157,7 @@ export default function ArticlesCmsPage() {
         router.push(data.editUrl as string);
         return;
       }
-      setSuccess("Article deleted.");
+      setSuccess("Moved to recycle bin.");
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
@@ -176,7 +176,7 @@ export default function ArticlesCmsPage() {
         title={
           pending?.forEdit
             ? "Open in Full manuscripts?"
-            : "Delete this article?"
+            : "Move to recycle bin?"
         }
         description={
           pending?.forEdit ? (
@@ -205,21 +205,21 @@ export default function ArticlesCmsPage() {
           ) : (
             <>
               <p>
-                Permanently remove{" "}
+                Move{" "}
                 <span className="font-medium text-[var(--ink)]">
                   “{pending?.title}”
                 </span>{" "}
-                from Atlas.
+                to the recycle bin.
               </p>
               <p className="mt-2 text-xs">
-                It will leave the public site and the author’s published list.
-                The submission returns to production if one was linked.
+                It leaves the public site and the author’s published list. You
+                can restore it later from Recycle bin.
               </p>
             </>
           )
         }
         confirmLabel={
-          pending?.forEdit ? "Unpublish & edit" : "Delete article"
+          pending?.forEdit ? "Unpublish & edit" : "Move to bin"
         }
         cancelLabel="Keep published"
         busy={Boolean(pending && busyId === pending.id)}
@@ -234,8 +234,8 @@ export default function ArticlesCmsPage() {
           Latest articles
         </h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Manage live articles. Delete removes them from the site and the
-          author’s published list. Edit unpublishes and opens Full manuscripts.
+          Manage live articles. Delete moves them to the recycle bin. Edit
+          unpublishes and opens Full manuscripts.
         </p>
         {error && (
           <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -402,7 +402,7 @@ export default function ArticlesCmsPage() {
           <p className="mt-2">
             Use <strong>Edit manuscript</strong> to unpublish and revise the
             full article, then publish again from Publish papers.{" "}
-            <strong>Delete</strong> removes it from Atlas and the author’s
+            <strong>Delete</strong> removes it from Nahda and the author’s
             published list.
           </p>
           <Link

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { BrandLogo } from "@/components/brand-logo";
 
 type Props = {
   children: ReactNode;
@@ -34,6 +35,7 @@ export function AuthSplitLayout({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--ink)]/88 via-[var(--ink)]/35 to-[var(--ink)]/10" />
         <div className="absolute inset-x-0 bottom-0 p-8 xl:p-10">
+          <BrandLogo href={null} variant="onDark" className="mb-4 h-10" />
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/75">
             {brand}
           </p>
@@ -70,7 +72,12 @@ export function AuthSplitLayout({
         </div>
 
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 py-4 sm:px-8">
-          <div className="auth-compact w-full max-w-md">{children}</div>
+          <div className="auth-compact w-full max-w-md">
+            <div className="mb-5 flex justify-center lg:justify-start">
+              <BrandLogo href="/" variant="full" />
+            </div>
+            {children}
+          </div>
         </div>
       </div>
     </div>

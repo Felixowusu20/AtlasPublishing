@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
     void sendEmail({
       to: user.email,
-      subject: "Welcome to Atlas Academic Publishing",
+      subject: "Welcome to Nahda Publications",
       html: welcomeEmailHtml(user.name),
     });
 

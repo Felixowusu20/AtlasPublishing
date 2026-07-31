@@ -41,7 +41,7 @@ function LoginForm() {
     <AuthSplitLayout
       imageSrc={AUTH_IMAGES.authorLogin}
       imageAlt="Sunlit university library reading room"
-      brand="Atlas Academic Publishing"
+      brand="Nahda Publications"
       headline="Manuscripts tracked from submission to publication."
       subhead="Manage revisions, feedback, and editorial progress."
     >

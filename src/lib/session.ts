@@ -19,7 +19,7 @@ function getSecret() {
     // Allow local bootstrap with a fixed fallback so generate still works;
     // production must set AUTH_SECRET.
     return new TextEncoder().encode(
-      secret || "dev-only-atlas-secret-change-me-please-32chars",
+      secret || "dev-only-nahda-secret-change-me-please-32chars",
     );
   }
   return new TextEncoder().encode(secret);

@@ -1,13 +1,21 @@
 import Link from "next/link";
-import { journals } from "@/data/mock";
+import { prisma } from "@/lib/db";
+import { formatApcAmount, parseApcAmountCents } from "@/lib/apc";
 
-export default function FeesPage() {
+export const dynamic = "force-dynamic";
+
+export default async function FeesPage() {
+  const journals = await prisma.journal.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" },
+  });
+
   return (
     <div className="page-wrap">
       <h1 className="page-title">Fees & waivers</h1>
       <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-        Article processing charges (APC) by journal. Payments are mocked for
-        now (Stripe / Paystack later).
+        Article processing charges by journal. Payment is collected after
+        acceptance.
       </p>
 
       <div className="mt-8 overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-sm">
@@ -20,22 +28,41 @@ export default function FeesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--line)]">
-            {journals.map((j) => (
-              <tr key={j.id}>
-                <td className="px-4 py-3">
-                  <Link
-                    href={`/journals/${j.slug}`}
-                    className="font-medium text-[var(--accent)] hover:underline"
-                  >
-                    {j.title}
-                  </Link>
+            {journals.length === 0 && (
+              <tr>
+                <td
+                  colSpan={3}
+                  className="px-4 py-8 text-center text-[var(--muted)]"
+                >
+                  No active journals yet.
                 </td>
-                <td className="px-4 py-3 text-[var(--muted)]">
-                  {j.openAccess ? "Open Access" : "Subscription"}
-                </td>
-                <td className="px-4 py-3 font-medium">{j.apc}</td>
               </tr>
-            ))}
+            )}
+            {journals.map((j) => {
+              const cents = parseApcAmountCents(j.apc, {
+                openAccess: j.openAccess,
+              });
+              return (
+                <tr key={j.id}>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/journals/${j.slug}`}
+                      className="font-medium text-[var(--accent)] hover:underline"
+                    >
+                      {j.title}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-[var(--muted)]">
+                    {j.openAccess ? "Open Access" : "Subscription"}
+                  </td>
+                  <td className="px-4 py-3 font-medium">
+                    {cents > 0
+                      ? formatApcAmount(cents)
+                      : j.apc?.trim() || "No APC"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -43,9 +70,8 @@ export default function FeesPage() {
       <div className="mt-6 card p-5 text-sm text-[var(--muted)]">
         <p className="font-semibold text-[var(--ink)]">Waivers</p>
         <p className="mt-2">
-          Full or partial waivers may be available for corresponding authors from
-          low-income economies, or via institutional sponsorship. Request a
-          waiver during submission (demo placeholder).
+          Waiver requests can be sent to the editorial office. Approved waivers
+          are applied after acceptance.
         </p>
       </div>
     </div>

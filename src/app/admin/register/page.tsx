@@ -18,7 +18,7 @@ export default function AdminRegisterPage() {
     email: "",
     password: "",
     confirm: "",
-    institution: "Atlas Publishing House",
+    institution: "Nahda Publications",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,8 +53,8 @@ export default function AdminRegisterPage() {
     <AuthSplitLayout
       imageSrc={AUTH_IMAGES.adminRegister}
       imageAlt="Focused workspace with laptop"
-      brand="Atlas Admin"
-      headline="Bootstrap the Atlas publishing control panel."
+      brand="Nahda Admin"
+      headline="Bootstrap the Nahda publishing control panel."
       subhead="Create the first super admin, then add reviewers."
     >
       <div className="auth-card shadow-xl">

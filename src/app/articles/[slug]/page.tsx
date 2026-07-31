@@ -360,7 +360,7 @@ function ArticleView({ article }: { article: ViewArticle }) {
                     </h2>
                     <p className="mt-3 max-w-xl text-sm leading-relaxed text-[var(--muted)]">
                       This page presents the abstract and citation details.
-                      Download the Atlas-formatted PDF for figures, tables,
+                      Download the Nahda-formatted PDF for figures, tables,
                       methods, and references.
                     </p>
                     {downloadHref ? (
@@ -421,7 +421,7 @@ function ArticleView({ article }: { article: ViewArticle }) {
                   </div>
                   <div className="p-5">
                     <p className="text-xs leading-relaxed text-[var(--muted)]">
-                      Includes figures, tables, and references in the Atlas
+                      Includes figures, tables, and references in the Nahda
                       article format.
                     </p>
                     {downloadHref ? (

@@ -15,9 +15,13 @@ const display = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Atlas Academic Publishing",
+  title: "Nahda Publications",
   description:
     "Journal submission, peer review, and scholarly publishing platform",
+  icons: {
+    icon: [{ url: "/favicon.png", type: "image/png" }],
+    apple: [{ url: "/favicon.png" }],
+  },
 };
 
 export default function RootLayout({

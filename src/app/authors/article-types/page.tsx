@@ -5,7 +5,7 @@ export default function ArticleTypesPage() {
     <div className="page-wrap">
       <h1 className="page-title">Article types</h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
-        Supported manuscript categories across Atlas journals.
+        Supported manuscript categories across Nahda journals.
       </p>
       <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {articleTypes.map((type) => (

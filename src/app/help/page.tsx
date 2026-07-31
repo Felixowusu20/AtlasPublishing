@@ -14,7 +14,7 @@ export default function HelpPage() {
     ],
     [
       "How do APCs and waivers work?",
-      "See Fees & waivers. Payment providers (Stripe/Paystack) will be mocked until billing is wired.",
+      "See Fees & waivers. APC is paid after acceptance, before production.",
     ],
     [
       "Is this connected to a real database?",
@@ -47,7 +47,7 @@ export default function HelpPage() {
         <p className="mt-2 text-sm text-[var(--muted)]">
           Email{" "}
           <span className="font-medium text-[var(--ink)]">
-            support@atlas.pub
+            nahdapublications@gmail.com
           </span>{" "}
           (demo). Typical response within 1 to 2 business days.
         </p>

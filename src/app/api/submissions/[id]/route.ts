@@ -10,9 +10,10 @@ export async function GET(_request: Request, { params }: Params) {
   const { id } = await params;
 
   const submission = await prisma.submission.findFirst({
-    where: { id, authorId: session.sub },
+    where: { id, authorId: session.sub, deletedAt: null },
     include: {
       journal: true,
+      payment: true,
       publishedArticle: {
         select: {
           id: true,

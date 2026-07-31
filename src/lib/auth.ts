@@ -43,10 +43,10 @@ export const seedUsers: DemoUser[] = [
   {
     id: "u-003",
     name: "Prof. Helen Markovic",
-    email: "h.markovic@atlas.pub",
+    email: "editor@nahdapublications.com",
     password: "demo1234",
     role: "editor",
-    institution: "Atlas Publishing House",
+    institution: "Nahda Publications",
     researchInterests: ["Editorial Policy", "Open Science"],
   },
 ];

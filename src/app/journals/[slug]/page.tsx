@@ -75,21 +75,35 @@ export default async function JournalDetailPage({
             ← All journals
           </Link>
           <div className="mt-4 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-sm text-white/70">{journal.shortTitle}</p>
-              <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl sm:text-4xl">
-                {journal.title}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/80">
-                {journal.description}
-              </p>
-              <p className="mt-3 text-xs text-white/60">
-                {journal.issn ? `ISSN ${journal.issn}` : null}
-                {journal.eIssn ? `, eISSN ${journal.eIssn}` : null}
-                {journal.issn || journal.eIssn ? ", " : ""}
-                {journal.openAccess ? "Open Access" : "Subscription"}
-                {journal.foundedYear ? `, Founded ${journal.foundedYear}` : ""}
-              </p>
+            <div className="flex min-w-0 items-start gap-4">
+              {journal.coverImageUrl ? (
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/95 p-1.5 shadow-sm sm:h-20 sm:w-20">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={journal.coverImageUrl}
+                    alt=""
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              ) : null}
+              <div className="min-w-0">
+                <p className="text-sm font-medium uppercase tracking-wider text-white/70">
+                  {journal.shortTitle}
+                </p>
+                <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl leading-tight sm:text-4xl">
+                  {journal.title}
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/80">
+                  {journal.description}
+                </p>
+                <p className="mt-3 text-xs text-white/60">
+                  {journal.issn ? `ISSN ${journal.issn}` : null}
+                  {journal.eIssn ? `, eISSN ${journal.eIssn}` : null}
+                  {journal.issn || journal.eIssn ? ", " : ""}
+                  {journal.openAccess ? "Open Access" : "Subscription"}
+                  {journal.foundedYear ? `, Founded ${journal.foundedYear}` : ""}
+                </p>
+              </div>
             </div>
             <Link
               href={`/submissions/new?journal=${journal.id}`}

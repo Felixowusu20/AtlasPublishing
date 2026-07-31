@@ -1,135 +1,90 @@
-// Atlas Academic Publishing — Typst article template (ACS-style masthead).
+// Nahda Publications — ACS-level Typst journal article template.
 // Runtime fills this via `buildAtlasTypstSource()` in src/lib/typst-atlas.ts.
+// Brand colors come from each journal's coverColor. Typst only (not LaTeX).
 
-#set page(
-  paper: "a4",
-  margin: (x: 2.0cm, y: 2.2cm),
-  header: context {
-    if counter(page).get().first() > 1 {
-      set text(size: 8pt, fill: rgb("#5b6b7c"))
-      grid(
-        columns: (1fr, auto),
-        [Atlas Academic Publishing · *JOURNAL_SHORT*],
-        [*MANUSCRIPT_ID*],
-      )
-      v(2pt)
-      line(length: 100%, stroke: 0.45pt + rgb("#0f6b6a"))
-    }
-  },
-  footer: context {
-    set text(size: 8pt, fill: rgb("#5b6b7c"))
-    line(length: 100%, stroke: 0.3pt + rgb("#d7dee7"))
-    v(4pt)
-    grid(
-      columns: (1fr, auto),
-      [© *YEAR* Atlas Academic Publishing · *LICENSE*],
-      counter(page).display("1"),
-    )
-  },
-)
+#let primary = rgb("#0B3A53")
+#let link-blue = rgb("#3d6f8f")
+#let soft-link = rgb("#8eb0c4")
+#let soft = rgb("#f2f6f8")
+#let wordmark-fill = rgb("#2a5a73")
+#let cite-orange = rgb("#e08a2e")
+#let oa-gold = rgb("#c4a35a")
+#let ink = rgb("#0b1f33")
+#let muted = rgb("#5b6b7c")
+#let rule = rgb("#c5ced8")
+#let serif = ("Libertinus Serif", "New Computer Modern", "Georgia", "Times New Roman")
+#let sans = ("Libertinus Sans", "TeX Gyre Heros", "Helvetica", "Arial")
 
-#set text(font: "Libertinus Serif", size: 10.5pt, fill: rgb("#0b1f33"))
-#set par(justify: true, leading: 0.75em)
-#set heading(numbering: "1.")
+#set page(paper: "a4", margin: (left: 1.7cm, right: 1.7cm, top: 1.55cm, bottom: 1.65cm))
+#set text(font: serif, size: 9.5pt, fill: ink)
+#set par(justify: true, leading: 0.68em)
+#show link: set text(fill: link-blue)
 
-// First-page masthead
-#grid(
-  columns: (auto, 1fr, auto),
-  gutter: 10pt,
-  align(horizon)[
-    #box(
-      width: 1.15cm,
-      height: 1.15cm,
-      fill: rgb("#0f6b6a"),
-      radius: 50%,
-      inset: 2.5pt,
-      align(center + horizon)[
-        #box(
-          width: 100%,
-          height: 100%,
-          fill: white,
-          radius: 50%,
-          align(center + horizon)[
-            #text(size: 13pt, weight: "bold", fill: rgb("#0f6b6a"))[A]
-          ],
-        )
-      ],
-    )
-  ],
-  align(horizon)[
-    #text(size: 12pt, weight: "bold", fill: rgb("#5b6b7c"), tracking: 0.08em)[ATLAS ]
-    #text(size: 12pt, weight: "bold", fill: rgb("#0b1f33"), tracking: 0.06em)[*JOURNAL_SHORT*]
-    #v(2pt)
-    #text(size: 8pt, fill: rgb("#5b6b7c"))[*JOURNAL_TITLE*]
-  ],
-  align(right + horizon)[
-    #text(size: 8pt, weight: "bold")[*MANUSCRIPT_ID*] \
-    #text(size: 7.5pt, fill: rgb("#5b6b7c"))[*PUBLISHED*]
-  ],
-)
-
-#v(8pt)
 #grid(
   columns: (1fr, auto),
-  gutter: 4pt,
-  align(horizon)[#box(width: 100%, height: 2.8pt, fill: rgb("#0f6b6a"))],
-  align(horizon)[
-    #box(fill: rgb("#0f6b6a"), inset: (x: 7pt, y: 3.5pt))[
-      #text(size: 7.5pt, weight: "bold", fill: white, tracking: 0.08em)[Article]
+  align(left + horizon)[
+    #text(font: serif, size: 26pt, weight: "bold", style: "italic", fill: wordmark-fill)[*JOURNAL_SHORT*]
+  ],
+  align(right + top)[
+    #box(fill: oa-gold, radius: 3pt, inset: (x: 9pt, y: 4pt))[
+      #text(font: sans, size: 8pt, weight: "bold", fill: white)[Open Access]
     ]
+    #v(5pt)
+    #text(font: sans, size: 7pt)[Licensed under CC-BY-4.0]
   ],
 )
-
-#v(14pt)
-#text(size: 16pt, weight: "bold")[*TITLE*]
-
-#v(10pt)
-#text(size: 8.5pt, fill: rgb("#5b6b7c"))[*AUTHORS*]
-
-#v(4pt)
-#text(size: 11.5pt)[*AFFILIATIONS*]
 
 #v(10pt)
 #grid(
-  columns: (1fr, 1fr),
-  gutter: 8pt,
-  [
-    #block(
-      width: 100%,
-      inset: (x: 8pt, y: 7pt),
-      fill: rgb("#fafbfc"),
-      stroke: (bottom: 2.5pt + rgb("#f59e0b")),
-    )[
-      #text(size: 8pt)[#text(weight: "bold")[Cite This:] #text(fill: rgb("#0f6b6a"))[Citation]]
-    ]
-  ],
-  [
-    #block(
-      width: 100%,
-      inset: (x: 8pt, y: 7pt),
-      fill: rgb("#fafbfc"),
-      stroke: (bottom: 2.5pt + rgb("#0f6b6a")),
-    )[
-      #text(size: 9pt, weight: "bold", fill: rgb("#0f6b6a"))[Read Online]
+  columns: (1fr, auto),
+  align(bottom + left)[#text(font: sans, size: 8pt, fill: link-blue)[journals.example / *JOURNAL_SHORT*]],
+  align(bottom + right)[
+    #box(fill: primary, inset: (x: 11pt, y: 5pt))[
+      #text(font: sans, size: 9pt, weight: "bold", fill: white)[Article]
     ]
   ],
 )
+#line(length: 100%, stroke: 1.6pt + primary)
 
-#v(12pt)
-#block(
-  width: 100%,
-  inset: 10pt,
-  fill: rgb("#f5f7fa"),
-  radius: 4pt,
+#v(14pt)
+#text(font: sans, size: 17.5pt, weight: "bold")[*TITLE*]
+
+#v(10pt)
+#text(size: 10.5pt)[*AUTHORS*]
+
+#v(14pt)
+#grid(
+  columns: (1.45fr, 1fr),
+  gutter: 14pt,
   [
-    #text(size: 9pt, weight: "bold", fill: rgb("#0f6b6a"))[Abstract]
-    #v(4pt)
-    #text(size: 9.5pt)[*ABSTRACT*]
+    #text(font: sans, size: 9pt)[*Cite This:* #text(fill: link-blue)[_Journal_ citation]]
+    #v(5pt)
+    #box(width: 100%, height: 2.4pt, fill: cite-orange)
+  ],
+  [
+    #box(width: 100%, fill: primary, inset: (x: 10pt, y: 7pt))[
+      #text(font: sans, size: 9.5pt, weight: "bold", fill: white)[Read Online]
+    ]
   ],
 )
 
 #v(8pt)
-#text(size: 9pt)[*Keywords:* #text(fill: rgb("#5b6b7c"))[*KEYWORDS*]]
+#line(length: 100%, stroke: 0.45pt + primary)
+#text(font: sans, size: 11pt, weight: "bold", fill: soft-link)[ACCESS]
+#h(10pt)|#h(10pt) Metrics & More #h(10pt)|#h(10pt) Article Recommendations
 
-#v(14pt)
-*BODY*
+#v(12pt)
+#text(font: sans, size: 8pt, weight: "bold", fill: primary, tracking: 0.12em)[ABSTRACT]
+#v(5pt)
+#text(size: 9pt)[*ABSTRACT*]
+
+#v(9pt)
+#text(font: sans, size: 7pt, weight: "bold", fill: primary)[KEYWORDS] #h(0.55em) *KEYWORDS*
+
+#v(13pt)
+#line(length: 100%, stroke: 0.7pt + primary)
+#v(10pt)
+
+#columns(2, gutter: 0.55cm)[
+  *BODY*
+]

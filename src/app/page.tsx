@@ -103,7 +103,7 @@ export default async function HomePage() {
               Search by title, author, or DOI
             </h2>
             <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)]">
-              Paste an Atlas DOI such as{" "}
+              Paste an Nahda DOI such as{" "}
               <code className="rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-[var(--accent)] ring-1 ring-[var(--line)]">
                 10.58000/ajs.2026.0142
               </code>{" "}
@@ -135,7 +135,7 @@ export default async function HomePage() {
               Publishing pathway
             </p>
             <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
-              How publishing works on Atlas
+              How publishing works on Nahda
             </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
               A clear path from manuscript upload to open publication.
@@ -308,12 +308,25 @@ export default async function HomePage() {
                     className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-[var(--line)] transition hover:ring-[var(--accent)]/30"
                   >
                     <span
-                      className="flex h-12 w-9 shrink-0 items-end justify-center rounded-md pb-1.5 text-[9px] font-bold text-white"
-                      style={{
-                        background: journalCardColor(j.coverColor, index),
-                      }}
+                      className="relative flex h-12 w-9 shrink-0 items-end justify-center overflow-hidden rounded-md text-[9px] font-bold text-white"
+                      style={
+                        j.coverImageUrl
+                          ? { background: "#fff" }
+                          : {
+                              background: journalCardColor(j.coverColor, index),
+                            }
+                      }
                     >
-                      {j.shortTitle}
+                      {j.coverImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={j.coverImageUrl}
+                          alt=""
+                          className="h-full w-full object-contain p-0.5"
+                        />
+                      ) : (
+                        <span className="pb-1.5">{j.shortTitle}</span>
+                      )}
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-[var(--ink)]">
