@@ -23,28 +23,34 @@ export async function GET(request: Request) {
     if (!Number.isNaN(d.getTime())) where.createdAt = { gt: d };
   }
 
-  const [notifications, unreadCount] = await Promise.all([
-    prisma.notification.findMany({
-      where,
-      include: {
-        submission: {
-          select: {
-            id: true,
-            manuscriptId: true,
-            title: true,
-            status: true,
+  try {
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where,
+        include: {
+          submission: {
+            select: {
+              id: true,
+              manuscriptId: true,
+              title: true,
+              status: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 40,
-    }),
-    prisma.notification.count({
-      where: { userId: admin.sub, unread: true },
-    }),
-  ]);
+        orderBy: { createdAt: "desc" },
+        take: 40,
+      }),
+      prisma.notification.count({
+        where: { userId: admin.sub, unread: true },
+      }),
+    ]);
 
-  return jsonOk({ notifications, unreadCount });
+    return jsonOk({ notifications, unreadCount });
+  } catch (err) {
+    console.error("[admin notifications GET]", err);
+    // Don't hard-fail the admin shell when Neon briefly drops a connection.
+    return jsonOk({ notifications: [], unreadCount: 0, degraded: true });
+  }
 }
 
 export async function PATCH(request: Request) {

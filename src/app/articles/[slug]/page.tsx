@@ -6,7 +6,7 @@ import { articleDownloadPath } from "@/lib/submission-utils";
 import { ArticleMetricsPanel } from "@/components/article-metrics";
 import { ArticleKeywords } from "@/components/article-keywords";
 import { CiteActions } from "@/components/cite-actions";
-import { atlasDoiPath, doiToUrl, normalizeDoi } from "@/lib/doi";
+import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
 import {
   ArticleMasthead,
   type MastheadRecommendation,
@@ -23,11 +23,10 @@ function formatDate(value: Date | string | null | undefined) {
 }
 
 function doiLinks(doi: string) {
-  if (!doi || doi === "Pending") return { local: null, external: null };
+  if (!doi || doi === "Pending") return { local: null };
   const normalized = normalizeDoi(doi);
   return {
     local: atlasDoiPath(normalized),
-    external: doiToUrl(normalized),
   };
 }
 
@@ -218,7 +217,7 @@ function ArticleView({ article }: { article: ViewArticle }) {
   const downloadHref = article.manuscriptUrl
     ? articleDownloadPath(article.slug)
     : null;
-  const { local: doiLocal, external: doiExternal } = doiLinks(article.doi);
+  const { local: doiLocal } = doiLinks(article.doi);
   const citation = `${article.authors[0] ?? "Author"}${
     article.authors.length > 1 ? " et al." : ""
   }. ${article.title}. ${article.journalTitle}. ${article.publishedAt}. DOI: ${article.doi}`;
@@ -278,7 +277,7 @@ function ArticleView({ article }: { article: ViewArticle }) {
           />
 
           <div className="grid gap-0 border-t border-[var(--line)] lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="min-w-0 px-5 py-8 sm:px-8 sm:py-10" id="article-content">
+            <div className="min-w-0 px-4 py-6 sm:px-8 sm:py-10" id="article-content">
               {/* On-page outline for HTML bodies */}
               {hasSections ? (
                 <nav
@@ -321,7 +320,7 @@ function ArticleView({ article }: { article: ViewArticle }) {
                   </h2>
                   <div className="h-px flex-1 bg-[var(--line)]" />
                 </div>
-                <p className="mt-4 text-[16px] leading-[1.8] text-[var(--ink)] first-letter:float-left first-letter:mr-2 first-letter:font-[family-name:var(--font-display)] first-letter:text-[2.75rem] first-letter:font-semibold first-letter:leading-[0.85] first-letter:text-[var(--accent)]">
+                <p className="mt-4 text-[15px] leading-[1.75] text-[var(--ink)] sm:text-[16px] sm:leading-[1.8] first-letter:mr-2 first-letter:font-[family-name:var(--font-display)] first-letter:text-[2rem] first-letter:font-semibold first-letter:leading-[0.85] first-letter:text-[var(--accent)] max-sm:first-letter:float-none sm:first-letter:float-left sm:first-letter:text-[2.75rem]">
                   {article.abstract}
                 </p>
               </section>
@@ -381,18 +380,18 @@ function ArticleView({ article }: { article: ViewArticle }) {
               )}
 
               {/* Citation footer */}
-              <section className="mt-12 rounded-xl bg-[var(--ink)] px-5 py-5 text-white sm:px-6">
+              <section className="mt-12 rounded-xl bg-[var(--ink)] px-4 py-5 text-white sm:px-6">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">
                   How to cite
                 </p>
-                <p className="mt-2 text-[13px] leading-relaxed text-white/90">
+                <p className="mt-2 break-words text-[13px] leading-relaxed text-white/90">
                   {citation}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   {doiLocal ? (
                     <a
                       href={doiLocal}
-                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
+                      className="max-w-full break-all rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
                     >
                       {normalizeDoi(article.doi)}
                     </a>
@@ -406,7 +405,7 @@ function ArticleView({ article }: { article: ViewArticle }) {
             </div>
 
             {/* Sidebar */}
-            <aside className="border-t border-[var(--line)] bg-[var(--surface)]/40 px-5 py-8 sm:px-6 lg:border-l lg:border-t-0">
+            <aside className="border-t border-[var(--line)] bg-[var(--surface)]/40 px-4 py-6 sm:px-6 sm:py-8 lg:border-l lg:border-t-0">
               <div className="space-y-5 lg:sticky lg:top-24">
                 <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--line)]">
                   <div className="bg-[var(--accent)] px-5 py-4 text-white">
@@ -450,15 +449,27 @@ function ArticleView({ article }: { article: ViewArticle }) {
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-[var(--line)]">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Cite this article
-                  </p>
-                  <p className="mt-3 text-[12px] leading-relaxed text-[var(--ink)]">
-                    {citation}
-                  </p>
-                  <div className="mt-4">
-                    <CiteActions citation={citation} doiHref={doiExternal} />
+                <div className="overflow-hidden rounded-2xl bg-gradient-to-b from-[var(--accent-soft)]/80 to-white shadow-sm ring-1 ring-[var(--accent)]/20">
+                  <div className="border-b border-[var(--accent)]/15 px-5 py-3.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+                      Cite this article
+                    </p>
+                  </div>
+                  <div className="p-5">
+                    <p className="rounded-xl bg-white/80 px-3.5 py-3 text-[12px] leading-relaxed text-[var(--ink)] ring-1 ring-[var(--line)]">
+                      {citation}
+                    </p>
+                    <div className="mt-4">
+                      <CiteActions
+                        citation={citation}
+                        doiHref={doiLocal}
+                        doiLabel={
+                          article.doi && article.doi !== "Pending"
+                            ? normalizeDoi(article.doi)
+                            : null
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
 

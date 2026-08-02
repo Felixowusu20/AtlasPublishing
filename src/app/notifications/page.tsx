@@ -54,9 +54,9 @@ function NotificationsInner() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="font-[family-name:var(--font-display)] text-3xl">
+          <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl">
             Notifications
           </h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
@@ -65,7 +65,11 @@ function NotificationsInner() {
             notifications.
           </p>
         </div>
-        <button type="button" className="btn-secondary text-xs" onClick={() => void markAll()}>
+        <button
+          type="button"
+          className="btn-secondary w-fit shrink-0 text-xs"
+          onClick={() => void markAll()}
+        >
           Mark all read
         </button>
       </div>

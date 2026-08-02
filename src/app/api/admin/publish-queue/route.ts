@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { prisma } from "@/lib/db";
+import { prisma, prismaFailureMessage } from "@/lib/db";
 import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { articlePublishedEmailHtml, sendEmail } from "@/lib/mail";
@@ -142,15 +142,34 @@ export async function POST(request: Request) {
     }
 
     let slug = (body.slug?.trim() || slugify(body.title)).slice(0, 80);
-    const existing = await prisma.publishedArticle.findUnique({
-      where: { slug },
+    // After "Unpublish & edit", the soft-deleted row still owns slug/DOI.
+    // Republishing must restore that row instead of creating a duplicate.
+    const previous = await prisma.publishedArticle.findFirst({
+      where: {
+        trashedSubmissionId: submission.id,
+        deletedAt: { not: null },
+      },
+      orderBy: { deletedAt: "desc" },
     });
-    if (existing) {
-      slug =
-        `${slug}-${submission.manuscriptId.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`.slice(
-          0,
-          80,
-        );
+
+    if (previous && !body.slug?.trim()) {
+      // Keep the original public URL when republishing after an edit pass.
+      slug = previous.slug;
+    } else {
+      const slugTaken = await prisma.publishedArticle.findFirst({
+        where: {
+          slug,
+          ...(previous ? { id: { not: previous.id } } : {}),
+        },
+        select: { id: true },
+      });
+      if (slugTaken) {
+        slug =
+          `${slug}-${submission.manuscriptId.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`.slice(
+            0,
+            80,
+          );
+      }
     }
 
     const acceptedAt = body.acceptedAt ? new Date(body.acceptedAt) : new Date();
@@ -159,13 +178,21 @@ export async function POST(request: Request) {
       : submission.submittedAt;
 
     const publishYear = acceptedAt.getFullYear();
-    let doi = body.doi?.trim() ? normalizeDoi(body.doi) : null;
+    let doi = body.doi?.trim()
+      ? normalizeDoi(body.doi)
+      : previous?.doi
+        ? previous.doi
+        : null;
     if (!doi) {
       doi = await allocateNextAtlasDoi(prisma, submission.journal, publishYear);
     }
 
     const doiClash = await prisma.publishedArticle.findFirst({
-      where: { doi },
+      where: {
+        doi,
+        ...(previous ? { id: { not: previous.id } } : {}),
+      },
+      select: { id: true, deletedAt: true },
     });
     if (doiClash) {
       return jsonError(`DOI already in use: ${doi}`, 400);
@@ -221,39 +248,47 @@ export async function POST(request: Request) {
       }
     }
 
+    const articleData = {
+      title: body.title,
+      slug,
+      doi,
+      authors: body.authors,
+      affiliations: body.affiliations ?? [],
+      journalId: submission.journalId,
+      submissionId: submission.id,
+      publishedAt: new Date(),
+      receivedAt,
+      acceptedAt,
+      volume: body.volume || undefined,
+      issue: body.issue || "Early View",
+      pages: body.pages || undefined,
+      articleType: body.articleType,
+      openAccess: body.openAccess ?? true,
+      license: body.license || "CC BY 4.0",
+      abstract: body.abstract,
+      keywords: body.keywords ?? submission.keywords,
+      manuscriptUrl: publishedPdfUrl,
+      coverImageUrl:
+        body.coverImageUrl || submission.journal.coverImageUrl || undefined,
+      isFeatured: body.isFeatured ?? true,
+      isActive: true,
+      deletedAt: null as Date | null,
+      deletedById: null as string | null,
+      trashedSubmissionId: null as string | null,
+    };
+
     const result = await prisma.$transaction(
       async (tx) => {
-        const article = await tx.publishedArticle.create({
-          data: {
-            title: body.title,
-            slug,
-            doi,
-            authors: body.authors,
-            affiliations: body.affiliations ?? [],
-            journalId: submission.journalId,
-            submissionId: submission.id,
-            publishedAt: new Date(),
-            receivedAt,
-            acceptedAt,
-            volume: body.volume || undefined,
-            issue: body.issue || "Early View",
-            pages: body.pages || undefined,
-            articleType: body.articleType,
-            openAccess: body.openAccess ?? true,
-            license: body.license || "CC BY 4.0",
-            abstract: body.abstract,
-            keywords: body.keywords ?? submission.keywords,
-            // Downloadable Nahda-formatted PDF (Typst)
-            manuscriptUrl: publishedPdfUrl,
-            coverImageUrl:
-              body.coverImageUrl ||
-              submission.journal.coverImageUrl ||
-              undefined,
-            isFeatured: body.isFeatured ?? true,
-            isActive: true,
-          },
-          include: { journal: true },
-        });
+        const article = previous
+          ? await tx.publishedArticle.update({
+              where: { id: previous.id },
+              data: articleData,
+              include: { journal: true },
+            })
+          : await tx.publishedArticle.create({
+              data: articleData,
+              include: { journal: true },
+            });
 
         await tx.submission.update({
           where: { id: submission.id },
@@ -268,14 +303,14 @@ export async function POST(request: Request) {
           data: {
             userId: submission.authorId,
             submissionId: submission.id,
-            title: "Your article is published",
-            body: `Congratulations! “${article.title}” is now live in ${article.journal.title}. Open your dashboard to download the final PDF, or visit /articles/${article.slug}.`,
+            title: "Congratulations! Your article is published",
+            body: `We’re delighted to share that “${article.title}” is now live in ${article.journal.title}. Open your dashboard to download the final PDF, or visit /articles/${article.slug}.`,
           },
         });
 
         return article;
       },
-      { maxWait: 20_000, timeout: 30_000 },
+      { maxWait: 20_000, timeout: 45_000 },
     );
 
     const base = getAppBaseUrl();
@@ -289,7 +324,7 @@ export async function POST(request: Request) {
     try {
       const mail = await sendEmail({
         to: submission.author.email,
-        subject: `Published: “${result.title}”`,
+        subject: `Congratulations! “${result.title}” is published`,
         html: articlePublishedEmailHtml({
           authorName: submission.author.name,
           title: result.title,
@@ -318,7 +353,10 @@ export async function POST(request: Request) {
     if (err instanceof z.ZodError) {
       return jsonError(err.issues[0]?.message ?? "Invalid input");
     }
-    console.error(err);
-    return jsonError("Could not publish article", 500);
+    console.error("[publish-queue POST]", err);
+    return jsonError(
+      prismaFailureMessage(err, "Could not publish article"),
+      500,
+    );
   }
 }

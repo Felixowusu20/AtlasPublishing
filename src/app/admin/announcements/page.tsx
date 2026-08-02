@@ -61,7 +61,7 @@ export default function AnnouncementsCmsPage() {
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
       <div>
-        <h1 className="font-[family-name:var(--font-display)] text-3xl">
+        <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl">
           Announcements CMS
         </h1>
         <div className="mt-6 space-y-3">

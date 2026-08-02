@@ -119,19 +119,25 @@ html {
 .page-wrap {
   margin-inline: auto;
   max-width: 72rem;
-  padding: 2.5rem 1rem;
+  padding: 1.5rem 1rem;
 }
 
 @media (min-width: 640px) {
   .page-wrap {
-    padding-inline: 1.5rem;
+    padding: 2.5rem 1.5rem;
   }
 }
 
 .page-title {
   font-family: var(--font-display), Georgia, serif;
-  font-size: 1.875rem;
+  font-size: 1.5rem;
   color: var(--ink);
+}
+
+@media (min-width: 640px) {
+  .page-title {
+    font-size: 1.875rem;
+  }
 }
 
 .card {

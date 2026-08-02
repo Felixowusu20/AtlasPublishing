@@ -69,7 +69,7 @@ function ToolGroup({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-0.5">
+    <div className="flex shrink-0 flex-nowrap items-center gap-0.5 sm:flex-wrap">
       <span className="mr-0.5 hidden px-1 text-[9px] font-bold uppercase tracking-wider text-[var(--muted)] xl:inline">
         {label}
       </span>
@@ -106,6 +106,161 @@ function insertAtCursor(textarea: HTMLTextAreaElement, text: string) {
   const cursor = start + text.length;
   return { next, cursorStart: cursor, cursorEnd: cursor };
 }
+
+/** Transform selected lines (or current line) with a mapper. */
+function mapSelectedLines(
+  textarea: HTMLTextAreaElement,
+  mapper: (line: string, index: number) => string,
+) {
+  const value = textarea.value;
+  let start = textarea.selectionStart;
+  let end = textarea.selectionEnd;
+  if (start === end) {
+    const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+    const lineEnd = value.indexOf("\n", start);
+    start = lineStart;
+    end = lineEnd === -1 ? value.length : lineEnd;
+  } else {
+    start = value.lastIndexOf("\n", start - 1) + 1;
+    const after = value.indexOf("\n", end);
+    end = after === -1 ? value.length : after;
+  }
+  const block = value.slice(start, end);
+  const lines = block.split("\n");
+  const nextBlock = lines.map(mapper).join("\n");
+  const next = value.slice(0, start) + nextBlock + value.slice(end);
+  return {
+    next,
+    cursorStart: start,
+    cursorEnd: start + nextBlock.length,
+  };
+}
+
+function wrapAlignBlock(
+  textarea: HTMLTextAreaElement,
+  align: "left" | "center" | "right" | "justify",
+) {
+  const value = textarea.value;
+  let start = textarea.selectionStart;
+  let end = textarea.selectionEnd;
+  if (start === end) {
+    // Expand to the whole paragraph (blank-line bounded), not just one line
+    let lineStart = value.lastIndexOf("\n", start - 1) + 1;
+    let lineEnd = value.indexOf("\n", start);
+    if (lineEnd === -1) lineEnd = value.length;
+
+    while (lineStart > 0) {
+      const prevBreak = value.lastIndexOf("\n", lineStart - 2);
+      const prevStart = prevBreak + 1;
+      const prevLine = value.slice(prevStart, lineStart - 1);
+      if (!prevLine.trim()) break;
+      lineStart = prevStart;
+    }
+    while (lineEnd < value.length) {
+      const nextBreak = value.indexOf("\n", lineEnd + 1);
+      const nextEnd = nextBreak === -1 ? value.length : nextBreak;
+      const nextLine = value.slice(lineEnd + 1, nextEnd);
+      if (!nextLine.trim()) break;
+      lineEnd = nextEnd;
+    }
+    start = lineStart;
+    end = lineEnd;
+  } else {
+    start = value.lastIndexOf("\n", start - 1) + 1;
+    const after = value.indexOf("\n", end);
+    end = after === -1 ? value.length : after;
+  }
+
+  let selected = value.slice(start, end).trim();
+  if (!selected) {
+    selected =
+      align === "justify"
+        ? "This paragraph is justified. Add enough words so the lines wrap across the column and the spacing between words will even out."
+        : "Aligned text";
+  }
+  selected = selected
+    .replace(/^:::(left|center|right|justify)\s*\n?/i, "")
+    .replace(/\n?:::\s*$/i, "")
+    .trim();
+
+  const block = `:::${align}\n${selected}\n:::\n\n`;
+  const next = value.slice(0, start) + block + value.slice(end);
+  return {
+    next,
+    cursorStart: start + `:::${align}\n`.length,
+    cursorEnd: start + `:::${align}\n`.length + selected.length,
+  };
+}
+
+function clearInlineFormatting(text: string) {
+  return text
+    .replace(/\{\{(?:size|font):[^}]+\}\}/g, "")
+    .replace(/\{\{\/(?:size|font)\}\}/g, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/\+\+([^+]+)\+\+/g, "$1")
+    .replace(/~~([^~]+)~~/g, "$1")
+    .replace(/==([^=]+)==/g, "$1")
+    .replace(/\^([^^]+)\^/g, "$1")
+    .replace(/~([^~]+)~/g, "$1")
+    .replace(/`([^`]+)`/g, "$1");
+}
+
+function toggleListLines(
+  textarea: HTMLTextAreaElement,
+  kind: "ul" | "ol",
+) {
+  return mapSelectedLines(textarea, (line, index) => {
+    const indent = line.match(/^(\s*)/)?.[1] ?? "";
+    const body = line
+      .replace(/^\s+/, "")
+      .replace(/^[-*\u2022]\s+/, "")
+      .replace(/^\d+\.\s+/, "");
+    if (!body.trim()) return line;
+    if (kind === "ul") {
+      if (/^\s*[-*\u2022]\s+/.test(line)) return `${indent}${body}`;
+      return `${indent}- ${body}`;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) return `${indent}${body}`;
+    return `${indent}${index + 1}. ${body}`;
+  });
+}
+
+function indentLines(textarea: HTMLTextAreaElement, dir: 1 | -1) {
+  return mapSelectedLines(textarea, (line) => {
+    if (dir > 0) return `  ${line}`;
+    return line.replace(/^ {1,2}/, "");
+  });
+}
+
+const FONT_OPTIONS = [
+  { value: "", label: "Font" },
+  { value: "Times New Roman", label: "Times New Roman" },
+  { value: "Georgia", label: "Georgia" },
+  { value: "Arial", label: "Arial" },
+  { value: "Helvetica", label: "Helvetica" },
+  { value: "Calibri", label: "Calibri" },
+  { value: "Courier New", label: "Courier New" },
+  { value: "Palatino", label: "Palatino" },
+];
+
+const SIZE_OPTIONS = [
+  { value: "", label: "Size" },
+  { value: "10", label: "10" },
+  { value: "11", label: "11" },
+  { value: "12", label: "12" },
+  { value: "14", label: "14" },
+  { value: "16", label: "16" },
+  { value: "18", label: "18" },
+  { value: "20", label: "20" },
+  { value: "24", label: "24" },
+  { value: "28", label: "28" },
+  { value: "36", label: "36" },
+];
+
+const selectClass =
+  "h-7 max-w-[9.5rem] rounded-md border border-[var(--line)] bg-white px-1.5 text-[11px] font-semibold text-[var(--ink)] outline-none hover:border-[var(--accent)]/40 focus:border-[var(--accent)]";
+
 
 function applyEdit(
   ref: RefObject<HTMLTextAreaElement | null>,
@@ -255,7 +410,7 @@ export function ManuscriptEditor({
   onFiguresChange,
   rows = 16,
   label = "Full manuscript body",
-  hint = "Drag images onto the editor. Open Table for a Word-style grid — type in cells, drag rows/columns, add with +.",
+  hint = "Word-style toolbar: font, size, align, bullets, tables. Drag images onto the editor.",
   onError,
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -560,24 +715,65 @@ export function ManuscriptEditor({
           </div>
         )}
 
-        {/* Primary ribbon */}
+        {/* Word-style formatting ribbon */}
         <div className="space-y-1.5 border-b border-[var(--line)] bg-gradient-to-b from-[#f7f9fb] to-[var(--surface)] px-2 py-2">
-          <div className="flex flex-wrap items-center gap-y-1">
-            <ToolGroup label="Style">
-              <ToolBtn title="Heading 1 — section" onClick={() => heading(1)}>
-                H1
-              </ToolBtn>
-              <ToolBtn title="Heading 2 — subsection" onClick={() => heading(2)}>
-                H2
-              </ToolBtn>
-              <ToolBtn title="Heading 3" onClick={() => heading(3)}>
-                H3
-              </ToolBtn>
+          <div className="-mx-1 flex flex-nowrap items-center gap-y-1.5 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+            <ToolGroup label="Font">
+              <select
+                className={selectClass}
+                defaultValue=""
+                title="Font family"
+                aria-label="Font family"
+                onChange={(e) => {
+                  const font = e.target.value;
+                  e.target.value = "";
+                  if (!font) return;
+                  run((el) =>
+                    wrapSelection(
+                      el,
+                      `{{font:${font}}}`,
+                      "{{/font}}",
+                      "text",
+                    ),
+                  );
+                }}
+              >
+                {FONT_OPTIONS.map((o) => (
+                  <option key={o.label} value={o.value} disabled={!o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={`${selectClass} max-w-[4.5rem]`}
+                defaultValue=""
+                title="Font size"
+                aria-label="Font size"
+                onChange={(e) => {
+                  const size = e.target.value;
+                  e.target.value = "";
+                  if (!size) return;
+                  run((el) =>
+                    wrapSelection(
+                      el,
+                      `{{size:${size}}}`,
+                      "{{/size}}",
+                      "text",
+                    ),
+                  );
+                }}
+              >
+                {SIZE_OPTIONS.map((o) => (
+                  <option key={o.label} value={o.value} disabled={!o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </ToolGroup>
             <Divider />
-            <ToolGroup label="Font">
+            <ToolGroup label="Style">
               <ToolBtn
-                title="Bold"
+                title="Bold (Ctrl/Cmd+B)"
                 onClick={() =>
                   run((el) => wrapSelection(el, "**", "**", "bold"))
                 }
@@ -609,6 +805,14 @@ export function ManuscriptEditor({
                 <span className="line-through">S</span>
               </ToolBtn>
               <ToolBtn
+                title="Highlight"
+                onClick={() =>
+                  run((el) => wrapSelection(el, "==", "==", "highlight"))
+                }
+              >
+                <span className="rounded-sm bg-amber-200 px-0.5">H</span>
+              </ToolBtn>
+              <ToolBtn
                 title="Superscript"
                 onClick={() =>
                   run((el) => wrapSelection(el, "^", "^", "sup"))
@@ -625,35 +829,111 @@ export function ManuscriptEditor({
                 X₂
               </ToolBtn>
               <ToolBtn
-                title="Inline code"
+                title="Clear formatting from selection"
                 onClick={() =>
-                  run((el) => wrapSelection(el, "`", "`", "code"))
+                  run((el) => {
+                    const start = el.selectionStart;
+                    const end = el.selectionEnd;
+                    if (start === end) {
+                      return {
+                        next: el.value,
+                        cursorStart: start,
+                        cursorEnd: end,
+                      };
+                    }
+                    const selected = el.value.slice(start, end);
+                    const cleaned = clearInlineFormatting(selected);
+                    return {
+                      next:
+                        el.value.slice(0, start) +
+                        cleaned +
+                        el.value.slice(end),
+                      cursorStart: start,
+                      cursorEnd: start + cleaned.length,
+                    };
+                  })
                 }
               >
-                {"</>"}
+                Clear
               </ToolBtn>
             </ToolGroup>
             <Divider />
-            <ToolGroup label="Para">
+            <ToolGroup label="Align">
               <ToolBtn
-                title="Bullet list"
-                onClick={() =>
-                  run((el) =>
-                    insertAtCursor(el, "\n- Item one\n- Item two\n- Item three\n"),
-                  )
-                }
+                title="Align left"
+                onClick={() => run((el) => wrapAlignBlock(el, "left"))}
+              >
+                Left
+              </ToolBtn>
+              <ToolBtn
+                title="Align center"
+                onClick={() => run((el) => wrapAlignBlock(el, "center"))}
+              >
+                Center
+              </ToolBtn>
+              <ToolBtn
+                title="Align right"
+                onClick={() => run((el) => wrapAlignBlock(el, "right"))}
+              >
+                Right
+              </ToolBtn>
+              <ToolBtn
+                title="Justify"
+                onClick={() => run((el) => wrapAlignBlock(el, "justify"))}
+              >
+                Justify
+              </ToolBtn>
+            </ToolGroup>
+            <Divider />
+            <ToolGroup label="Lists">
+              <ToolBtn
+                title="Bulleted list — toggle on selected lines"
+                onClick={() => run((el) => toggleListLines(el, "ul"))}
               >
                 • List
               </ToolBtn>
               <ToolBtn
-                title="Numbered list"
+                title="Numbered list — toggle on selected lines"
+                onClick={() => run((el) => toggleListLines(el, "ol"))}
+              >
+                1. List
+              </ToolBtn>
+              <ToolBtn
+                title="Increase indent"
+                onClick={() => run((el) => indentLines(el, 1))}
+              >
+                → Indent
+              </ToolBtn>
+              <ToolBtn
+                title="Decrease indent"
+                onClick={() => run((el) => indentLines(el, -1))}
+              >
+                ← Outdent
+              </ToolBtn>
+              <ToolBtn
+                title="Checklist"
                 onClick={() =>
                   run((el) =>
-                    insertAtCursor(el, "\n1. First\n2. Second\n3. Third\n"),
+                    insertAtCursor(
+                      el,
+                      "\n- [ ] Task one\n- [ ] Task two\n- [x] Done\n",
+                    ),
                   )
                 }
               >
-                1. List
+                ☐ Tasks
+              </ToolBtn>
+            </ToolGroup>
+            <Divider />
+            <ToolGroup label="Para">
+              <ToolBtn title="Heading 1 — section" onClick={() => heading(1)}>
+                H1
+              </ToolBtn>
+              <ToolBtn title="Heading 2 — subsection" onClick={() => heading(2)}>
+                H2
+              </ToolBtn>
+              <ToolBtn title="Heading 3" onClick={() => heading(3)}>
+                H3
               </ToolBtn>
               <ToolBtn
                 title="Block quote"
@@ -670,6 +950,14 @@ export function ManuscriptEditor({
                 }
               >
                 ― Rule
+              </ToolBtn>
+              <ToolBtn
+                title="Inline code"
+                onClick={() =>
+                  run((el) => wrapSelection(el, "`", "`", "code"))
+                }
+              >
+                {"</>"}
               </ToolBtn>
               <ToolBtn
                 title="Insert / edit hyperlink"
@@ -781,6 +1069,11 @@ export function ManuscriptEditor({
               ))}
             </ToolGroup>
           </div>
+          <p className="px-1 text-[10px] text-[var(--muted)]">
+            Select a paragraph, then Align (Left / Center / Right / Justify).
+            Justify needs enough text to wrap in the column — then regenerate
+            the PDF to see it.
+          </p>
         </div>
 
         {linkOpen && (

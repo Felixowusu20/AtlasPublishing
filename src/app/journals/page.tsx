@@ -26,7 +26,7 @@ export default async function JournalsPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
                 Nahda Publications
               </p>
-              <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-[var(--ink)]">
+              <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)] sm:text-3xl">
                 Journals
               </h1>
               <p className="mt-2 max-w-xl text-sm text-[var(--muted)]">

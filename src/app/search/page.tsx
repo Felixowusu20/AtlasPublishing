@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { ArticleListingCard } from "@/components/article-listing-card";
 
 type SearchArticle = {
@@ -32,22 +32,61 @@ type SearchJournal = {
   subjects: string[];
 };
 
+type JournalOption = {
+  id: string;
+  slug: string;
+  title: string;
+  shortTitle: string;
+};
+
 function SearchPageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialQ = searchParams.get("q") ?? "";
+  const initialJournal = searchParams.get("journal") ?? "";
+  const initialType = searchParams.get("type") ?? "all";
+
   const [q, setQ] = useState(initialQ);
-  const [type, setType] = useState("all");
+  const [journal, setJournal] = useState(initialJournal);
+  const [type, setType] = useState(initialType);
+  const [journalOptions, setJournalOptions] = useState<JournalOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [articles, setArticles] = useState<SearchArticle[]>([]);
   const [journals, setJournals] = useState<SearchJournal[]>([]);
 
   useEffect(() => {
     setQ(searchParams.get("q") ?? "");
+    setJournal(searchParams.get("journal") ?? "");
+    setType(searchParams.get("type") ?? "all");
   }, [searchParams]);
 
   useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/cms/journals")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setJournalOptions(
+          ((data.journals ?? []) as JournalOption[]).map((j) => ({
+            id: j.id,
+            slug: j.slug,
+            title: j.title,
+            shortTitle: j.shortTitle,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setJournalOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const query = q.trim();
-    if (!query) {
+    const journalKey = journal.trim();
+    if (!query && !journalKey) {
       setArticles([]);
       setJournals([]);
       return;
@@ -55,9 +94,11 @@ function SearchPageInner() {
 
     const timer = window.setTimeout(() => {
       setLoading(true);
-      void fetch(
-        `/api/search?q=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`,
-      )
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (journalKey) params.set("journal", journalKey);
+      params.set("type", type);
+      void fetch(`/api/search?${params.toString()}`)
         .then((res) => res.json())
         .then((data) => {
           setArticles(data.articles ?? []);
@@ -71,7 +112,30 @@ function SearchPageInner() {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [q, type]);
+  }, [q, type, journal]);
+
+  function syncUrl(next: {
+    q?: string;
+    journal?: string;
+    type?: string;
+  }) {
+    const params = new URLSearchParams();
+    const nextQ = next.q ?? q;
+    const nextJournal = next.journal ?? journal;
+    const nextType = next.type ?? type;
+    if (nextQ.trim()) params.set("q", nextQ.trim());
+    if (nextJournal.trim()) params.set("journal", nextJournal.trim());
+    if (nextType && nextType !== "all") params.set("type", nextType);
+    const qs = params.toString();
+    router.replace(qs ? `/search?${qs}` : "/search");
+  }
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    syncUrl({ q, journal, type });
+  }
+
+  const selectedJournal = journalOptions.find((j) => j.slug === journal);
 
   return (
     <div className="relative min-h-screen">
@@ -87,39 +151,77 @@ function SearchPageInner() {
           </p>
           <h1 className="page-title mt-1">Search</h1>
           <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
-            Find articles by title, author, keyword, or Nahda DOI. Results open
-            the same professional article page used across the site.
+            Find papers by title, author, keyword, or DOI. Use the journal
+            dropdown to read only from a specific Nahda title.
           </p>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--line)]">
+        <form
+          onSubmit={onSubmit}
+          className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--line)]"
+        >
           <div className="h-1 bg-[var(--accent)]" />
-          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:p-5">
-            <input
-              className="flex-1 rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
-              placeholder="Search title, author, DOI, keyword…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              autoFocus
-            />
-            <select
-              className="rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-            >
-              <option value="all">All</option>
-              <option value="articles">Articles</option>
-              <option value="journals">Journals</option>
-            </select>
+          <div className="flex flex-col gap-3 p-4 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <select
+                className="rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm sm:max-w-[14rem]"
+                value={journal}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setJournal(value);
+                  syncUrl({ journal: value });
+                }}
+                aria-label="Filter by journal"
+              >
+                <option value="">All journals</option>
+                {journalOptions.map((j) => (
+                  <option key={j.id} value={j.slug}>
+                    {j.shortTitle ? `${j.shortTitle} — ${j.title}` : j.title}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="flex-1 rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+                placeholder="Search title, author, DOI, keyword…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                autoFocus
+              />
+              <select
+                className="rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm sm:max-w-[9rem]"
+                value={type}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setType(value);
+                  syncUrl({ type: value });
+                }}
+              >
+                <option value="all">All</option>
+                <option value="articles">Articles</option>
+                <option value="journals">Journals</option>
+              </select>
+              <button type="submit" className="btn-primary !px-4 !py-2.5 text-sm">
+                Search
+              </button>
+            </div>
           </div>
           <p className="border-t border-[var(--line)] px-4 py-2.5 text-[11px] text-[var(--muted)] sm:px-5">
+            {selectedJournal ? (
+              <>
+                Showing results in{" "}
+                <span className="font-semibold text-[var(--ink)]">
+                  {selectedJournal.title}
+                </span>
+                .{" "}
+              </>
+            ) : null}
             Tip: paste a DOI like{" "}
-            <code className="rounded bg-[var(--surface)] px-1.5 py-0.5 text-[var(--accent)]">
+            <code className="break-all rounded bg-[var(--surface)] px-1.5 py-0.5 text-[var(--accent)]">
               10.58000/ajs.2026.0142
             </code>{" "}
-            to jump straight to the paper.
+            — or use the DOI box in the navbar.
           </p>
-        </div>
+        </form>
 
         {loading ? (
           <p className="mt-8 text-sm text-[var(--muted)]">Searching…</p>
@@ -155,6 +257,7 @@ function SearchPageInner() {
             <section>
               <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                 Articles ({articles.length})
+                {selectedJournal ? ` · ${selectedJournal.shortTitle}` : ""}
               </h2>
               <ul className="mt-3 space-y-4">
                 {articles.map((a) => (
@@ -185,23 +288,28 @@ function SearchPageInner() {
             </section>
           )}
 
-          {q.trim() &&
+          {(q.trim() || journal.trim()) &&
             !loading &&
             articles.length === 0 &&
             journals.length === 0 && (
               <div className="rounded-2xl bg-white p-6 text-sm text-[var(--muted)] ring-1 ring-[var(--line)]">
-                No results for “{q}”. Try a DOI, title fragment, or author name.
+                No results
+                {q.trim() ? <> for “{q}”</> : null}
+                {selectedJournal ? (
+                  <> in {selectedJournal.shortTitle || selectedJournal.title}</>
+                ) : null}
+                . Try another keyword, author name, or clear the journal filter.
               </div>
             )}
 
-          {!q.trim() && !loading ? (
+          {!q.trim() && !journal.trim() && !loading ? (
             <div className="rounded-2xl bg-[var(--accent-soft)]/60 p-6 ring-1 ring-[var(--line)]">
               <p className="text-sm font-semibold text-[var(--ink)]">
-                Start with a DOI or keyword
+                Start with a journal, DOI, or keyword
               </p>
               <p className="mt-1 text-sm text-[var(--muted)]">
-                Search results use the same article cards as the homepage and
-                article list — open access badge, journal bar, and DOI download.
+                Pick a journal from the dropdown to browse its papers, or search
+                across all Nahda titles. DOI lookup is also on the top navbar.
               </p>
             </div>
           ) : null}

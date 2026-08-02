@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { AuthorNotifications } from "@/components/author-notifications";
 import { BrandLogo } from "@/components/brand-logo";
+import { NavbarSearch } from "@/components/navbar-search";
 import { journals } from "@/data/mock";
 import { initials } from "@/lib/auth";
 
@@ -93,6 +94,7 @@ export function SiteHeader() {
   const [open, setOpen] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSection, setMobileSection] = useState<string | null>("Journals");
   const navRef = useRef<HTMLElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
   // Hover menus stay inert until after hydration — a mouse already resting on a
@@ -153,7 +155,7 @@ export function SiteHeader() {
           </p>
           <div className="hidden items-center gap-4 sm:flex">
             <Link href="/search" className="hover:text-white">
-              Search
+              Search articles
             </Link>
             <Link href="/help" className="hover:text-white">
               Support
@@ -162,7 +164,7 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
         <BrandLogo variant="full" priority />
 
         <nav ref={navRef} className="relative hidden items-center gap-0.5 lg:flex">
@@ -299,13 +301,13 @@ export function SiteHeader() {
             </div>
             </>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 lg:flex">
               <Link href="/login" className="btn-secondary !px-3 !py-2 text-sm">
                 Sign in
               </Link>
               <Link
                 href="/register"
-                className="hidden btn-primary !px-3 !py-2 text-sm md:inline-flex"
+                className="btn-primary !px-3 !py-2 text-sm"
               >
                 Register
               </Link>
@@ -314,62 +316,147 @@ export function SiteHeader() {
 
           <button
             type="button"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line)] bg-white lg:hidden"
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border transition lg:hidden ${
+              mobileOpen
+                ? "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
+                : "border-[var(--line)] bg-white text-[var(--ink)]"
+            }`}
             onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Toggle menu"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
           >
-            <span className="text-lg">{mobileOpen ? "×" : "☰"}</span>
+            <HamburgerIcon open={mobileOpen} />
           </button>
         </div>
       </div>
 
+      <div className="hidden border-t border-[var(--line)] bg-white md:block">
+        <div className="mx-auto max-w-6xl px-3 py-2.5 sm:px-6 sm:py-2">
+          <NavbarSearch variant="header" />
+        </div>
+      </div>
+
       {mobileOpen && (
-        <div className="border-t border-[var(--line)] bg-white lg:hidden">
-          <div className="mx-auto max-w-6xl space-y-1 px-4 py-3">
-            {nav.map((item) => (
-              <div key={item.label} className="border-b border-[var(--line)] py-2">
-                <Link
-                  href={item.href}
-                  className="block px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--accent)]"
-                >
-                  {item.label}
-                </Link>
-                <div className="mt-1">
-                  {item.children.map((child) => (
-                    <Link
-                      key={child.href + child.label}
-                      href={child.href}
-                      className="block rounded-lg px-2 py-2 text-sm text-[var(--ink)] hover:bg-[var(--surface)]"
+        <div className="border-t border-[var(--line)] bg-[var(--surface)]/70 lg:hidden">
+          <div className="mx-auto max-w-6xl space-y-3 px-3 py-4 sm:px-6">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+              Browse
+            </p>
+
+            <NavbarSearch variant="mobile" />
+
+            <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-sm">
+              {nav.map((item, index) => {
+                const sectionOpen = mobileSection === item.label;
+                return (
+                  <div
+                    key={item.label}
+                    className={
+                      index > 0 ? "border-t border-[var(--line)]" : undefined
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
+                      aria-expanded={sectionOpen}
+                      onClick={() =>
+                        setMobileSection((prev) =>
+                          prev === item.label ? null : item.label,
+                        )
+                      }
                     >
-                      {child.label}
-                    </Link>
-                  ))}
+                      <span>
+                        <span className="block text-sm font-semibold text-[var(--ink)]">
+                          {item.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
+                          {item.children.length} links
+                        </span>
+                      </span>
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
+                          sectionOpen
+                            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                            : "bg-[var(--surface)] text-[var(--muted)]"
+                        }`}
+                      >
+                        <Chevron open={sectionOpen} />
+                      </span>
+                    </button>
+
+                    {sectionOpen && (
+                      <div className="space-y-1 bg-[var(--surface)]/50 px-2 pb-3">
+                        <Link
+                          href={item.href}
+                          className="flex items-center justify-between rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-[var(--accent)] ring-1 ring-[var(--line)]"
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          View all {item.label.toLowerCase()}
+                          <span aria-hidden>→</span>
+                        </Link>
+                        {item.children.map((child) => (
+                          <Link
+                            key={child.href + child.label}
+                            href={child.href}
+                            className="block rounded-xl px-3 py-2.5 transition hover:bg-white"
+                            onClick={() => setMobileOpen(false)}
+                          >
+                            <span className="block text-sm font-medium text-[var(--ink)]">
+                              {child.label}
+                            </span>
+                            {child.hint ? (
+                              <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
+                                {child.hint}
+                              </span>
+                            ) : null}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {user ? (
+              <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-3 shadow-sm">
+                <p className="truncate px-1 text-sm font-semibold text-[var(--ink)]">
+                  {user.name}
+                </p>
+                <p className="truncate px-1 text-xs text-[var(--muted)]">
+                  {user.email}
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Link
+                    href="/dashboard"
+                    className="rounded-xl bg-[var(--surface)] px-3 py-2.5 text-center text-sm font-semibold text-[var(--ink)]"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    type="button"
+                    className="rounded-xl bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-700"
+                    onClick={handleSignOut}
+                  >
+                    Sign out
+                  </button>
                 </div>
               </div>
-            ))}
-            {user ? (
-              <div className="py-2">
-                <p className="px-2 text-xs text-[var(--muted)]">{user.email}</p>
-                <Link
-                  href="/dashboard"
-                  className="block rounded-lg px-2 py-2 text-sm text-[var(--ink)] hover:bg-[var(--surface)]"
-                >
-                  My dashboard
-                </Link>
-                <button
-                  type="button"
-                  className="block w-full rounded-lg px-2 py-2 text-left text-sm text-rose-700 hover:bg-[var(--surface)]"
-                  onClick={handleSignOut}
-                >
-                  Sign out
-                </button>
-              </div>
             ) : (
-              <div className="flex gap-2 py-3">
-                <Link href="/login" className="btn-secondary flex-1 text-center">
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/login"
+                  className="rounded-xl border border-[var(--line)] bg-white px-3 py-3 text-center text-sm font-semibold text-[var(--ink)] shadow-sm"
+                  onClick={() => setMobileOpen(false)}
+                >
                   Sign in
                 </Link>
-                <Link href="/register" className="btn-primary flex-1 text-center">
+                <Link
+                  href="/register"
+                  className="rounded-xl bg-[var(--accent)] px-3 py-3 text-center text-sm font-semibold text-white shadow-sm"
+                  onClick={() => setMobileOpen(false)}
+                >
                   Register
                 </Link>
               </div>
@@ -378,6 +465,28 @@ export function SiteHeader() {
         </div>
       )}
     </header>
+  );
+}
+
+function HamburgerIcon({ open }: { open: boolean }) {
+  return (
+    <span className="relative block h-3.5 w-4" aria-hidden>
+      <span
+        className={`absolute left-0 block h-0.5 w-4 rounded-full bg-current transition duration-200 ${
+          open ? "top-1.5 rotate-45" : "top-0"
+        }`}
+      />
+      <span
+        className={`absolute left-0 top-1.5 block h-0.5 w-4 rounded-full bg-current transition duration-200 ${
+          open ? "scale-x-0 opacity-0" : "opacity-100"
+        }`}
+      />
+      <span
+        className={`absolute left-0 block h-0.5 w-4 rounded-full bg-current transition duration-200 ${
+          open ? "top-1.5 -rotate-45" : "top-3"
+        }`}
+      />
+    </span>
   );
 }
 
@@ -412,7 +521,7 @@ export function SiteFooter() {
 
   return (
     <footer className="mt-auto border-t border-[var(--line)] bg-[var(--ink)] text-slate-300">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
+      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:grid-cols-2 sm:gap-8 sm:px-6 sm:py-12 lg:grid-cols-4">
         <div>
           <BrandLogo href="/" variant="onDark" className="h-10 sm:h-11" />
           <p className="mt-3 text-sm leading-relaxed text-slate-400">

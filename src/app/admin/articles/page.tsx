@@ -146,12 +146,22 @@ export default function ArticlesCmsPage() {
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(
-        `/api/admin/articles?id=${encodeURIComponent(id)}${forEdit ? "&edit=1" : ""}`,
-        { method: "DELETE" },
-      );
+      const res = forEdit
+        ? await fetch("/api/admin/articles/unpublish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          })
+        : await fetch(
+            `/api/admin/articles?id=${encodeURIComponent(id)}`,
+            { method: "DELETE" },
+          );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Delete failed");
+      if (!res.ok) {
+        throw new Error(
+          data.error ?? (forEdit ? "Could not unpublish" : "Delete failed"),
+        );
+      }
       setPending(null);
       if (forEdit && data.editUrl) {
         router.push(data.editUrl as string);
@@ -230,7 +240,7 @@ export default function ArticlesCmsPage() {
       />
 
       <div>
-        <h1 className="font-[family-name:var(--font-display)] text-3xl">
+        <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl">
           Latest articles
         </h1>
         <p className="mt-2 text-sm text-[var(--muted)]">

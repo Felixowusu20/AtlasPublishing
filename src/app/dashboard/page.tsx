@@ -152,7 +152,7 @@ function DashboardInner() {
             </div>
             <div>
               <p className="text-sm text-slate-300">{greeting}</p>
-              <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl tracking-tight">
+              <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl tracking-tight sm:text-3xl">
                 {user.name}
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
@@ -193,14 +193,14 @@ function DashboardInner() {
 
         {needsAction.length > 0 && (
           <section className="mt-8 overflow-hidden rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50 to-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-amber-100 px-5 py-4">
+            <div className="flex flex-col gap-2 border-b border-amber-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div>
                 <h2 className="text-sm font-semibold text-amber-950">Action required</h2>
                 <p className="mt-0.5 text-xs text-amber-800/80">
                   Revise and resubmit here when reviewers request corrections.
                 </p>
               </div>
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
+              <span className="w-fit rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
                 {needsAction.length}
               </span>
             </div>
@@ -285,7 +285,7 @@ function DashboardInner() {
               </Link>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-1.5 rounded-xl border border-[var(--line)] bg-white p-1.5">
+            <div className="mt-4 -mx-1 flex flex-nowrap gap-1.5 overflow-x-auto rounded-xl border border-[var(--line)] bg-white p-1.5 sm:mx-0 sm:flex-wrap sm:overflow-visible">
               {filters.map((f) => {
                 const count = submissions.filter((s) => matchesFilter(s, f.key)).length;
                 const activeFilter = filter === f.key;
@@ -294,7 +294,7 @@ function DashboardInner() {
                     key={f.key}
                     type="button"
                     onClick={() => setFilter(f.key)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                       activeFilter
                         ? "bg-[var(--ink)] text-white"
                         : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"

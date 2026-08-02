@@ -31,7 +31,7 @@ type Props = {
   allLink?: string;
 };
 
-const POLL_MS = 20_000;
+const POLL_MS = 45_000;
 
 function loadSeenIds(key: string): Set<string> {
   try {

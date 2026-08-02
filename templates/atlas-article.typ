@@ -15,7 +15,7 @@
 #let serif = ("Libertinus Serif", "New Computer Modern", "Georgia", "Times New Roman")
 #let sans = ("Libertinus Sans", "TeX Gyre Heros", "Helvetica", "Arial")
 
-#set page(paper: "a4", margin: (left: 1.7cm, right: 1.7cm, top: 1.55cm, bottom: 1.65cm))
+#set page(paper: "a4", margin: (left: 1.7cm, right: 1.7cm, top: 1.55cm, bottom: 2.15cm))
 #set text(font: serif, size: 9.5pt, fill: ink)
 #set par(justify: true, leading: 0.68em)
 #show link: set text(fill: link-blue)
@@ -88,3 +88,6 @@
 #columns(2, gutter: 0.55cm)[
   *BODY*
 ]
+
+// Footer on every page (set via page.footer in buildAtlasTypstSource):
+// Left: Nahda logo + © Authors · Right: https://doi.org/… + journal citation

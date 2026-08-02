@@ -199,21 +199,21 @@ export function SubmissionWizard() {
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-      <aside className="h-fit rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm">
-        <p className="px-2 pb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+    <div className="grid gap-5 lg:grid-cols-[240px_1fr] lg:gap-8">
+      <aside className="h-fit rounded-2xl border border-[var(--line)] bg-white p-3 shadow-sm sm:p-4">
+        <p className="hidden px-2 pb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] lg:block">
           Steps
         </p>
-        <ol className="space-y-1">
+        <ol className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:block lg:space-y-1 lg:overflow-visible lg:px-0 lg:pb-0">
           {submissionSteps.map((s) => {
             const active = s.id === step;
             const done = s.id < step;
             return (
-              <li key={s.id}>
+              <li key={s.id} className="shrink-0 lg:w-full">
                 <button
                   type="button"
                   onClick={() => s.id < step && setStep(s.id)}
-                  className={`flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                  className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left transition lg:items-start lg:gap-3 lg:px-3 lg:py-2.5 ${
                     active
                       ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                       : done
@@ -222,7 +222,7 @@ export function SubmissionWizard() {
                   }`}
                 >
                   <span
-                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold lg:mt-0.5 ${
                       active || done
                         ? "bg-[var(--accent)] text-white"
                         : "bg-slate-100 text-slate-500"
@@ -230,9 +230,13 @@ export function SubmissionWizard() {
                   >
                     {done ? "✓" : s.id}
                   </span>
-                  <span>
-                    <span className="block text-sm font-medium">{s.label}</span>
-                    <span className="block text-xs opacity-80">{s.description}</span>
+                  <span className="min-w-0">
+                    <span className="block whitespace-nowrap text-xs font-medium sm:text-sm lg:whitespace-normal">
+                      {s.label}
+                    </span>
+                    <span className="mt-0.5 hidden text-xs opacity-80 lg:block">
+                      {s.description}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -241,12 +245,12 @@ export function SubmissionWizard() {
         </ol>
       </aside>
 
-      <div className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-sm sm:p-8">
+      <div className="rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm sm:p-6 lg:p-8">
         <div className="mb-6">
           <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
             Step {step} of 6
           </p>
-          <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+          <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)] sm:text-2xl">
             {submissionSteps[step - 1].label}
           </h2>
           <p className="mt-1 text-sm text-[var(--muted)]">

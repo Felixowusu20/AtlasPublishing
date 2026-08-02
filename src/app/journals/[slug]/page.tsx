@@ -67,7 +67,7 @@ export default async function JournalDetailPage({
         className="border-b border-[var(--line)] text-white"
         style={{ background: cover }}
       >
-        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
           <Link
             href="/journals"
             className="text-sm text-white/70 hover:text-white"
@@ -90,7 +90,7 @@ export default async function JournalDetailPage({
                 <p className="text-sm font-medium uppercase tracking-wider text-white/70">
                   {journal.shortTitle}
                 </p>
-                <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl leading-tight sm:text-4xl">
+                <h1 className="mt-2 font-[family-name:var(--font-display)] text-2xl leading-tight sm:text-3xl lg:text-4xl">
                   {journal.title}
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/80">

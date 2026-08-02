@@ -47,7 +47,7 @@ function ProfileInner() {
                 <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
                   {k}
                 </dt>
-                <dd className="mt-1 text-sm font-medium">{v}</dd>
+                <dd className="mt-1 break-words text-sm font-medium">{v}</dd>
               </div>
             ))}
           </dl>

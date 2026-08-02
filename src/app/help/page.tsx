@@ -32,10 +32,10 @@ export default function HelpPage() {
       <div className="mt-8 space-y-3">
         {faqs.map(([q, a]) => (
           <details key={q} className="card group open:shadow-md">
-            <summary className="cursor-pointer list-none px-5 py-4 font-medium text-[var(--ink)]">
+            <summary className="cursor-pointer list-none px-4 py-3.5 text-sm font-medium text-[var(--ink)] sm:px-5 sm:py-4 sm:text-base">
               {q}
             </summary>
-            <p className="border-t border-[var(--line)] px-5 py-4 text-sm text-[var(--muted)]">
+            <p className="border-t border-[var(--line)] px-4 py-3.5 text-sm text-[var(--muted)] sm:px-5 sm:py-4">
               {a}
             </p>
           </details>
@@ -46,7 +46,7 @@ export default function HelpPage() {
         <h2 className="font-semibold text-[var(--ink)]">Contact support</h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
           Email{" "}
-          <span className="font-medium text-[var(--ink)]">
+          <span className="break-all font-medium text-[var(--ink)]">
             nahdapublications@gmail.com
           </span>{" "}
           (demo). Typical response within 1 to 2 business days.

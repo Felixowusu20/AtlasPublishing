@@ -179,12 +179,14 @@ export function welcomeEmailHtml(name: string) {
 
 /** Strip academic titles so greetings stay "Dear Jane Smith," not "Dear Dr. …". */
 export function authorGreetingName(name: string) {
-  return name
+  const cleaned = name
     .replace(
-      /^(dr|doctor|prof|professor|mr|mrs|ms|miss|sir|madam|eng|rev)\.?\s+/i,
-      "",
+      /\b(dr|doctor|prof|professor|mr|mrs|ms|miss|sir|madam|eng|rev)\.?(\s+|$)/gi,
+      " ",
     )
-    .trim() || name.trim();
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || name.trim();
 }
 
 /**
@@ -222,15 +224,15 @@ export function submissionAcknowledgementEmailHtml(opts: {
         Please use this manuscript ID in all future correspondence.
       </p>
       <p style="margin:0 0 14px">
-        Your submission will now undergo an initial technical and editorial
-        screening to ensure that it meets the journal’s scope, formatting
-        requirements, and ethical standards. Further stages of review will
-        follow as appropriate. You will be notified by email once each stage
-        has been completed.
+        Your submission will now undergo an initial technical check and
+        editorial screening to ensure that it meets the journal’s scope,
+        formatting requirements, and ethical standards. Further stages of
+        peer review and production will follow as appropriate. You will be
+        communicated with by email as each stage is completed.
       </p>
       <p style="margin:0 0 14px">
-        You can monitor the status of your manuscript by logging into your
-        Nahda Publications author account.
+        You can also monitor the status of your manuscript by logging into
+        your Nahda Publications author account.
       </p>
       <p style="margin:0 0 14px">
         Thank you for choosing <strong>${escapeHtml(opts.journalTitle)}</strong>.
@@ -387,31 +389,41 @@ export function articlePublishedEmailHtml(opts: {
   articleUrl: string;
   pdfUrl?: string | null;
 }) {
+  const firstName = opts.authorName.trim().split(/\s+/)[0] || opts.authorName;
+
   const links = opts.pdfUrl
     ? `
       <p style="margin:0 0 14px">
-        Your article is now available. You may download the final PDF or visit
-        the public article page.
+        Your article is now live for readers worldwide. You can download the
+        final PDF, share the public page, and cite your work with pride.
       </p>`
     : `
       <p style="margin:0 0 14px">
-        Your article is now available on the Nahda Publications website.
+        Your article is now live on the Nahda Publications website for readers
+        worldwide. Share the public page and cite your work with pride.
       </p>`;
 
   const secondary = opts.pdfUrl
     ? `<p style="margin:12px 0 0;font-size:14px">
-         <a href="${opts.articleUrl}" style="color:${BRAND.green}">View article page</a>
+         Prefer the web version?
+         <a href="${opts.articleUrl}" style="color:${BRAND.green}">View the article page</a>
        </p>`
     : "";
 
   return emailDocument({
-    title: "Your article is published",
+    title: "Congratulations! Your article is published",
     bodyHtml: `
-      <p style="margin:0 0 14px">Dear ${escapeHtml(opts.authorName)},</p>
+      <p style="margin:0 0 14px">Dear ${escapeHtml(firstName)},</p>
       <p style="margin:0 0 14px">
-        Your manuscript <strong>${escapeHtml(opts.title)}</strong>
+        Congratulations! We are delighted to let you know that your manuscript
+        <strong>${escapeHtml(opts.title)}</strong>
         (${escapeHtml(opts.manuscriptId)}) has been published in
         <em>${escapeHtml(opts.journalTitle)}</em>.
+      </p>
+      <p style="margin:0 0 14px">
+        Thank you for choosing Nahda Publications and for the care you put into
+        this work through peer review and production. We are proud to share it
+        with the scholarly community.
       </p>
       ${links}
       ${secondary}
@@ -419,9 +431,11 @@ export function articlePublishedEmailHtml(opts: {
     cta: {
       href: opts.pdfUrl || opts.articleUrl,
       label: opts.pdfUrl
-        ? "Download published PDF"
-        : "View published article",
+        ? "Download your published PDF"
+        : "View your published article",
     },
+    footerNote:
+      "We look forward to your future submissions. If you have any questions about your article page, DOI, or PDF, simply reply to this email.",
   });
 }
 

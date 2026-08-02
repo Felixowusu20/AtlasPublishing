@@ -282,6 +282,11 @@ export function NahdaArticleTemplate({
       ? doi
       : `https://doi.org/${doi}`
     : articleUrl || "#";
+  const doiLabel = doi
+    ? doi.startsWith("http")
+      ? doi
+      : `https://doi.org/${doi}`
+    : "DOI pending";
   const jUrl =
     journalUrl ||
     (journalSlug ? `/journals/${journalSlug}` : "/journals");
@@ -549,7 +554,7 @@ export function NahdaArticleTemplate({
               Keywords
             </span>
             <span className="ml-2 text-[12px] text-[#0b1f33]">
-              {keywords.join(" · ")}
+              {keywords.join(", ")}
             </span>
           </section>
         )}
@@ -565,12 +570,37 @@ export function NahdaArticleTemplate({
           </section>
         ) : null}
 
-        <section
-          className="mt-8 px-4 py-3 text-[11px] leading-relaxed text-[#5b6b7c]"
-          style={{ background: "var(--j-soft)" }}
-        >
-          <p>
-            © {year} Nahda Publications · {journalTitle}. Licensed under{" "}
+        <footer className="mt-8 border-t border-[#d7dee7] px-1 pt-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="flex min-w-0 items-center gap-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/logo-nahda.png"
+                alt="Nahda Publications"
+                className="h-7 w-auto max-w-[140px] object-contain object-left"
+              />
+              <p className="text-[10px] leading-snug text-[#5b6b7c]">
+                © {year} The Authors. Published by Nahda Publications
+              </p>
+            </div>
+            <div className="min-w-0 text-left sm:max-w-[55%] sm:text-right">
+              <a
+                href={doiHref}
+                target="_blank"
+                rel="noreferrer"
+                className="break-all text-[11px] font-medium hover:underline"
+                style={{ color: "var(--j-link)" }}
+              >
+                {doiLabel}
+              </a>
+              <p className="mt-0.5 text-[10px] text-[#0b1f33]">
+                <em>{journalShortTitle || journalTitle || "Journal"}</em>
+                {citeBits.length > 0 ? ` ${citeBits.join(", ")}` : ` ${year}`}
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-[10px] leading-relaxed text-[#5b6b7c]">
+            Licensed under{" "}
             <a
               href={licenseHref}
               className="hover:underline"
@@ -578,9 +608,10 @@ export function NahdaArticleTemplate({
             >
               {license}
             </a>
-            .
+            {" · "}
+            {journalTitle}
           </p>
-        </section>
+        </footer>
       </div>
     </article>
   );
