@@ -7,7 +7,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /** Bump when schema fields change so a stale HMR client is discarded. */
-const PRISMA_SCHEMA_VERSION = 3;
+const PRISMA_SCHEMA_VERSION = 4;
 
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL;
@@ -19,19 +19,38 @@ function createPrismaClient() {
   // which otherwise surfaces as Prisma P2028 when a transaction starts.
   const adapter = new PrismaPg({
     connectionString,
-    max: 10,
-    connectionTimeoutMillis: 15_000,
-    idleTimeoutMillis: 30_000,
+    max: 5,
+    connectionTimeoutMillis: 30_000,
+    idleTimeoutMillis: 20_000,
     keepAlive: true,
   });
 
   return new PrismaClient({
     adapter,
     transactionOptions: {
-      maxWait: 15_000,
-      timeout: 30_000,
+      maxWait: 20_000,
+      timeout: 45_000,
     },
   });
+}
+
+/** Human-readable message for common Prisma / pooler failures. */
+export function prismaFailureMessage(err: unknown, fallback: string) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/timeout|terminated|ECONNRESET|Can't reach database/i.test(message)) {
+    return "Database connection timed out. Please try again in a moment.";
+  }
+  const code =
+    err && typeof err === "object" && "code" in err
+      ? String((err as { code?: string }).code)
+      : "";
+  if (code === "P2002") {
+    return "A record with this slug or DOI already exists.";
+  }
+  if (code === "P2028" || code === "P2024") {
+    return "Database transaction timed out. Please try again.";
+  }
+  return fallback;
 }
 
 if (

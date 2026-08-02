@@ -206,7 +206,7 @@ export function ArticleMasthead({
         }`}
       >
         <div className="max-w-3xl">
-          <h1 className="font-[family-name:var(--font-display)] text-[1.75rem] font-bold leading-[1.2] tracking-tight text-[var(--ink)] sm:text-[2.25rem]">
+          <h1 className="font-[family-name:var(--font-display)] text-[1.35rem] font-bold leading-snug tracking-tight text-[var(--ink)] sm:text-[1.75rem] sm:leading-[1.2] lg:text-[2.25rem]">
             {title}
           </h1>
 
@@ -294,14 +294,15 @@ export function ArticleMasthead({
                 className="inline-flex items-center gap-1.5 px-2 py-1.5 font-medium transition hover:text-[var(--accent)]"
               >
                 <MetricsIcon />
-                Metrics &amp; More
+                <span className="sm:hidden">Metrics</span>
+                <span className="hidden sm:inline">Metrics &amp; More</span>
               </button>
               {metricsOpen ? (
                 <div
                   id={metricsId}
                   role="region"
                   aria-label="Article metrics"
-                  className="absolute left-0 z-20 mt-1 w-64 rounded-lg border border-[var(--line)] bg-white p-4 shadow-lg"
+                  className="absolute left-0 z-20 mt-1 w-[min(16rem,calc(100vw-2rem))] rounded-lg border border-[var(--line)] bg-white p-4 shadow-lg"
                 >
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                     Article metrics
@@ -333,7 +334,8 @@ export function ArticleMasthead({
                 className="inline-flex items-center gap-1.5 px-2 py-1.5 font-medium transition hover:text-[var(--accent)]"
               >
                 <RecsIcon />
-                Article Recommendations
+                <span className="sm:hidden">Related</span>
+                <span className="hidden sm:inline">Article Recommendations</span>
               </button>
               {recsOpen ? (
                 <div
@@ -385,7 +387,8 @@ export function ArticleMasthead({
               className="inline-flex items-center gap-1.5 px-2 py-1.5 font-medium transition hover:text-[var(--accent)]"
             >
               <SiIcon />
-              Supporting Information
+              <span className="sm:hidden">Supporting info</span>
+              <span className="hidden sm:inline">Supporting Information</span>
             </a>
           </nav>
 

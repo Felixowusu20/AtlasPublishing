@@ -164,7 +164,7 @@ export default function RecycleBinPage() {
         onConfirm={() => void confirmAction()}
       />
 
-      <h1 className="font-[family-name:var(--font-display)] text-3xl">
+      <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl">
         Recycle bin
       </h1>
       <p className="mt-2 text-sm text-[var(--muted)]">

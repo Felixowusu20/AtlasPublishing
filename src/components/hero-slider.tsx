@@ -56,27 +56,27 @@ export function HeroSlider() {
 
   if (!ready) {
     return (
-      <section className="relative isolate min-h-[50vh] border-b border-[var(--line)] bg-[var(--ink)]" />
+      <section className="relative isolate min-h-[38vh] border-b border-[var(--line)] bg-[var(--ink)] sm:min-h-[50vh]" />
     );
   }
 
   if (slides.length === 0) {
     return (
       <section className="relative isolate border-b border-[var(--line)] bg-[var(--ink)] text-white">
-        <div className="relative z-10 mx-auto flex min-h-[50vh] max-w-6xl flex-col justify-end px-4 py-16 sm:px-6 sm:py-20">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
+        <div className="relative z-10 mx-auto flex min-h-[38vh] max-w-6xl flex-col justify-end px-4 py-8 sm:min-h-[50vh] sm:px-6 sm:py-20">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200 sm:text-xs">
             Nahda Publications
           </p>
-          <h1 className="mt-4 max-w-2xl font-[family-name:var(--font-display)] text-4xl leading-tight sm:text-5xl">
+          <h1 className="mt-3 max-w-2xl font-[family-name:var(--font-display)] text-2xl leading-tight sm:mt-4 sm:text-5xl">
             Hero content coming soon
           </h1>
-          <p className="mt-4 max-w-xl text-base text-slate-200 sm:text-lg">
+          <p className="mt-3 max-w-xl text-sm text-slate-200 sm:mt-4 sm:text-lg">
             Add slides in Admin → Hero CMS to publish the homepage hero.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-wrap gap-2 sm:mt-8 sm:gap-3">
             <Link
               href="/journals"
-              className="inline-flex rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white"
+              className="inline-flex rounded-lg border border-white/30 px-4 py-2.5 text-sm font-semibold text-white sm:px-5 sm:py-3"
             >
               Browse journals
             </Link>
@@ -109,9 +109,9 @@ export function HeroSlider() {
                 alt={slide.alt}
                 fill
                 priority={i === 0}
-                sizes="100vw"
+                sizes="(max-width: 640px) 100vw, 100vw"
                 unoptimized={slide.src.startsWith("http")}
-                className={`object-cover object-center ${i === index ? "hero-kenburns" : ""}`}
+                className={`object-cover object-[center_30%] sm:object-center ${i === index ? "hero-kenburns" : ""}`}
               />
             </div>
           ))}
@@ -125,32 +125,32 @@ export function HeroSlider() {
         />
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-[70vh] max-w-6xl flex-col justify-end px-4 py-16 sm:px-6 sm:py-20">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
+      <div className="relative z-10 mx-auto flex min-h-[42vh] max-w-6xl flex-col justify-end px-4 py-8 sm:min-h-[70vh] sm:px-6 sm:py-20">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200 sm:text-xs">
           Nahda Publications
         </p>
-        <h1 className="mt-4 max-w-2xl font-[family-name:var(--font-display)] text-4xl leading-tight sm:text-5xl">
+        <h1 className="mt-2 max-w-2xl font-[family-name:var(--font-display)] text-2xl leading-tight sm:mt-4 sm:text-5xl">
           {current.title}
         </h1>
-        <p className="mt-4 max-w-xl text-base text-slate-200 sm:text-lg">
+        <p className="mt-2 line-clamp-3 max-w-xl text-sm text-slate-200 sm:mt-4 sm:line-clamp-none sm:text-lg">
           {current.body}
         </p>
-        <div className="mt-8 flex flex-wrap gap-3">
+        <div className="mt-5 flex flex-wrap gap-2 sm:mt-8 sm:gap-3">
           <Link
             href={current.ctaHref || "/submissions/new"}
-            className="inline-flex rounded-lg bg-white px-5 py-3 text-sm font-semibold text-[var(--ink)]"
+            className="inline-flex rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[var(--ink)] sm:px-5 sm:py-3"
           >
             {current.ctaLabel || "Submit a manuscript"}
           </Link>
           <Link
             href="/journals"
-            className="inline-flex rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white"
+            className="inline-flex rounded-lg border border-white/30 px-4 py-2.5 text-sm font-semibold text-white sm:px-5 sm:py-3"
           >
             Browse journals
           </Link>
         </div>
         {slides.length > 1 && (
-          <div className="mt-8 flex gap-2">
+          <div className="mt-5 flex gap-2 sm:mt-8">
             {slides.map((_, i) => (
               <button
                 key={i}

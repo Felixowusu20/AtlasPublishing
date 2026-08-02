@@ -56,7 +56,7 @@ export function ArticleListingCard({
         >
           {article.journalTitle}
         </Link>
-        <span className="flex shrink-0 items-center bg-[var(--ink)] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider">
+        <span className="flex max-w-[42%] shrink-0 items-center truncate bg-[var(--ink)] px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider sm:max-w-none sm:px-3">
           {typeLabel(article.articleType)}
         </span>
       </div>
@@ -125,12 +125,12 @@ export function ArticleListingCard({
           </p>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-3.5">
+        <div className="mt-4 flex flex-col gap-3 border-t border-[var(--line)] pt-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--muted)]">
             {doi ? (
               <Link
                 href={`/doi/${doi}`}
-                className="font-semibold text-[var(--accent)] hover:underline"
+                className="min-w-0 break-all font-semibold text-[var(--accent)] hover:underline"
                 title="Open via Nahda DOI"
               >
                 DOI {doi}
@@ -138,7 +138,7 @@ export function ArticleListingCard({
             ) : (
               <span>DOI pending</span>
             )}
-            <span>{article.publishedAt}</span>
+            <span className="shrink-0">{article.publishedAt}</span>
             {typeof article.views === "number" &&
             typeof article.downloads === "number" ? (
               <ArticleMetrics
@@ -148,7 +148,7 @@ export function ArticleListingCard({
             ) : null}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             {article.hasPdf && doi ? (
               <a
                 href={`/doi/${doi}?download=1`}

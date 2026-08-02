@@ -88,7 +88,7 @@ export async function allocateNextAtlasDoi(
   return formatAtlasDoi(code, year, maxSerial + 1);
 }
 
-/** Resolve a DOI string to a published article slug, if any. */
+/** Resolve a DOI string to a published article, if any. */
 export async function findArticleByDoi(
   db: Prisma.TransactionClient | typeof import("@/lib/db").prisma,
   rawDoi: string,
@@ -96,9 +96,11 @@ export async function findArticleByDoi(
   const doi = normalizeDoi(rawDoi);
   if (!doi) return null;
 
-  return db.publishedArticle.findFirst({
+  // Exact / case-insensitive match first
+  const exact = await db.publishedArticle.findFirst({
     where: {
       isActive: true,
+      deletedAt: null,
       OR: [
         { doi: { equals: doi, mode: "insensitive" } },
         { doi: { equals: rawDoi.trim(), mode: "insensitive" } },
@@ -110,8 +112,68 @@ export async function findArticleByDoi(
       title: true,
       doi: true,
       manuscriptUrl: true,
+      authors: true,
+      abstract: true,
+      articleType: true,
+      publishedAt: true,
+      volume: true,
+      issue: true,
+      pages: true,
+      views: true,
+      downloads: true,
+      citations: true,
+      openAccess: true,
+      license: true,
+      journal: {
+        select: {
+          title: true,
+          shortTitle: true,
+          slug: true,
+        },
+      },
     },
   });
+  if (exact) return exact;
+
+  // Fallback: DOI stored with or without https://doi.org/ prefix
+  const candidates = await db.publishedArticle.findMany({
+    where: {
+      isActive: true,
+      deletedAt: null,
+      doi: { not: null },
+    },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      doi: true,
+      manuscriptUrl: true,
+      authors: true,
+      abstract: true,
+      articleType: true,
+      publishedAt: true,
+      volume: true,
+      issue: true,
+      pages: true,
+      views: true,
+      downloads: true,
+      citations: true,
+      openAccess: true,
+      license: true,
+      journal: {
+        select: {
+          title: true,
+          shortTitle: true,
+          slug: true,
+        },
+      },
+    },
+    take: 500,
+  });
+
+  return (
+    candidates.find((row) => row.doi && normalizeDoi(row.doi) === doi) ?? null
+  );
 }
 
 /** Assign Nahda DOIs to published articles that do not have one yet. */

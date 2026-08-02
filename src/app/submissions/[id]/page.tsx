@@ -102,7 +102,7 @@ function Detail({ id }: { id: string }) {
         />
         <span className="text-xs text-[var(--muted)]">{sub.manuscriptId}</span>
       </div>
-      <h1 className="mt-3 font-[family-name:var(--font-display)] text-3xl text-[var(--ink)]">
+      <h1 className="mt-3 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)] sm:text-3xl">
         {sub.title}
       </h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
@@ -114,7 +114,7 @@ function Detail({ id }: { id: string }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
             Published
           </p>
-          <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+          <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)] sm:text-2xl">
             Your article is live
           </h2>
           <p className="mt-2 max-w-xl text-sm text-emerald-950/80">

@@ -1,6 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
-import { prisma } from "@/lib/db";
+import { prisma, prismaFailureMessage } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
 import { progressForStatus } from "@/lib/submission-utils";
@@ -58,7 +58,10 @@ export async function GET(request: Request) {
     return jsonOk({ queue });
   } catch (err) {
     console.error("[manuscripts GET]", err);
-    return jsonError("Could not load manuscripts queue", 500);
+    return jsonError(
+      prismaFailureMessage(err, "Could not load manuscripts queue"),
+      500,
+    );
   }
 }
 

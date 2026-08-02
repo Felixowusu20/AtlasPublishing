@@ -134,7 +134,7 @@ export default async function HomePage() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
               Publishing pathway
             </p>
-            <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+            <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)] sm:text-2xl">
               How publishing works on Nahda
             </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
@@ -142,38 +142,51 @@ export default async function HomePage() {
             </p>
           </div>
 
-          <ol className="relative mt-10 grid gap-6 sm:grid-cols-5 sm:gap-3">
+          <ol className="relative mt-10 space-y-0 sm:grid sm:grid-cols-5 sm:gap-3 sm:space-y-0">
+            {/* Desktop horizontal connector */}
             <div
               className="pointer-events-none absolute left-[10%] right-[10%] top-5 hidden h-px bg-[var(--line)] sm:block"
               aria-hidden
             />
-            {publishingWorkflow.map((item, index) => (
-              <li
-                key={item.step}
-                className="relative flex flex-col items-center text-center"
-              >
-                <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-[var(--accent)] bg-white text-sm font-semibold text-[var(--accent)] shadow-[0_0_0_6px_var(--paper)]">
-                  {item.step}
-                </div>
-                {index < publishingWorkflow.length - 1 && (
+
+            {publishingWorkflow.map((item, index) => {
+              const isLast = index === publishingWorkflow.length - 1;
+              return (
+                <li
+                  key={item.step}
+                  className="relative flex gap-4 sm:flex-col sm:items-center sm:gap-0 sm:text-center"
+                >
+                  {/* Mobile vertical rail + node */}
+                  <div className="relative flex w-10 shrink-0 flex-col items-center sm:contents">
+                    <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-[var(--accent)] bg-white text-sm font-semibold text-[var(--accent)] shadow-[0_0_0_6px_var(--paper)] sm:shadow-[0_0_0_6px_var(--surface)]">
+                      {item.step}
+                    </div>
+                    {!isLast && (
+                      <div
+                        className="mt-1 w-0.5 flex-1 min-h-[1.25rem] rounded-full bg-gradient-to-b from-[var(--accent)]/55 via-[var(--line)] to-[var(--line)] sm:hidden"
+                        aria-hidden
+                      />
+                    )}
+                  </div>
+
                   <div
-                    className="absolute left-1/2 top-10 h-[calc(100%-0.5rem)] w-px -translate-x-1/2 bg-[var(--line)] sm:hidden"
-                    aria-hidden
-                  />
-                )}
-                <div className="mt-4 w-full rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[var(--line)]">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
-                    Step {item.step}
-                  </p>
-                  <p className="mt-1.5 text-sm font-semibold text-[var(--ink)]">
-                    {item.title}
-                  </p>
-                  <p className="mt-2 text-xs leading-relaxed text-[var(--muted)]">
-                    {item.detail}
-                  </p>
-                </div>
-              </li>
-            ))}
+                    className={`min-w-0 flex-1 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[var(--line)] sm:mt-4 sm:w-full ${
+                      isLast ? "mb-0" : "mb-5 sm:mb-0"
+                    }`}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
+                      Step {item.step}
+                    </p>
+                    <p className="mt-1.5 text-sm font-semibold text-[var(--ink)]">
+                      {item.title}
+                    </p>
+                    <p className="mt-2 text-xs leading-relaxed text-[var(--muted)]">
+                      {item.detail}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         </div>
       </section>
@@ -181,12 +194,12 @@ export default async function HomePage() {
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
         <div className="grid gap-10 lg:grid-cols-[1.55fr_1fr]">
           <div>
-            <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
                   Recently published
                 </p>
-                <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+                <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)] sm:text-2xl">
                   Latest articles
                 </h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">
@@ -351,7 +364,7 @@ export default async function HomePage() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50">
               For authors
             </p>
-            <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl">
+            <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl sm:text-2xl">
               Ready to submit?
             </h2>
             <p className="mt-2 max-w-lg text-sm leading-relaxed text-white/70">

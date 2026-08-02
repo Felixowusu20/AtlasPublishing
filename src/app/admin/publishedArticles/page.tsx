@@ -441,12 +441,23 @@ export default function PublishedArticlesPage() {
     setSuccess("");
     setActionBusy(true);
     try {
-      const res = await fetch(
-        `/api/admin/articles?id=${encodeURIComponent(articleId)}${forEdit ? "&edit=1" : ""}`,
-        { method: "DELETE" },
-      );
+      const res = forEdit
+        ? await fetch("/api/admin/articles/unpublish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: articleId }),
+          })
+        : await fetch(
+            `/api/admin/articles?id=${encodeURIComponent(articleId)}`,
+            { method: "DELETE" },
+          );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not delete article");
+      if (!res.ok) {
+        throw new Error(
+          data.error ??
+            (forEdit ? "Could not unpublish article" : "Could not delete article"),
+        );
+      }
       setPending(null);
       if (forEdit && data.editUrl) {
         router.push(data.editUrl as string);
@@ -546,11 +557,11 @@ export default function PublishedArticlesPage() {
 
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <div>
-          <h1 className="font-[family-name:var(--font-display)] text-3xl text-[var(--ink)]">
+          <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl text-[var(--ink)]">
             Publish accepted papers
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Edit metadata, generate the Nahda Typst PDF from the full
+            Edit metadata, generate the Nahda PDF from the full
             manuscript, then publish and email the author.
           </p>
         </div>
@@ -887,13 +898,13 @@ export default function PublishedArticlesPage() {
                     }
                     onError={setError}
                     rows={14}
-                    label="Article body (for Typst PDF)"
+                    label="Article body (for PDF)"
                     hint="Prefer writing the full paper on Full manuscripts, then return here to publish. Changes here are used for this publish session’s PDF."
                   />
 
                   <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 p-4">
                     <p className="text-xs font-semibold text-[var(--ink)]">
-                      Nahda Typst PDF
+                      Nahda PDF
                     </p>
                     <p className="mt-1 text-[11px] text-[var(--muted)]">
                       Generate the branded downloadable article PDF the author

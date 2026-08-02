@@ -26,72 +26,109 @@ type SearchArticle = {
   hasPdf: boolean;
 };
 
-export async function GET(request: Request) {
-  const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
-  const type = new URL(request.url).searchParams.get("type") ?? "all";
+function matchesQuery(
+  parts: (string | null | undefined)[],
+  needle: string,
+  doiNeedle: string,
+) {
+  if (!needle) return true;
+  const hay = parts.filter(Boolean).join(" ").toLowerCase();
+  if (hay.includes(needle)) return true;
+  if (doiNeedle && hay.includes(doiNeedle)) return true;
+  return false;
+}
 
-  if (!q) {
-    return jsonOk({ articles: [], journals: [], query: q });
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams;
+  const q = params.get("q")?.trim() ?? "";
+  const type = params.get("type") ?? "all";
+  const journalKey = params.get("journal")?.trim() ?? "";
+
+  if (!q && !journalKey) {
+    return jsonOk({
+      articles: [],
+      journals: [],
+      query: q,
+      journal: journalKey,
+    });
   }
 
   const needle = q.toLowerCase();
-  const doiNeedle = normalizeDoi(q);
+  const doiNeedle = q ? normalizeDoi(q) : "";
 
   let articles: SearchArticle[] = [];
   let journalResults: {
     id: string;
     slug: string;
     title: string;
+    shortTitle?: string;
     subjects: string[];
   }[] = [];
 
   try {
+    const journalFilter = journalKey
+      ? {
+          journal: {
+            isActive: true,
+            OR: [
+              { slug: journalKey },
+              {
+                shortTitle: {
+                  equals: journalKey,
+                  mode: "insensitive" as const,
+                },
+              },
+              { id: journalKey },
+            ],
+          },
+        }
+      : {};
+
     const [dbArticles, dbJournals] = await Promise.all([
       prisma.publishedArticle.findMany({
         where: {
           isActive: true,
-          OR: [
-            { title: { contains: q, mode: "insensitive" } },
-            { abstract: { contains: q, mode: "insensitive" } },
-            { doi: { contains: doiNeedle, mode: "insensitive" } },
-          ],
+          deletedAt: null,
+          ...journalFilter,
         },
         include: { journal: true },
         orderBy: { publishedAt: "desc" },
-        take: 40,
+        take: 150,
       }),
-      prisma.journal.findMany({
-        where: {
-          isActive: true,
-          OR: [
-            { title: { contains: q, mode: "insensitive" } },
-            { shortTitle: { contains: q, mode: "insensitive" } },
-            { description: { contains: q, mode: "insensitive" } },
-          ],
-        },
-        orderBy: { sortOrder: "asc" },
-        take: 20,
-      }),
+      q
+        ? prisma.journal.findMany({
+            where: {
+              isActive: true,
+              OR: [
+                { title: { contains: q, mode: "insensitive" } },
+                { shortTitle: { contains: q, mode: "insensitive" } },
+                { description: { contains: q, mode: "insensitive" } },
+              ],
+            },
+            orderBy: { sortOrder: "asc" },
+            take: 20,
+          })
+        : Promise.resolve([]),
     ]);
 
     articles = dbArticles
-      .filter((a) => {
-        const hay = [
-          a.title,
-          a.abstract,
-          a.doi ?? "",
-          a.authors.join(" "),
-          a.keywords.join(" "),
-          a.journal.title,
-        ]
-          .join(" ")
-          .toLowerCase();
-        return (
-          hay.includes(needle) ||
-          (a.doi && normalizeDoi(a.doi) === doiNeedle) ||
-          Boolean(a.doi?.toLowerCase().includes(doiNeedle))
-        );
-      })
+      .filter((a) =>
+        matchesQuery(
+          [
+            a.title,
+            a.abstract,
+            a.doi,
+            a.authors.join(" "),
+            a.keywords.join(" "),
+            a.journal.title,
+            a.journal.shortTitle,
+            a.articleType,
+          ],
+          needle,
+          doiNeedle,
+        ),
+      )
+      .slice(0, 40)
       .map((a) => ({
         id: a.id,
         slug: a.slug,
@@ -116,6 +153,7 @@ export async function GET(request: Request) {
       id: j.id,
       slug: j.slug,
       title: j.title,
+      shortTitle: j.shortTitle,
       subjects: j.subjects,
     }));
   } catch (err) {
@@ -125,18 +163,27 @@ export async function GET(request: Request) {
   if (articles.length === 0) {
     articles = mockArticles
       .filter((a) => {
-        const hay = [
-          a.title,
-          a.abstract,
-          a.doi,
-          a.authors.join(" "),
-          a.keywords.join(" "),
-          a.journalTitle,
-        ]
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(needle) || a.doi.toLowerCase().includes(doiNeedle);
+        if (
+          journalKey &&
+          a.journalSlug !== journalKey &&
+          a.journalTitle.toLowerCase() !== journalKey.toLowerCase()
+        ) {
+          return false;
+        }
+        return matchesQuery(
+          [
+            a.title,
+            a.abstract,
+            a.doi,
+            a.authors.join(" "),
+            a.keywords.join(" "),
+            a.journalTitle,
+          ],
+          needle,
+          doiNeedle,
+        );
       })
+      .slice(0, 40)
       .map((a) => ({
         id: a.id,
         slug: a.slug,
@@ -158,7 +205,7 @@ export async function GET(request: Request) {
       }));
   }
 
-  if (journalResults.length === 0) {
+  if (q && journalResults.length === 0) {
     journalResults = mockJournals
       .filter(
         (j) =>
@@ -178,6 +225,7 @@ export async function GET(request: Request) {
 
   return jsonOk({
     query: q,
+    journal: journalKey,
     articles,
     journals: journalResults,
   });

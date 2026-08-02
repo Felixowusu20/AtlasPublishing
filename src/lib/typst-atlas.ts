@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -152,6 +152,20 @@ function inlineToTypst(text: string): string {
     hold(`#link(${JSON.stringify(url)})[${escapeTypst(label)}]`),
   );
 
+  // Font size / family wrappers (outermost first; recurse for nested styles)
+  s = s.replace(
+    /\{\{size:(\d{1,2})\}\}([\s\S]*?)\{\{\/size\}\}/g,
+    (_, size: string, t: string) =>
+      hold(`#text(size: ${Number(size)}pt)[${inlineToTypst(t)}]`),
+  );
+  s = s.replace(
+    /\{\{font:([A-Za-z0-9 _-]+)\}\}([\s\S]*?)\{\{\/font\}\}/g,
+    (_, font: string, t: string) =>
+      hold(
+        `#text(font: ${JSON.stringify(font.trim())})[${inlineToTypst(t)}]`,
+      ),
+  );
+
   // Bold then italic
   s = s.replace(/\*\*([^*]+)\*\*/g, (_, t: string) =>
     hold(`*${escapeTypst(t)}*`),
@@ -169,6 +183,11 @@ function inlineToTypst(text: string): string {
   );
   s = s.replace(/<u>([^<]+)<\/u>/gi, (_, t: string) =>
     hold(`#underline[${escapeTypst(t)}]`),
+  );
+
+  // Highlight ==text==
+  s = s.replace(/==([^=]+)==/g, (_, t: string) =>
+    hold(`#highlight[${escapeTypst(t)}]`),
   );
 
   // Superscript ^text^ and subscript ~text~
@@ -384,6 +403,93 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
       continue;
     }
 
+    // Alignment / styled paragraph blocks: :::center ... :::
+    const alignOpen = trimmed.match(/^:::(left|center|right|justify)$/i);
+    if (alignOpen) {
+      closeList();
+      const align = alignOpen[1].toLowerCase() as
+        | "left"
+        | "center"
+        | "right"
+        | "justify";
+      i += 1;
+      const block: string[] = [];
+      while (i < lines.length && lines[i].trim() !== ":::") {
+        block.push(lines[i]);
+        i += 1;
+      }
+      if (i < lines.length) i += 1; // closing :::
+
+      // Build paragraph(s): blank lines split paragraphs; soft-wrap otherwise
+      const paragraphs: string[] = [];
+      let buf: string[] = [];
+      const flush = () => {
+        if (!buf.length) return;
+        paragraphs.push(buf.map((l) => inlineToTypst(l)).join(" "));
+        buf = [];
+      };
+      for (const rawLine of block) {
+        if (!rawLine.trim()) {
+          flush();
+          continue;
+        }
+        buf.push(rawLine.trim());
+      }
+      flush();
+
+      const body =
+        paragraphs.length > 0
+          ? paragraphs.join("\n\n")
+          : inlineToTypst("Aligned text");
+
+      // Full-width block so alignment is visible inside the 2-column layout.
+      // Global body uses justify:true — left/center/right must override it.
+      if (align === "justify") {
+        out.push(
+          [
+            `#block(width: 100%)[`,
+            `  #set par(justify: true, first-line-indent: 0pt, leading: 0.78em)`,
+            `  #set align(left)`,
+            `  ${body}`,
+            `]`,
+          ].join("\n"),
+        );
+      } else if (align === "left") {
+        out.push(
+          [
+            `#block(width: 100%)[`,
+            `  #set par(justify: false, first-line-indent: 0pt, leading: 0.78em)`,
+            `  #set align(left)`,
+            `  ${body}`,
+            `]`,
+          ].join("\n"),
+        );
+      } else if (align === "center") {
+        out.push(
+          [
+            `#block(width: 100%)[`,
+            `  #set par(justify: false, first-line-indent: 0pt, leading: 0.78em)`,
+            `  #set align(center)`,
+            `  ${body}`,
+            `]`,
+          ].join("\n"),
+        );
+      } else {
+        // right
+        out.push(
+          [
+            `#block(width: 100%)[`,
+            `  #set par(justify: false, first-line-indent: 0pt, leading: 0.78em)`,
+            `  #set align(right)`,
+            `  ${body}`,
+            `]`,
+          ].join("\n"),
+        );
+      }
+      out.push("");
+      continue;
+    }
+
     if (trimmed === "---" || trimmed === "***") {
       closeList();
       out.push("#line(length: 100%, stroke: 0.4pt + rgb(\"#c5ced8\"))");
@@ -492,13 +598,14 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
       continue;
     }
 
-    // Lists
-    const ul = trimmed.match(/^[-*]\s+(.+)$/);
-    if (ul) {
+    // Lists (support 2-space indent levels)
+    const ul = trimmed.match(/^([-*\u2022])\s+(.+)$/);
+    const ulIndent = line.match(/^(\s*)/)?.[1].length ?? 0;
+    if (ul && !/^\d+\./.test(trimmed)) {
       if (inReferences) {
         closeList();
         out.push(
-          `#par(hanging-indent: 1.35em, first-line-indent: 0pt)[${inlineToTypst(ul[1])}]`,
+          `#par(hanging-indent: 1.35em, first-line-indent: 0pt)[${inlineToTypst(ul[2])}]`,
         );
         i += 1;
         continue;
@@ -507,16 +614,17 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
         closeList();
         inList = "ul";
       }
-      out.push(`- ${inlineToTypst(ul[1])}`);
+      const pad = "  ".repeat(Math.min(4, Math.floor(ulIndent / 2)));
+      out.push(`${pad}- ${inlineToTypst(ul[2])}`);
       i += 1;
       continue;
     }
-    const ol = trimmed.match(/^\d+\.\s+(.+)$/);
+    const ol = trimmed.match(/^(\d+)\.\s+(.+)$/);
     if (ol) {
       if (inReferences) {
         closeList();
         out.push(
-          `#par(hanging-indent: 1.35em, first-line-indent: 0pt)[${ol[0].match(/^\d+/)?.[0] ?? ""}. ${inlineToTypst(ol[1])}]`,
+          `#par(hanging-indent: 1.35em, first-line-indent: 0pt)[${ol[1]}. ${inlineToTypst(ol[2])}]`,
         );
         i += 1;
         continue;
@@ -525,7 +633,10 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
         closeList();
         inList = "ol";
       }
-      out.push(`+ ${inlineToTypst(ol[1])}`);
+      const pad = "  ".repeat(
+        Math.min(4, Math.floor((line.match(/^(\s*)/)?.[1].length ?? 0) / 2)),
+      );
+      out.push(`${pad}+ ${inlineToTypst(ol[2])}`);
       i += 1;
       continue;
     }
@@ -624,6 +735,7 @@ export function buildAtlasTypstSource(
   input: AtlasTypstInput,
   figureMap: FigureMap = new Map(),
   logoPath?: string | null,
+  publisherLogoPath?: string | null,
 ): string {
   const palette = journalArticlePalette(
     input.coverColor,
@@ -659,7 +771,7 @@ export function buildAtlasTypstSource(
 
   const authorsLine = formatAuthorsAcsTypst(input.authors, palette.link);
   const affiliations = formatAffiliationsTypst(input.affiliations);
-  const keywords = input.keywords.map(escapeTypst).join(" · ") || "—";
+  const keywords = input.keywords.map(escapeTypst).join(", ") || "—";
   const year = new Date().getFullYear().toString();
   const typeLabel = escapeTypst(
     (input.articleType || "Article").replace(/\s+Article$/i, "").slice(0, 22) ||
@@ -676,6 +788,7 @@ export function buildAtlasTypstSource(
     doiAbsolute || articleUrl || "https://doi.org/",
   );
   const doiText = escapeTypst(doiRaw || "Pending");
+  const doiLinkLabel = escapeTypst(doiAbsolute || "DOI pending");
 
   const citeJournal = escapeTypst(input.journalShortTitle || input.journalTitle);
   const citeParts = [
@@ -696,9 +809,6 @@ export function buildAtlasTypstSource(
   const journalMastheadLink = journalUrlHref
     ? `#text(font: sans, size: 8pt, fill: link-blue)[#link(${journalUrlHref})[${journalUrlLabel}]]`
     : `#text(font: sans, size: 8pt, fill: link-blue)[${escapeTypst(input.journalShortTitle || input.journalTitle)}]`;
-  const footerRight = journalUrlHref
-    ? `#link(${journalUrlHref})[${journalUrlLabel}]`
-    : `[${escapeTypst(input.manuscriptId)}]`;
   const readOnline = articleHref
     ? `#link(${articleHref})[#text(fill: white)[Read Online]]`
     : `#link(${doiHref})[#text(fill: white)[Read Online]]`;
@@ -714,6 +824,10 @@ export function buildAtlasTypstSource(
 
   const logoBlock = logoPath
     ? `#image("${logoPath}", height: 0.95cm)`
+    : null;
+
+  const publisherLogo = publisherLogoPath
+    ? `#image("${publisherLogoPath}", height: 0.62cm)`
     : null;
 
   const abstractText = escapeTypst(
@@ -742,7 +856,7 @@ export function buildAtlasTypstSource(
 
 #set page(
   paper: "a4",
-  margin: (left: 1.7cm, right: 1.7cm, top: 1.55cm, bottom: 1.65cm),
+  margin: (left: 1.7cm, right: 1.7cm, top: 1.55cm, bottom: 2.15cm),
   header: context {
     let n = counter(page).get().first()
     if n > 1 {
@@ -756,7 +870,7 @@ export function buildAtlasTypstSource(
           ${manuscriptLink}
         ],
         align(right + horizon)[
-          #link(${doiHref})[DOI]
+          #text(fill: muted)[${escapeTypst(input.manuscriptId)}]
         ],
       )
       v(3pt)
@@ -764,18 +878,30 @@ export function buildAtlasTypstSource(
     }
   },
   footer: context {
-    set text(font: sans, size: 7.5pt, fill: muted)
-    line(length: 100%, stroke: 0.35pt + rule)
+    set text(font: sans, size: 7pt, fill: muted)
+    line(length: 100%, stroke: 0.4pt + rule)
     v(5pt)
     grid(
-      columns: (1fr, auto, 1fr),
+      columns: (1.15fr, auto, 1.35fr),
+      gutter: 8pt,
       align(left + horizon)[
-        #link(${licenseHref})[${escapeTypst(licenseRaw)}]
+        ${
+          publisherLogo
+            ? `#box(baseline: 32%)[${publisherLogo}]#h(6pt)`
+            : `#text(font: serif, size: 8pt, weight: "bold", fill: primary)[Nahda]#h(5pt)`
+        }
+        #text(size: 6pt, fill: muted)[
+          © ${year} The Authors. Published by Nahda Publications
+        ]
       ],
       align(center + horizon)[
-        #text(fill: primary, weight: "semibold")[#counter(page).display()]
+        #text(fill: primary, weight: "semibold", size: 8pt)[#counter(page).display()]
       ],
-      align(right + horizon)[${footerRight}],
+      align(right + top)[
+        #link(${doiHref})[#text(fill: link-blue, size: 6.75pt)[${doiLinkLabel}]]
+        #v(1.5pt)
+        #text(size: 6.5pt, fill: ink)[${citeDisplay}]
+      ],
     )
   },
 )
@@ -1074,6 +1200,7 @@ export async function compileAtlasTypstPdf(
 
   const figureMap: FigureMap = new Map();
   let logoPath: string | null = null;
+  let publisherLogoPath: string | null = null;
 
   try {
     const declared = input.figures ?? [];
@@ -1113,7 +1240,21 @@ export async function compileAtlasTypstPdf(
       }
     }
 
-    const source = buildAtlasTypstSource(input, figureMap, logoPath);
+    // Always embed the Nahda publisher logo (ACS-style masthead).
+    try {
+      const brandLogo = join(process.cwd(), "public", "brand", "logo-nahda.png");
+      await copyFile(brandLogo, join(figuresDir, "nahda-logo.png"));
+      publisherLogoPath = "figures/nahda-logo.png";
+    } catch (err) {
+      console.warn("[typst] skip publisher logo", err);
+    }
+
+    const source = buildAtlasTypstSource(
+      input,
+      figureMap,
+      logoPath,
+      publisherLogoPath,
+    );
     const mainPath = join(workspace, "main.typ");
     await writeFile(mainPath, source, "utf8");
 
@@ -1132,14 +1273,14 @@ export async function compileAtlasTypstPdf(
       console.error("[typst] compile failed", detail || "(no diagnostics)");
       throw new Error(
         detail
-          ? `Typst could not compile the Nahda article PDF: ${detail.slice(0, 500)}`
-          : "Typst could not compile the Nahda article PDF",
+          ? `Could not compile the Nahda article PDF: ${detail.slice(0, 500)}`
+          : "Could not compile the Nahda article PDF",
       );
     }
 
     const pdf = compiler.pdf(compiled.result);
     if (!pdf || !(pdf instanceof Uint8Array || Buffer.isBuffer(pdf))) {
-      throw new Error("Typst PDF export returned an empty buffer");
+      throw new Error("PDF export returned an empty buffer");
     }
     return Buffer.from(pdf);
   } finally {
