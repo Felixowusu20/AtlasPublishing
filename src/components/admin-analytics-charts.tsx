@@ -299,21 +299,33 @@ export function JournalDonut({ journals }: { journals: JournalSlice[] }) {
   const stroke = 22;
   const c = 2 * Math.PI * r;
 
-  let offset = 0;
-  const slices = active.map((j, i) => {
+  const slices = active.reduce<
+    Array<
+      JournalSlice & {
+        value: number;
+        color: string;
+        dash: string;
+        offset: number;
+        pct: number;
+      }
+    >
+  >((acc, j, i) => {
     const value = metric === "views" ? j.views : j.articles;
     const len = total > 0 ? (value / total) * c : 0;
-    const slice = {
-      ...j,
-      value,
-      color: PALETTE[i % PALETTE.length],
-      dash: `${len} ${c - len}`,
-      offset,
-      pct: total > 0 ? Math.round((value / total) * 100) : 0,
-    };
-    offset -= len;
-    return slice;
-  });
+    const prev = acc[acc.length - 1];
+    const offset = prev ? prev.offset - (total > 0 ? (prev.value / total) * c : 0) : 0;
+    return [
+      ...acc,
+      {
+        ...j,
+        value,
+        color: PALETTE[i % PALETTE.length]!,
+        dash: `${len} ${c - len}`,
+        offset,
+        pct: total > 0 ? Math.round((value / total) * 100) : 0,
+      },
+    ];
+  }, []);
 
   return (
     <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">

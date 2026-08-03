@@ -13,6 +13,13 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // eslint-plugin-react-hooks v7 flags normal mount fetches, URL sync,
+      // and client-only hydration (localStorage). Keep those patterns.
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -490,9 +490,13 @@ See `.env.example` for placeholders. Never commit real secrets.
 | `npm run dev` | Local development server |
 | `npm run build` | `prisma generate` + Next.js production build |
 | `npm start` | Run production server |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript (`tsc --noEmit`) |
+| `npm run ci` | Lint + typecheck + build (local CI parity) |
 | `npm run db:generate` | Generate Prisma client |
 | `npm run db:push` | Push schema to database |
-| `npm run db:migrate` | Run Prisma migrations |
+| `npm run db:migrate` | Create/run Prisma migrations (dev) |
+| `npm run db:migrate:deploy` | Apply migrations (CI/production) |
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run db:seed:nahda` | Seed Nahda journals |
 

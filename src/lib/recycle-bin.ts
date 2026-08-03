@@ -1,5 +1,4 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/db";
 import { progressForStatus } from "@/lib/submission-utils";
 
 type Tx = Prisma.TransactionClient;
