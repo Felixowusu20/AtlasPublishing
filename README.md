@@ -502,37 +502,6 @@ See `.env.example` for placeholders. Never commit real secrets.
 
 ---
 
-## CI/CD (one flow)
-
-GitHub Actions workflow: `.github/workflows/ci-cd.yml`
-
-```
-PR / push ──► quality (lint → typecheck → build)
-                 │
-                 ├─ pull_request ──► Vercel preview
-                 └─ push to main ──► migrate → Vercel production
-```
-
-**GitHub → Settings → Secrets and variables → Actions**
-
-| Secret | Used for |
-| --- | --- |
-| `VERCEL_TOKEN` | Deploy via Vercel CLI |
-| `VERCEL_ORG_ID` | Vercel team/org |
-| `VERCEL_PROJECT_ID` | This project |
-| `DATABASE_URL` | `prisma migrate deploy` on production |
-
-Get Vercel IDs after linking the project:
-
-```bash
-npx vercel link
-# then read .vercel/project.json (gitignored)
-```
-
-If Vercel Git integration is already deploying on push, either disable that and use this workflow, or remove the deploy jobs and keep **quality** only as the required check.
-
----
-
 ## Publishing checklist (ops)
 
 1. Author submits → appears in **Submission inbox**
