@@ -262,7 +262,6 @@ export default function PublishedArticlesPage() {
 
   useEffect(() => {
     // Initial queue load for the publish workspace
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount fetch
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only
   }, []);

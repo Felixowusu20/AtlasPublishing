@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { jsonError, jsonOk } from "@/lib/api";
+import { jsonOk } from "@/lib/api";
 
 export async function GET() {
   try {
