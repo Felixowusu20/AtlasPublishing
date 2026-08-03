@@ -1,16 +1,40 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { getArticleBySlug, getArticlesByJournal } from "@/data/mock";
 import { articleDownloadPath } from "@/lib/submission-utils";
 import { ArticleMetricsPanel } from "@/components/article-metrics";
 import { ArticleKeywords } from "@/components/article-keywords";
 import { CiteActions } from "@/components/cite-actions";
+import { JsonLd } from "@/components/json-ld";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
 import {
   ArticleMasthead,
   type MastheadRecommendation,
 } from "@/components/article-masthead";
+import {
+  loadScholarArticleBySlug,
+  toScholarInput,
+} from "@/lib/seo/article-seo";
+import { buildArticleMetadata } from "@/lib/seo/scholar";
+import { scholarlyArticleJsonLd } from "@/lib/seo/jsonld";
+
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  try {
+    const article = await loadScholarArticleBySlug(slug);
+    if (article) return buildArticleMetadata(toScholarInput(article));
+  } catch (err) {
+    console.error("[article-metadata]", err);
+  }
+  return { title: "Article not found | Nahda Publications" };
+}
 
 function formatDate(value: Date | string | null | undefined) {
   if (!value) return "—";
@@ -38,7 +62,7 @@ export default async function ArticleDetailPage({
   const { slug } = await params;
 
   const dbArticle = await prisma.publishedArticle.findFirst({
-    where: { slug, isActive: true },
+    where: { slug, isActive: true, deletedAt: null },
     include: { journal: true },
   });
 
@@ -113,65 +137,36 @@ export default async function ArticleDetailPage({
       relatedCards,
     };
 
-    return <ArticleView article={article} />;
+    return (
+      <ArticleView
+        article={article}
+        jsonLd={scholarlyArticleJsonLd({
+          slug: dbArticle.slug,
+          title: dbArticle.title,
+          abstract: dbArticle.abstract,
+          authors: dbArticle.authors,
+          affiliations: dbArticle.affiliations,
+          keywords: dbArticle.keywords,
+          doi: dbArticle.doi,
+          publishedAt: dbArticle.publishedAt,
+          volume: dbArticle.volume,
+          issue: dbArticle.issue,
+          pages: dbArticle.pages,
+          manuscriptUrl: dbArticle.manuscriptUrl,
+          license: dbArticle.license,
+          openAccess: dbArticle.openAccess,
+          journal: {
+            title: dbArticle.journal.title,
+            slug: dbArticle.journal.slug,
+            issn: dbArticle.journal.issn,
+            eIssn: dbArticle.journal.eIssn,
+          },
+        })}
+      />
+    );
   }
 
-  const mock = getArticleBySlug(slug);
-  if (!mock) notFound();
-
-  const mockSiblings = getArticlesByJournal(mock.journalSlug).filter(
-    (a) => a.slug !== slug,
-  );
-
-  const mockRecs: MastheadRecommendation[] = mockSiblings.slice(0, 4).map((a) => ({
-    slug: a.slug,
-    title: a.title,
-    authors: a.authors,
-    journalTitle: a.journalTitle,
-  }));
-
-  const relatedCards: RelatedCard[] = mockSiblings.slice(0, 4).map((a) => ({
-    slug: a.slug,
-    title: a.title,
-    authors: a.authors,
-    articleType: a.articleType,
-    publishedAt: a.publishedAt,
-  }));
-
-  return (
-    <ArticleView
-      article={{
-        title: mock.title,
-        articleType: mock.articleType,
-        openAccess: mock.openAccess,
-        license: mock.license,
-        issue: mock.issue,
-        authors: mock.authors,
-        affiliations: mock.affiliations,
-        journalSlug: mock.journalSlug,
-        journalTitle: mock.journalTitle,
-        journalShortTitle: undefined,
-        journalId: mock.journalId,
-        logoUrl: null,
-        volume: mock.volume,
-        pages: mock.pages,
-        doi: mock.doi,
-        receivedAt: mock.receivedAt,
-        acceptedAt: mock.acceptedAt,
-        publishedAt: mock.publishedAt,
-        abstract: mock.abstract,
-        keywords: mock.keywords,
-        views: mock.views,
-        downloads: mock.downloads,
-        citations: mock.citations,
-        sections: mock.sections,
-        slug,
-        manuscriptUrl: null,
-        recommendations: mockRecs,
-        relatedCards,
-      }}
-    />
-  );
+  notFound();
 }
 
 type RelatedCard = {
@@ -213,7 +208,13 @@ type ViewArticle = {
   relatedCards?: RelatedCard[];
 };
 
-function ArticleView({ article }: { article: ViewArticle }) {
+function ArticleView({
+  article,
+  jsonLd,
+}: {
+  article: ViewArticle;
+  jsonLd?: Record<string, unknown>;
+}) {
   const downloadHref = article.manuscriptUrl
     ? articleDownloadPath(article.slug)
     : null;
@@ -226,6 +227,7 @@ function ArticleView({ article }: { article: ViewArticle }) {
 
   return (
     <div className="relative min-h-screen bg-[var(--paper)]">
+      {jsonLd ? <JsonLd data={jsonLd} /> : null}
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,_rgba(15,107,106,0.08),_transparent_55%)]"
         aria-hidden
@@ -329,6 +331,22 @@ function ArticleView({ article }: { article: ViewArticle }) {
                 <ArticleKeywords keywords={article.keywords} className="mt-7" />
               ) : null}
 
+              {article.affiliations.length > 0 ? (
+                <section id="affiliations" className="mt-8">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+                      Affiliations
+                    </h2>
+                    <div className="h-px flex-1 bg-[var(--line)]" />
+                  </div>
+                  <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-[var(--ink)]/85">
+                    {article.affiliations.map((aff) => (
+                      <li key={aff}>{aff}</li>
+                    ))}
+                  </ol>
+                </section>
+              ) : null}
+
               {hasSections ? (
                 <div className="mt-10 space-y-10">
                   {article.sections!.map((section) => {
@@ -352,15 +370,16 @@ function ArticleView({ article }: { article: ViewArticle }) {
                 >
                   <div className="px-6 py-7 sm:px-7">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-                      Full text
+                      Full text &amp; references
                     </p>
                     <h2 className="mt-2 font-[family-name:var(--font-display)] text-xl text-[var(--ink)] sm:text-2xl">
                       Read the complete manuscript
                     </h2>
                     <p className="mt-3 max-w-xl text-sm leading-relaxed text-[var(--muted)]">
-                      This page presents the abstract and citation details.
+                      This page presents the title, authors, affiliations,
+                      abstract, keywords, DOI, and publication history.
                       Download the Nahda-formatted PDF for figures, tables,
-                      methods, and references.
+                      methods, and the full reference list.
                     </p>
                     {downloadHref ? (
                       <a

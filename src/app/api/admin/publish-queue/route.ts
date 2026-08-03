@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { prisma, prismaFailureMessage } from "@/lib/db";
 import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { uploadToCloudinary } from "@/lib/cloudinary";
@@ -17,6 +18,7 @@ import {
   normalizeDoi,
 } from "@/lib/doi";
 import { getAppBaseUrl } from "@/lib/app-url";
+import { validateScholarReadiness, issueKey } from "@/lib/seo/article-seo";
 
 /** Accepted manuscripts waiting to be published into the journal template. */
 export async function GET() {
@@ -320,6 +322,33 @@ export async function POST(request: Request) {
       ? `${base}${articleDownloadPath(result.slug)}`
       : null;
 
+    const scholar = validateScholarReadiness({
+      title: result.title,
+      authors: result.authors,
+      abstract: result.abstract,
+      publishedAt: result.publishedAt,
+      journalTitle: result.journal.title,
+      issn: result.journal.issn,
+      eIssn: result.journal.eIssn,
+      doi: result.doi,
+      manuscriptUrl: publishedPdfUrl ?? result.manuscriptUrl,
+      slug: result.slug,
+    });
+
+    // Refresh SEO surfaces so Google/Scholar discover the new article promptly.
+    try {
+      revalidatePath(`/articles/${result.slug}`);
+      revalidatePath(`/journals/${result.journal.slug}`);
+      revalidatePath(
+        `/journals/${result.journal.slug}/issues/${issueKey(result.volume, result.issue)}`,
+      );
+      if (result.doi) revalidatePath(atlasDoiPath(result.doi));
+      revalidatePath("/articles");
+      revalidatePath("/sitemap.xml");
+    } catch (err) {
+      console.error("[publish-revalidate]", err);
+    }
+
     let emailSent = false;
     try {
       const mail = await sendEmail({
@@ -348,6 +377,7 @@ export async function POST(request: Request) {
       pdfUrl: publishedPdfUrl,
       downloadUrl: pdfDownloadUrl,
       emailSent,
+      scholar,
     });
   } catch (err) {
     if (err instanceof z.ZodError) {
