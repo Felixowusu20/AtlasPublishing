@@ -32,24 +32,29 @@ function writeConsent(value: CookieConsentValue) {
 
 export function CookieConsent() {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     if (pathname.startsWith("/admin")) {
       setVisible(false);
       return;
     }
-    // Defer until after mount so we never flash the banner for returning visitors.
-    const existing = readConsent();
-    setVisible(existing == null);
-  }, [pathname]);
+    // Only decide after mount so SSR HTML always matches the first client paint.
+    setVisible(readConsent() == null);
+  }, [mounted, pathname]);
 
   function decide(value: CookieConsentValue) {
     writeConsent(value);
     setVisible(false);
   }
 
-  if (!visible) return null;
+  if (!mounted || !visible) return null;
 
   return (
     <div

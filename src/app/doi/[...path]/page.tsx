@@ -1,20 +1,69 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { findArticleByDoi, normalizeDoi } from "@/lib/doi";
 import { articleDownloadPath } from "@/lib/submission-utils";
 import { formatMetric } from "@/components/article-metrics";
+import { JsonLd } from "@/components/json-ld";
+import { scholarlyArticleJsonLd } from "@/lib/seo/jsonld";
+import { absoluteUrl, buildArticleMetadata } from "@/lib/seo/scholar";
 
 type Props = {
   params: Promise<{ path: string[] }>;
   searchParams: Promise<{ download?: string }>;
 };
 
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { path } = await params;
+  const raw = decodeURIComponent(path.join("/"));
+  const doi = normalizeDoi(raw);
+  try {
+    const article = await findArticleByDoi(prisma, doi || raw);
+    if (!article) {
+      return {
+        title: "DOI not found | Nahda Publications",
+        robots: { index: false, follow: true },
+      };
+    }
+    const meta = buildArticleMetadata({
+      slug: article.slug,
+      title: article.title,
+      abstract: article.abstract,
+      authors: article.authors,
+      affiliations: article.affiliations,
+      keywords: article.keywords,
+      doi: article.doi,
+      publishedAt: article.publishedAt,
+      volume: article.volume,
+      issue: article.issue,
+      pages: article.pages,
+      manuscriptUrl: article.manuscriptUrl,
+      license: article.license,
+      openAccess: article.openAccess,
+      journal: article.journal,
+    });
+    return {
+      ...meta,
+      alternates: {
+        ...meta.alternates,
+        canonical: absoluteUrl(`/articles/${article.slug}`),
+      },
+      other: {
+        ...(meta.other as Record<string, string | string[]>),
+        "DC.identifier": `doi:${normalizeDoi(article.doi || doi)}`,
+      },
+    };
+  } catch (err) {
+    console.error("[doi-metadata]", err);
+    return { title: "DOI | Nahda Publications" };
+  }
+}
+
 /**
  * Hosted Nahda DOI record.
  * /doi/10.58000/... → metadata landing for the bound paper
  * /doi/...?download=1 → PDF download
- * Unknown DOI → friendly error page (not Crossref / doi.org)
  */
 export default async function DoiRecordPage({ params, searchParams }: Props) {
   const { path } = await params;
@@ -51,6 +100,25 @@ export default async function DoiRecordPage({ params, searchParams }: Props) {
 
   return (
     <div className="page-wrap max-w-3xl">
+      <JsonLd
+        data={scholarlyArticleJsonLd({
+          slug: article.slug,
+          title: article.title,
+          abstract: article.abstract,
+          authors: article.authors,
+          affiliations: article.affiliations,
+          keywords: article.keywords,
+          doi: article.doi,
+          publishedAt: article.publishedAt,
+          volume: article.volume,
+          issue: article.issue,
+          pages: article.pages,
+          manuscriptUrl: article.manuscriptUrl,
+          license: article.license,
+          openAccess: article.openAccess,
+          journal: article.journal,
+        })}
+      />
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
         Nahda DOI record
       </p>
@@ -151,7 +219,8 @@ export default async function DoiRecordPage({ params, searchParams }: Props) {
         <code className="rounded bg-[var(--surface)] px-1.5 py-0.5">
           {normalizeDoi(article.doi || doi)}
         </code>{" "}
-        always lands on this record and the bound paper on our site.
+        always lands on this record and the bound paper on our site. Crossref
+        registration can later point doi.org to this same landing URL.
       </p>
     </div>
   );

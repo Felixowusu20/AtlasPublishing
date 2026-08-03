@@ -7,7 +7,6 @@ import { useAuth } from "@/components/auth-provider";
 import { AuthorNotifications } from "@/components/author-notifications";
 import { BrandLogo } from "@/components/brand-logo";
 import { NavbarSearch } from "@/components/navbar-search";
-import { journals } from "@/data/mock";
 import { initials } from "@/lib/auth";
 
 type NavChild = { label: string; href: string; hint?: string };
@@ -18,7 +17,9 @@ type NavItem = {
   children: NavChild[];
 };
 
-function useNavItems(): NavItem[] {
+type NavJournal = { slug: string; title: string };
+
+function useNavItems(journals: NavJournal[]): NavItem[] {
   return useMemo(
     () => [
       {
@@ -82,12 +83,13 @@ function useNavItems(): NavItem[] {
         ],
       },
     ],
-    [],
+    [journals],
   );
 }
 
 export function SiteHeader() {
-  const nav = useNavItems();
+  const [navJournals, setNavJournals] = useState<NavJournal[]>([]);
+  const nav = useNavItems(navJournals);
   const { user, ready, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -97,21 +99,37 @@ export function SiteHeader() {
   const [mobileSection, setMobileSection] = useState<string | null>("Journals");
   const navRef = useRef<HTMLElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
-  // Hover menus stay inert until after hydration — a mouse already resting on a
-  // nav item can replay onMouseEnter mid-hydration and cause a markup mismatch.
   const hydrated = useRef(false);
-
-  const [lastPath, setLastPath] = useState(pathname);
-  if (lastPath !== pathname) {
-    setLastPath(pathname);
-    setOpen(null);
-    setAccountOpen(false);
-    setMobileOpen(false);
-  }
 
   useEffect(() => {
     hydrated.current = true;
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/cms/journals");
+        const data = await res.json();
+        if (cancelled || !res.ok) return;
+        const list = ((data.journals ?? []) as NavJournal[])
+          .map((j) => ({ slug: j.slug, title: j.title }))
+          .slice(0, 12);
+        setNavJournals(list);
+      } catch {
+        if (!cancelled) setNavJournals([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setOpen(null);
+    setAccountOpen(false);
+    setMobileOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
@@ -558,7 +576,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-white/10">
         <p className="mx-auto max-w-6xl px-4 py-4 text-xs text-slate-500 sm:px-6">
-          © {new Date().getFullYear()} Nahda Publications.
+          © 2026 Nahda Publications.
         </p>
       </div>
     </footer>

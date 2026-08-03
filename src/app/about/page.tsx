@@ -4,8 +4,8 @@ export default function AboutPage() {
       <h1 className="page-title">About Nahda</h1>
       <p className="mt-4 max-w-2xl text-base leading-relaxed text-[var(--muted)]">
         Nahda Publications is a multi-journal platform for manuscript
-        submission and scholarly publishing. This demo focuses on the author
-        experience with mock data.
+        submission, peer review, and scholarly publishing. We support authors
+        from first submission through DOI assignment and open publication.
       </p>
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         {[
@@ -19,6 +19,16 @@ export default function AboutPage() {
           </div>
         ))}
       </div>
+      <p className="mt-8 text-sm text-[var(--muted)]">
+        Questions? Contact{" "}
+        <a
+          href="mailto:nahdapublications@gmail.com"
+          className="font-semibold text-[var(--accent)] hover:underline"
+        >
+          nahdapublications@gmail.com
+        </a>
+        .
+      </p>
     </div>
   );
 }

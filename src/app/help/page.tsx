@@ -2,23 +2,23 @@ export default function HelpPage() {
   const faqs = [
     [
       "How do I submit a manuscript?",
-      "Sign in, open For Authors → Submit a manuscript, then complete the 6-step wizard.",
+      "Sign in, open For Authors → Submit a manuscript, then complete the submission wizard for your chosen journal.",
     ],
     [
       "Can I track my paper after submission?",
-      "Yes. Use Author dashboard or open the manuscript from My manuscripts to see editorial progress.",
+      "Yes. Use your author dashboard or open the manuscript from My manuscripts to see editorial progress and messages.",
     ],
     [
       "What file formats are accepted?",
-      "Word, PDF, LaTeX ZIP, images, Excel/CSV supplements. Uploads are mocked until Cloudinary is connected.",
+      "Word (DOCX), PDF, LaTeX ZIP packages, images, and Excel/CSV supplements. Files are uploaded securely for editorial handling.",
     ],
     [
       "How do APCs and waivers work?",
-      "See Fees & waivers. APC is paid after acceptance, before production.",
+      "See Fees & waivers. Article processing charges are paid after acceptance and before production. Waiver requests can be sent to the editorial office.",
     ],
     [
-      "Is this connected to a real database?",
-      "Not yet. Auth and demo data run in the browser. PostgreSQL + Prisma come next.",
+      "How are articles published and cited?",
+      "Accepted articles receive a Nahda DOI, appear on the journal site, and include citation metadata for discovery services and Google Scholar.",
     ],
   ];
 
@@ -46,10 +46,13 @@ export default function HelpPage() {
         <h2 className="font-semibold text-[var(--ink)]">Contact support</h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
           Email{" "}
-          <span className="break-all font-medium text-[var(--ink)]">
+          <a
+            href="mailto:nahdapublications@gmail.com"
+            className="break-all font-medium text-[var(--accent)] hover:underline"
+          >
             nahdapublications@gmail.com
-          </span>{" "}
-          (demo). Typical response within 1 to 2 business days.
+          </a>
+          . Typical response within 1 to 2 business days.
         </p>
       </div>
     </div>

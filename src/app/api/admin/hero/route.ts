@@ -60,8 +60,16 @@ export async function PATCH(request: Request) {
 
   try {
     const raw = await request.json();
-    const id = z.string().parse(raw.id);
-    const data = schema.partial().parse(raw);
+    const id = z.string().min(1).parse(raw.id);
+    // Strip id so it is never passed into Prisma update data.
+    const { id: _ignored, ...rest } = raw as { id: string } & Record<
+      string,
+      unknown
+    >;
+    const data = schema.partial().parse(rest);
+    if (Object.keys(data).length === 0) {
+      return jsonError("No fields to update");
+    }
     const slide = await prisma.heroSlide.update({ where: { id }, data });
     return jsonOk({ slide });
   } catch (err) {

@@ -16,6 +16,15 @@ type Slide = {
   isActive: boolean;
 };
 
+const emptyForm = {
+  title: "",
+  body: "",
+  alt: "",
+  ctaLabel: "Submit a manuscript",
+  ctaHref: "/submissions/new",
+  sortOrder: "0",
+};
+
 async function uploadImage(file: File) {
   const fd = new FormData();
   fd.append("file", file);
@@ -30,16 +39,12 @@ async function uploadImage(file: File) {
 export default function HeroCmsPage() {
   const { user } = useAdminAuth();
   const [slides, setSlides] = useState<Slide[]>([]);
-  const [form, setForm] = useState({
-    title: "",
-    body: "",
-    alt: "",
-    ctaLabel: "Submit a manuscript",
-    ctaHref: "/submissions/new",
-    sortOrder: "0",
-  });
+  const [form, setForm] = useState(emptyForm);
   const [file, setFile] = useState<File | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function load() {
@@ -56,37 +61,74 @@ export default function HeroCmsPage() {
     return <p className="text-sm text-[var(--muted)]">Super admin only.</p>;
   }
 
+  function resetForm() {
+    setForm(emptyForm);
+    setFile(null);
+    setEditingId(null);
+    setExistingImageUrl(null);
+    setError("");
+  }
+
+  function startEdit(slide: Slide) {
+    setEditingId(slide.id);
+    setExistingImageUrl(slide.imageUrl);
+    setFile(null);
+    setError("");
+    setSuccess("");
+    setForm({
+      title: slide.title,
+      body: slide.body,
+      alt: slide.alt ?? "",
+      ctaLabel: slide.ctaLabel ?? "Submit a manuscript",
+      ctaHref: slide.ctaHref ?? "/submissions/new",
+      sortOrder: String(slide.sortOrder ?? 0),
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!file) {
+    if (!editingId && !file) {
       setError("Choose a hero image");
       return;
     }
     setLoading(true);
     setError("");
+    setSuccess("");
     try {
-      const uploaded = await uploadImage(file);
+      let imageUrl: string | undefined;
+      let imagePublicId: string | undefined;
+      if (file) {
+        const uploaded = await uploadImage(file);
+        imageUrl = uploaded.url;
+        imagePublicId = uploaded.publicId;
+      }
+
+      const payload: Record<string, unknown> = {
+        title: form.title,
+        body: form.body,
+        alt: form.alt || undefined,
+        ctaLabel: form.ctaLabel || undefined,
+        ctaHref: form.ctaHref || undefined,
+        sortOrder: Number(form.sortOrder) || 0,
+      };
+      if (imageUrl) {
+        payload.imageUrl = imageUrl;
+        payload.imagePublicId = imagePublicId;
+      }
+
       const res = await fetch("/api/admin/hero", {
-        method: "POST",
+        method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          sortOrder: Number(form.sortOrder) || 0,
-          imageUrl: uploaded.url,
-          imagePublicId: uploaded.publicId,
-        }),
+        body: JSON.stringify(
+          editingId ? { id: editingId, ...payload } : payload,
+        ),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
-      setForm({
-        title: "",
-        body: "",
-        alt: "",
-        ctaLabel: "Submit a manuscript",
-        ctaHref: "/submissions/new",
-        sortOrder: "0",
-      });
-      setFile(null);
+
+      setSuccess(editingId ? "Slide updated." : "Slide added.");
+      resetForm();
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");
@@ -97,7 +139,13 @@ export default function HeroCmsPage() {
 
   async function remove(id: string) {
     if (!confirm("Delete this slide?")) return;
-    await fetch(`/api/admin/hero?id=${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/admin/hero?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Could not delete slide");
+      return;
+    }
+    if (editingId === id) resetForm();
     await load();
   }
 
@@ -111,19 +159,29 @@ export default function HeroCmsPage() {
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
+    <div className="grid gap-8 lg:grid-cols-[1fr_400px] lg:items-start">
       <div>
         <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl">
           Hero CMS
         </h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Homepage hero slides. Images upload to Cloudinary.
+          Edit homepage carousel slides. Changes appear on the public site after
+          save.
         </p>
         <div className="mt-6 space-y-4">
+          {slides.length === 0 && (
+            <p className="rounded-2xl border border-dashed border-[var(--line)] bg-white p-6 text-sm text-[var(--muted)]">
+              No slides yet. Add one with the form.
+            </p>
+          )}
           {slides.map((slide) => (
             <article
               key={slide.id}
-              className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white"
+              className={`overflow-hidden rounded-2xl border bg-white ${
+                editingId === slide.id
+                  ? "border-[var(--accent)] ring-2 ring-[var(--accent-soft)]"
+                  : "border-[var(--line)]"
+              }`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -145,10 +203,31 @@ export default function HeroCmsPage() {
                   >
                     {slide.isActive ? "Active" : "Hidden"}
                   </span>
+                  {editingId === slide.id ? (
+                    <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-semibold text-[var(--accent)]">
+                      Editing
+                    </span>
+                  ) : null}
                 </div>
-                <h2 className="mt-2 font-semibold">{slide.title}</h2>
-                <p className="mt-1 text-sm text-[var(--muted)]">{slide.body}</p>
-                <div className="mt-3 flex gap-3 text-xs font-semibold">
+                <h2 className="mt-2 font-semibold text-[var(--ink)]">
+                  {slide.title}
+                </h2>
+                <p className="mt-1 line-clamp-3 text-sm text-[var(--muted)]">
+                  {slide.body}
+                </p>
+                {(slide.ctaLabel || slide.ctaHref) && (
+                  <p className="mt-2 truncate text-xs text-[var(--accent)]">
+                    CTA: {slide.ctaLabel || "—"} → {slide.ctaHref || "—"}
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold">
+                  <button
+                    type="button"
+                    className="text-[var(--accent)]"
+                    onClick={() => startEdit(slide)}
+                  >
+                    Edit
+                  </button>
                   <button type="button" onClick={() => void toggle(slide)}>
                     {slide.isActive ? "Hide" : "Show"}
                   </button>
@@ -168,9 +247,23 @@ export default function HeroCmsPage() {
 
       <form
         onSubmit={onSubmit}
-        className="h-fit space-y-3 rounded-2xl border border-[var(--line)] bg-white p-5"
+        className="h-fit space-y-3 rounded-2xl border border-[var(--line)] bg-white p-5 lg:sticky lg:top-4"
       >
-        <h2 className="text-sm font-semibold">Add slide</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">
+            {editingId ? "Edit slide" : "Add slide"}
+          </h2>
+          {editingId ? (
+            <button
+              type="button"
+              className="text-xs font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
+              onClick={resetForm}
+            >
+              Cancel
+            </button>
+          ) : null}
+        </div>
+
         <label className="field">
           <span>Title</span>
           <input
@@ -188,20 +281,54 @@ export default function HeroCmsPage() {
             onChange={(e) => setForm((p) => ({ ...p, body: e.target.value }))}
           />
         </label>
+
         <label className="field">
-          <span>Image</span>
+          <span>
+            Image{editingId ? " (optional — leave blank to keep current)" : ""}
+          </span>
+          {editingId && existingImageUrl ? (
+            <div className="mb-2 overflow-hidden rounded-lg border border-[var(--line)]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={existingImageUrl}
+                alt="Current slide"
+                className="h-28 w-full object-cover"
+              />
+            </div>
+          ) : null}
           <input
             type="file"
             accept="image/*"
-            required
+            required={!editingId}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
         </label>
+
         <label className="field">
           <span>Alt text</span>
           <input
             value={form.alt}
             onChange={(e) => setForm((p) => ({ ...p, alt: e.target.value }))}
+          />
+        </label>
+        <label className="field">
+          <span>CTA label</span>
+          <input
+            value={form.ctaLabel}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, ctaLabel: e.target.value }))
+            }
+            placeholder="Submit a manuscript"
+          />
+        </label>
+        <label className="field">
+          <span>CTA link</span>
+          <input
+            value={form.ctaHref}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, ctaHref: e.target.value }))
+            }
+            placeholder="/submissions/new"
           />
         </label>
         <label className="field">
@@ -214,13 +341,26 @@ export default function HeroCmsPage() {
             }
           />
         </label>
+
         {error && (
           <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {error}
           </p>
         )}
+        {success && (
+          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            {success}
+          </p>
+        )}
+
         <button type="submit" className="btn-primary w-full" disabled={loading}>
-          {loading ? "Uploading…" : "Add slide"}
+          {loading
+            ? editingId
+              ? "Saving…"
+              : "Uploading…"
+            : editingId
+              ? "Save changes"
+              : "Add slide"}
         </button>
       </form>
     </div>

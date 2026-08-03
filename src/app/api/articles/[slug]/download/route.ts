@@ -19,13 +19,22 @@ function safeFilename(title: string, slug: string) {
  * Public download for a published article PDF.
  * Increments the download counter, then streams the PDF (via Cloudinary
  * authenticated download when public CDN delivery is ACL-blocked).
+ *
+ * `?inline=1` (or Googlebot / Scholar user-agents) serves `Content-Disposition: inline`
+ * so crawlers can index the full text.
  */
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const { slug } = await params;
+  const url = new URL(request.url);
+  const ua = request.headers.get("user-agent") || "";
+  const preferInline =
+    url.searchParams.get("inline") === "1" ||
+    url.searchParams.get("view") === "1" ||
+    /Googlebot|Google-Scholar|bingbot|SemanticScholarBot/i.test(ua);
 
   try {
     const article = await prisma.publishedArticle.findFirst({
-      where: { slug, isActive: true },
+      where: { slug, isActive: true, deletedAt: null },
       select: { id: true, manuscriptUrl: true, title: true },
     });
 
@@ -57,14 +66,22 @@ export async function GET(_request: Request, { params }: Params) {
         ? mimeFromUrl(article.manuscriptUrl)
         : asset.upstreamType || "application/pdf";
 
+    const disposition = preferInline
+      ? `inline; filename="${filename}"`
+      : `attachment; filename="${filename}"`;
+
     return new NextResponse(asset.bytes, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "private, max-age=60",
+        "Content-Disposition": disposition,
+        "Cache-Control": preferInline
+          ? "public, max-age=300"
+          : "private, max-age=60",
         "X-Content-Type-Options": "nosniff",
         "Content-Length": String(asset.bytes.byteLength),
+        // Help scholarly crawlers treat this as freely available fulltext
+        "X-Robots-Tag": "all",
       },
     });
   } catch (err) {

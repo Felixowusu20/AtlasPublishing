@@ -68,12 +68,19 @@ export function HeroSlider() {
             Nahda Publications
           </p>
           <h1 className="mt-3 max-w-2xl font-[family-name:var(--font-display)] text-2xl leading-tight sm:mt-4 sm:text-5xl">
-            Hero content coming soon
+            Scholarly publishing for researchers worldwide
           </h1>
           <p className="mt-3 max-w-xl text-sm text-slate-200 sm:mt-4 sm:text-lg">
-            Add slides in Admin → Hero CMS to publish the homepage hero.
+            Submit manuscripts, follow peer review, and discover open research
+            across Nahda journals.
           </p>
           <div className="mt-5 flex flex-wrap gap-2 sm:mt-8 sm:gap-3">
+            <Link
+              href="/submissions/new"
+              className="inline-flex rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[var(--ink)] sm:px-5 sm:py-3"
+            >
+              Submit a manuscript
+            </Link>
             <Link
               href="/journals"
               className="inline-flex rounded-lg border border-white/30 px-4 py-2.5 text-sm font-semibold text-white sm:px-5 sm:py-3"

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { ArticleListingCard } from "@/components/article-listing-card";
-import { publishedArticles } from "@/data/mock";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -26,14 +25,13 @@ type ArticleCard = {
 };
 
 async function getArticles(): Promise<ArticleCard[]> {
-  let published: ArticleCard[] = [];
   try {
     const rows = await prisma.publishedArticle.findMany({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null },
       include: { journal: true },
       orderBy: { publishedAt: "desc" },
     });
-    published = rows.map((a) => ({
+    return rows.map((a) => ({
       id: a.id,
       slug: a.slug,
       title: a.title,
@@ -53,33 +51,8 @@ async function getArticles(): Promise<ArticleCard[]> {
       hasPdf: Boolean(a.manuscriptUrl),
     }));
   } catch {
-    published = [];
+    return [];
   }
-
-  const seen = new Set(published.map((a) => a.slug));
-  const demo = publishedArticles
-    .filter((a) => !seen.has(a.slug))
-    .map((a) => ({
-      id: a.id,
-      slug: a.slug,
-      title: a.title,
-      authors: a.authors,
-      abstract: a.abstract,
-      articleType: a.articleType as string,
-      openAccess: a.openAccess,
-      volume: a.volume,
-      issue: a.issue,
-      doi: a.doi,
-      publishedAt: a.publishedAt,
-      journalTitle: a.journalTitle,
-      journalSlug: a.journalSlug,
-      views: a.views,
-      downloads: a.downloads,
-      keywords: a.keywords,
-      hasPdf: false,
-    }));
-
-  return [...published, ...demo];
 }
 
 export default async function ArticlesPage({
