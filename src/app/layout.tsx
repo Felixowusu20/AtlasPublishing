@@ -1,16 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import dynamic from "next/dynamic";
 import { Libre_Franklin, Source_Serif_4 } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
+import { CookieConsentGate } from "@/components/cookie-consent-gate";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { seoBaseUrl } from "@/lib/seo/scholar";
 import "./globals.css";
-
-const CookieConsent = dynamic(
-  () =>
-    import("@/components/cookie-consent").then((m) => m.CookieConsent),
-  { ssr: false },
-);
 
 const body = Libre_Franklin({
   variable: "--font-body",
@@ -94,7 +88,7 @@ export default function RootLayout({
           <SiteHeader />
           <main className="min-w-0 flex-1 overflow-x-clip">{children}</main>
           <SiteFooter />
-          <CookieConsent />
+          <CookieConsentGate />
         </AuthProvider>
       </body>
     </html>
