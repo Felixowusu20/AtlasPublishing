@@ -89,33 +89,30 @@ export function HeroSlider() {
   const current = slides[index] ?? slides[0];
 
   return (
-    <section className="relative isolate overflow-hidden border-b border-[var(--line)] bg-[var(--ink)] text-white">
+    <section className="relative isolate max-w-[100%] overflow-x-clip border-b border-[var(--line)] bg-[var(--ink)] text-white">
+      {/* Absolute slides (not a wide flex track) so mobile Safari can't expand page width */}
       <div className="absolute inset-0 overflow-hidden">
-        <div
-          className="flex h-full transition-transform duration-700 ease-in-out will-change-transform"
-          style={{
-            width: `${slides.length * 100}%`,
-            transform: `translateX(-${(index * 100) / slides.length}%)`,
-          }}
-        >
-          {slides.map((slide, i) => (
-            <div
-              key={`${slide.src}-${i}`}
-              className="relative h-full"
-              style={{ width: `${100 / slides.length}%` }}
-            >
-              <Image
-                src={slide.src}
-                alt={slide.alt}
-                fill
-                priority={i === 0}
-                sizes="(max-width: 640px) 100vw, 100vw"
-                unoptimized={slide.src.startsWith("http")}
-                className={`object-cover object-[center_30%] sm:object-center ${i === index ? "hero-kenburns" : ""}`}
-              />
-            </div>
-          ))}
-        </div>
+        {slides.map((slide, i) => (
+          <div
+            key={`${slide.src}-${i}`}
+            className={`absolute inset-0 overflow-hidden transition-opacity duration-700 ease-in-out ${
+              i === index ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
+            aria-hidden={i !== index}
+          >
+            <Image
+              src={slide.src}
+              alt={slide.alt}
+              fill
+              priority={i === 0}
+              sizes="100vw"
+              unoptimized={slide.src.startsWith("http")}
+              className={`object-cover object-[center_30%] sm:object-center ${
+                i === index ? "hero-kenburns" : ""
+              }`}
+            />
+          </div>
+        ))}
         <div
           className="absolute inset-0 z-[1]"
           style={{

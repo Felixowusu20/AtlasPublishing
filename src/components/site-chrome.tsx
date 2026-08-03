@@ -148,9 +148,9 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--paper)]/95 backdrop-blur">
-      <div className="border-b border-[var(--line)] bg-[var(--ink)] text-xs text-slate-300">
+      <div className="overflow-x-clip border-b border-[var(--line)] bg-[var(--ink)] text-xs text-slate-300">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-1.5 sm:px-6">
-          <p className="truncate">
+          <p className="min-w-0 truncate">
             Nahda Publications | Peer reviewed journals
           </p>
           <div className="hidden items-center gap-4 sm:flex">
@@ -164,8 +164,8 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-        <BrandLogo variant="full" priority />
+      <div className="mx-auto flex h-16 w-full max-w-6xl min-w-0 items-center justify-between gap-3 px-4 sm:px-6">
+        <BrandLogo variant="full" priority className="!max-w-[min(200px,52vw)]" />
 
         <nav ref={navRef} className="relative hidden items-center gap-0.5 lg:flex">
           {nav.map((item) => {
@@ -520,7 +520,7 @@ export function SiteFooter() {
   }
 
   return (
-    <footer className="mt-auto border-t border-[var(--line)] bg-[var(--ink)] text-slate-300">
+    <footer className="mt-auto max-w-[100%] overflow-x-clip border-t border-[var(--line)] bg-[var(--ink)] text-slate-300">
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:grid-cols-2 sm:gap-8 sm:px-6 sm:py-12 lg:grid-cols-4">
         <div>
           <BrandLogo href="/" variant="onDark" className="h-10 sm:h-11" />

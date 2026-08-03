@@ -24,6 +24,11 @@ html {
   scroll-behavior: smooth;
 }
 
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -104,21 +109,25 @@ html {
 
 @keyframes hero-kenburns {
   from {
-    transform: scale(1.05) translate3d(0, 0, 0);
+    transform: scale(1.04);
   }
   to {
-    transform: scale(1.12) translate3d(-1.5%, -1%, 0);
+    transform: scale(1.1);
   }
 }
 
 .hero-kenburns {
   animation: hero-kenburns 18s ease-in-out infinite alternate;
   will-change: transform;
+  /* Keep scaled images inside the slide — prevents mobile horizontal bleed */
+  transform-origin: center center;
 }
 
 .page-wrap {
   margin-inline: auto;
   max-width: 72rem;
+  width: 100%;
+  min-width: 0;
   padding: 1.5rem 1rem;
 }
 

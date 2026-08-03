@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Libre_Franklin, Source_Serif_4 } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
+import { CookieConsent } from "@/components/cookie-consent";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import "./globals.css";
 
@@ -34,8 +35,9 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col antialiased">
         <AuthProvider>
           <SiteHeader />
-          <main className="flex-1">{children}</main>
+          <main className="min-w-0 flex-1 overflow-x-clip">{children}</main>
           <SiteFooter />
+          <CookieConsent />
         </AuthProvider>
       </body>
     </html>
