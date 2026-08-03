@@ -65,7 +65,7 @@ export default async function HomePage() {
   const { articles, announcements, journals, stats } = await getHomeData();
 
   return (
-    <div>
+    <div className="max-w-[100%] overflow-x-clip">
       <HeroSlider />
 
       {stats && (
@@ -104,7 +104,7 @@ export default async function HomePage() {
             </h2>
             <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)]">
               Paste an Nahda DOI such as{" "}
-              <code className="rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-[var(--accent)] ring-1 ring-[var(--line)]">
+              <code className="inline-block max-w-full break-all rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-[var(--accent)] ring-1 ring-[var(--line)]">
                 10.58000/ajs.2026.0142
               </code>{" "}
               to open the full article page and download the PDF.
@@ -191,11 +191,11 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-        <div className="grid gap-10 lg:grid-cols-[1.55fr_1fr]">
-          <div>
+      <section className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+        <div className="grid min-w-0 gap-10 lg:grid-cols-[1.55fr_1fr]">
+          <div className="min-w-0">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
                   Recently published
                 </p>
@@ -215,7 +215,7 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            <div className="mt-6 space-y-4">
+            <div className="mt-6 w-full min-w-0 space-y-4">
               {articles.length === 0 && (
                 <p className="rounded-2xl bg-white p-6 text-sm text-[var(--muted)] ring-1 ring-[var(--line)]">
                   No published articles yet. Publish from the admin queue to see
@@ -249,7 +249,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <aside className="space-y-8">
+          <aside className="min-w-0 space-y-8">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
                 News

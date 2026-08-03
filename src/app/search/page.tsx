@@ -259,9 +259,9 @@ function SearchPageInner() {
                 Articles ({articles.length})
                 {selectedJournal ? ` · ${selectedJournal.shortTitle}` : ""}
               </h2>
-              <ul className="mt-3 space-y-4">
+              <ul className="mt-3 w-full min-w-0 space-y-4">
                 {articles.map((a) => (
-                  <li key={a.id}>
+                  <li key={a.id} className="min-w-0">
                     <ArticleListingCard
                       article={{
                         slug: a.slug,

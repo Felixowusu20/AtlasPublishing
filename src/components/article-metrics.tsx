@@ -105,7 +105,7 @@ export function ArticleMetrics({
 
   return (
     <span
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)] ${className}`}
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--muted)] ${className}`}
     >
       {items.map(([kind, value]) => (
         <span

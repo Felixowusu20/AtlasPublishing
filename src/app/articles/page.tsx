@@ -140,7 +140,7 @@ export default async function ArticlesPage({
           </div>
         </div>
 
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 w-full min-w-0 space-y-4">
           {list.length === 0 && (
             <p className="rounded-2xl bg-white p-6 text-sm text-[var(--muted)] ring-1 ring-[var(--line)]">
               No articles published yet.
