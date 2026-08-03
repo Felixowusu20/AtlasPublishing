@@ -128,7 +128,9 @@ export async function POST(request: Request) {
     const authorEmail = session.email;
     const authorName = session.name || "Author";
 
-    void sendEmail({
+    // Must await: on serverless (Vercel/etc.) returning before SMTP completes
+    // freezes the isolate and drops the acknowledgement email.
+    const mail = await sendEmail({
       to: authorEmail,
       subject: `Manuscript received: ${manuscriptId}`,
       html: submissionAcknowledgementEmailHtml({
@@ -159,7 +161,12 @@ export async function POST(request: Request) {
         journal.title,
         "Nahda Publications",
       ].join("\n"),
-    }).catch((err) => console.error("[submission-ack-email]", err));
+    });
+    if (!mail.ok) {
+      console.error(
+        `[submission-ack-email] to=${authorEmail} skipped=${mail.skipped} error=${mail.error ?? "unknown"}`,
+      );
+    }
 
     return jsonCreated({ submission });
   } catch (err) {
