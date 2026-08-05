@@ -1,6 +1,6 @@
 /**
  * Canonical public site origin from NEXT_PUBLIC_APP_URL (set in Vercel env).
- * Never hardcode localhost into emails, Stripe redirects, or production links.
+ * Never hardcode localhost into emails, Paystack redirects, or production links.
  */
 export function getAppBaseUrl(): string {
   const raw = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");

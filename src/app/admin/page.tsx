@@ -13,6 +13,7 @@ import {
   type JournalSlice,
   type MonthPoint,
 } from "@/components/admin-analytics-charts";
+import { PaymentAnalyticsPanel } from "@/components/payment-analytics-panel";
 
 type Counts = {
   submissions: number;
@@ -230,6 +231,8 @@ export default function AdminHomePage() {
           </div>
         </div>
       </section>
+
+      <PaymentAnalyticsPanel />
 
       {/* Workspace shortcuts */}
       <section className="mt-10">

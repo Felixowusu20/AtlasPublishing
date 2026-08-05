@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { articleTypes, submissionSteps } from "@/data/mock";
 import { useAuth } from "@/components/auth-provider";
+import { readApiJson, uploadFileDirect } from "@/lib/client-upload";
 import type { ArticleType } from "@/lib/types";
 
 type JournalOption = {
@@ -124,13 +125,10 @@ export function SubmissionWizard() {
     setLoading(true);
     setError("");
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("folder", "atlas/manuscripts");
-      fd.append("resourceType", "raw");
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(uploadData.error ?? "Upload failed");
+      const uploadData = await uploadFileDirect(file, {
+        folder: "atlas/manuscripts",
+        resourceType: "raw",
+      });
 
       const res = await fetch("/api/submissions", {
         method: "POST",
@@ -160,8 +158,12 @@ export function SubmissionWizard() {
           ],
         }),
       });
-      const data = await res.json();
+      const data = await readApiJson<{
+        error?: string;
+        submission?: { id: string; manuscriptId: string };
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Submission failed");
+      if (!data.submission) throw new Error("Submission failed");
       setSubmittedId(data.submission.id);
       setManuscriptId(data.submission.manuscriptId);
     } catch (err) {

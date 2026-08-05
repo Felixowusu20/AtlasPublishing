@@ -2,7 +2,7 @@
 
 Academic publishing platform for multi-journal manuscript submission, peer review, APC payment, production editing, Typst PDF generation, DOI hosting, and open publication.
 
-Built with **Next.js**, **Prisma**, **Neon PostgreSQL**, **Cloudinary**, **Stripe**, **Nodemailer**, and a **Typst** PDF engine.
+Built with **Next.js**, **Prisma**, **Neon PostgreSQL**, **Cloudinary**, **Paystack**, **Nodemailer**, and a **Typst** PDF engine.
 
 ---
 
@@ -52,7 +52,7 @@ Public readers browse journals, articles, search by keyword/DOI, and resolve Nah
 └──┬──────────┬──────────┬──────────┬──────────┬──────────────┘
    │          │          │          │          │
    ▼          ▼          ▼          ▼          ▼
-PostgreSQL  Cloudinary  Stripe    SMTP      Typst
+PostgreSQL  Cloudinary  Paystack  SMTP      Typst
   (Neon)    (uploads)  (APC)   (Gmail)   (PDF engine)
 ```
 
@@ -63,7 +63,7 @@ PostgreSQL  Cloudinary  Stripe    SMTP      Typst
 | Database | Neon PostgreSQL via Prisma 7 + `@prisma/adapter-pg` |
 | Auth | Custom JWT (`jose`) — author + admin sessions |
 | Files | Cloudinary (manuscripts, figures, PDFs, logos) |
-| Payments | Stripe Checkout (APC after acceptance) |
+| Payments | Paystack Checkout (APC after acceptance; international cards) |
 | Email | Nodemailer / Google SMTP |
 | PDF | Typst (`@myriaddreamin/typst-ts-node-compiler`) |
 | UI | Tailwind CSS, custom admin shell |
@@ -93,7 +93,7 @@ flowchart TB
   end
 
   subgraph External
-    Stripe[Stripe Checkout]
+    Paystack[Paystack Checkout]
     SMTP[Google SMTP]
   end
 
@@ -105,9 +105,9 @@ flowchart TB
   API --> CDN
   API --> PDF
   API --> Mail
-  API --> Stripe
+  API --> Paystack
   Mail --> SMTP
-  Stripe --> API
+  Paystack --> API
   PDF --> CDN
 ```
 
@@ -213,7 +213,7 @@ stateDiagram-v2
 flowchart TD
   A[Manuscript ACCEPTED] --> B{APC required?}
   B -->|No| C[apcPaymentStatus = NOT_REQUIRED]
-  B -->|Yes| D[Create Stripe Checkout]
+  B -->|Yes| D[Create Paystack Checkout]
   D --> E[Author pays]
   E --> F[apcPaymentStatus = PAID]
   D --> G[Admin waives]
@@ -235,7 +235,7 @@ sequenceDiagram
   participant DB
   participant Cloudinary
   participant Admin
-  participant Stripe
+  participant Paystack
   participant Email
 
   Author->>App: Register / login
@@ -249,8 +249,8 @@ sequenceDiagram
   alt Revisions requested
     Author->>App: Resubmit files + response
   else Accepted
-    Author->>Stripe: Pay APC
-    Stripe->>App: Confirm payment
+    Author->>Paystack: Pay APC
+    Paystack->>App: Confirm payment
     Admin->>App: Edit full manuscript + publish
     App->>Email: Congratulations + PDF links
   end
@@ -409,7 +409,7 @@ atlas-academic-publishing/
 cp .env.example .env
 ```
 
-Fill in Neon, auth, Cloudinary, SMTP, Stripe, and app URL values (see [Environment variables](#environment-variables)).
+Fill in Neon, auth, Cloudinary, SMTP, Paystack, and app URL values (see [Environment variables](#environment-variables)).
 
 ### 2. Install & database
 
@@ -475,11 +475,15 @@ Visit `/admin/register` **only when no super admin exists**, then use `/admin/lo
 | `AUTH_SECRET` | JWT signing secret |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Uploads |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Transactional email |
-| `NEXT_PUBLIC_APP_URL` | Canonical app URL (emails, Stripe redirects, DOI/article links) |
-| `STRIPE_SECRET_KEY` / `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | APC Checkout |
+| `NEXT_PUBLIC_APP_URL` | Canonical app URL (emails, Paystack redirects, DOI/article links) |
+| `PAYSTACK_SECRET_KEY` / `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | APC Checkout (secret used server-side) |
+| `PAYSTACK_CURRENCY` | Checkout currency (default `USD` for international cards) |
+| `PAYSTACK_RECEIPT_INBOX` | Optional inbox for Paystack’s own receipt (authors get Nahda’s USD receipt instead) |
 | `DEFAULT_APC_CENTS` | Fallback APC when journal has no amount |
 
 See `.env.example` for placeholders. Never commit real secrets.
+
+**APC receipts:** After payment, the app emails authors a branded Nahda Publications receipt in USD. To stop Paystack’s own receipt email, open [Paystack → Settings → Preferences](https://dashboard.paystack.com/#/settings/preferences) and turn off **Email receipts to customers** (you can still email receipts to yourself). Also set `PAYSTACK_RECEIPT_INBOX` (or rely on `SMTP_FROM`) so any Paystack notice goes to the publisher, not the author.
 
 ---
 

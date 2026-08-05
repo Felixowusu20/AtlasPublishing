@@ -5,6 +5,10 @@ import { prisma } from "@/lib/db";
 import { articleDownloadPath } from "@/lib/submission-utils";
 import { ArticleMetricsPanel } from "@/components/article-metrics";
 import { ArticleKeywords } from "@/components/article-keywords";
+import {
+  ArticleCitation,
+  buildCitationText,
+} from "@/components/article-citation";
 import { CiteActions } from "@/components/cite-actions";
 import { JsonLd } from "@/components/json-ld";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
@@ -219,9 +223,13 @@ function ArticleView({
     ? articleDownloadPath(article.slug)
     : null;
   const { local: doiLocal } = doiLinks(article.doi);
-  const citation = `${article.authors[0] ?? "Author"}${
-    article.authors.length > 1 ? " et al." : ""
-  }. ${article.title}. ${article.journalTitle}. ${article.publishedAt}. DOI: ${article.doi}`;
+  const citation = buildCitationText({
+    authors: article.authors,
+    title: article.title,
+    journalTitle: article.journalTitle,
+    publishedAt: article.publishedAt,
+    doi: article.doi,
+  });
   const related = article.relatedCards ?? [];
   const hasSections = Boolean(article.sections && article.sections.length > 0);
 
@@ -399,28 +407,30 @@ function ArticleView({
               )}
 
               {/* Citation footer */}
-              <section className="mt-12 rounded-xl bg-[var(--ink)] px-4 py-5 text-white sm:px-6">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">
-                  How to cite
-                </p>
-                <p className="mt-2 break-words text-[13px] leading-relaxed text-white/90">
-                  {citation}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {doiLocal ? (
-                    <a
-                      href={doiLocal}
-                      className="max-w-full break-all rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
-                    >
-                      {normalizeDoi(article.doi)}
-                    </a>
-                  ) : null}
-                  <span className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/80">
-                    {article.license}
-                    {article.openAccess ? " · Open Access" : ""}
-                  </span>
-                </div>
-              </section>
+              <ArticleCitation
+                className="mt-12"
+                variant="banner"
+                authors={article.authors}
+                title={article.title}
+                journalTitle={article.journalTitle}
+                journalSlug={article.journalSlug}
+                publishedAt={article.publishedAt}
+                doi={article.doi}
+              />
+              <div className="mt-4 flex flex-wrap gap-3">
+                {doiLocal ? (
+                  <a
+                    href={doiLocal}
+                    className="max-w-full break-all rounded-lg bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] ring-1 ring-[var(--accent)]/20 transition hover:bg-[var(--accent)] hover:text-white"
+                  >
+                    {normalizeDoi(article.doi)}
+                  </a>
+                ) : null}
+                <span className="rounded-lg bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] ring-1 ring-[var(--line)]">
+                  {article.license}
+                  {article.openAccess ? " · Open Access" : ""}
+                </span>
+              </div>
             </div>
 
             {/* Sidebar */}
@@ -468,27 +478,26 @@ function ArticleView({
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-2xl bg-gradient-to-b from-[var(--accent-soft)]/80 to-white shadow-sm ring-1 ring-[var(--accent)]/20">
-                  <div className="border-b border-[var(--accent)]/15 px-5 py-3.5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
-                      Cite this article
-                    </p>
-                  </div>
-                  <div className="p-5">
-                    <p className="rounded-xl bg-white/80 px-3.5 py-3 text-[12px] leading-relaxed text-[var(--ink)] ring-1 ring-[var(--line)]">
-                      {citation}
-                    </p>
-                    <div className="mt-4">
-                      <CiteActions
-                        citation={citation}
-                        doiHref={doiLocal}
-                        doiLabel={
-                          article.doi && article.doi !== "Pending"
-                            ? normalizeDoi(article.doi)
-                            : null
-                        }
-                      />
-                    </div>
+                <div className="overflow-hidden rounded-2xl shadow-sm ring-1 ring-[var(--accent)]/20">
+                  <ArticleCitation
+                    variant="card"
+                    authors={article.authors}
+                    title={article.title}
+                    journalTitle={article.journalTitle}
+                    journalSlug={article.journalSlug}
+                    publishedAt={article.publishedAt}
+                    doi={article.doi}
+                  />
+                  <div className="border-t border-[var(--line)] bg-white p-5">
+                    <CiteActions
+                      citation={citation}
+                      doiHref={doiLocal}
+                      doiLabel={
+                        article.doi && article.doi !== "Pending"
+                          ? normalizeDoi(article.doi)
+                          : null
+                      }
+                    />
                   </div>
                 </div>
 

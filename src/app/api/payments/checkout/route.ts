@@ -3,20 +3,24 @@ import { prisma } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import { formatApcAmount, needsApcPayment } from "@/lib/apc";
-import { ensureApcCheckout, markApcPaid } from "@/lib/apc-checkout";
-import { getStripe, stripeConfigured } from "@/lib/stripe";
+import { markApcPaid, prepareApcPayment } from "@/lib/apc-checkout";
+import {
+  paystackConfigured,
+  usdToPaystackAmount,
+  verifyPaystackTransaction,
+} from "@/lib/paystack";
 
 /**
- * Author: create or resume Stripe Checkout for an accepted manuscript APC.
+ * Author: prepare APC payment for the custom Nahda checkout (USD display).
  */
 export async function POST(request: Request) {
   const session = await requireUser(["AUTHOR"]);
   if (!session) return unauthorized();
 
   try {
-    if (!stripeConfigured()) {
+    if (!paystackConfigured()) {
       return jsonError(
-        "Stripe is not configured. Contact the editorial office.",
+        "Paystack is not configured. Contact the editorial office.",
         503,
       );
     }
@@ -47,20 +51,23 @@ export async function POST(request: Request) {
       return jsonOk({
         alreadyCleared: true,
         status: submission.apcPaymentStatus,
-        checkoutUrl: null,
         amountLabel: submission.payment
-          ? formatApcAmount(submission.payment.amountCents)
+          ? formatApcAmount(submission.payment.amountCents, "usd")
           : null,
       });
     }
 
-    const checkout = await ensureApcCheckout(submission);
+    const prepared = await prepareApcPayment(submission);
+    const cleared =
+      prepared.status === "PAID" ||
+      prepared.status === "NOT_REQUIRED" ||
+      prepared.status === "WAIVED";
     return jsonOk({
-      alreadyCleared: false,
-      status: checkout.status,
-      checkoutUrl: checkout.checkoutUrl,
-      amountCents: checkout.amountCents,
-      amountLabel: formatApcAmount(checkout.amountCents),
+      alreadyCleared: cleared,
+      status: prepared.status,
+      reference: prepared.reference ?? null,
+      amountCents: prepared.amountCents,
+      amountLabel: prepared.amountLabel,
     });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -75,25 +82,25 @@ export async function POST(request: Request) {
 }
 
 /**
- * Author: confirm payment after Stripe success redirect.
- * No webhook required — we ask Stripe if the Checkout Session is paid.
+ * Author: confirm payment after Paystack success redirect.
+ * No webhook required — we verify the transaction reference with Paystack.
  *
- * Body: { submissionId, sessionId? }
- * If sessionId is omitted, uses the stored stripeCheckoutSessionId.
+ * Body: { submissionId, reference? }
+ * If reference is omitted, uses the stored paystackReference.
  */
 export async function PUT(request: Request) {
   const session = await requireUser(["AUTHOR"]);
   if (!session) return unauthorized();
 
   try {
-    if (!stripeConfigured()) {
-      return jsonError("Stripe is not configured", 503);
+    if (!paystackConfigured()) {
+      return jsonError("Paystack is not configured", 503);
     }
 
     const body = z
       .object({
         submissionId: z.string().min(1),
-        sessionId: z.string().min(1).optional(),
+        reference: z.string().min(1).optional(),
       })
       .parse(await request.json());
 
@@ -110,42 +117,70 @@ export async function PUT(request: Request) {
       });
     }
 
-    const sessionId =
-      body.sessionId || submission.payment?.stripeCheckoutSessionId || null;
-    if (!sessionId) {
+    const reference =
+      body.reference || submission.payment?.paystackReference || null;
+    if (!reference) {
       return jsonError(
-        "No checkout session found. Click Pay now first.",
+        "No Paystack reference found. Click Pay now first.",
         400,
       );
     }
 
-    const stripe = getStripe();
-    const checkout = await stripe.checkout.sessions.retrieve(sessionId);
+    const verified = await verifyPaystackTransaction(reference);
 
-    if (
-      checkout.metadata?.submissionId &&
-      checkout.metadata.submissionId !== submission.id
-    ) {
-      return jsonError("Checkout session does not match this manuscript", 400);
+    const meta =
+      typeof verified.metadata === "object" && verified.metadata
+        ? verified.metadata
+        : {};
+    const metaSubmissionId =
+      typeof meta.submissionId === "string" ? meta.submissionId : null;
+    if (metaSubmissionId && metaSubmissionId !== submission.id) {
+      return jsonError("Payment does not match this manuscript", 400);
     }
 
-    if (checkout.payment_status !== "paid") {
+    if (verified.status !== "success") {
       return jsonError(
         "Payment not recorded yet. Finish checkout, then click I’ve paid.",
         400,
       );
     }
 
-    const paymentIntentId =
-      typeof checkout.payment_intent === "string"
-        ? checkout.payment_intent
-        : checkout.payment_intent?.id ?? null;
+    // Payment.amountCents is always USD; Paystack charges merchant currency after FX.
+    if (submission.payment && verified.amount > 0) {
+      const chargedCurrency = (verified.currency || "GHS").toUpperCase();
+      const expectedAmount = usdToPaystackAmount(
+        submission.payment.amountCents,
+        chargedCurrency,
+      );
+      const ok =
+        verified.amount === expectedAmount ||
+        (chargedCurrency === "USD" &&
+          verified.amount === submission.payment.amountCents);
+      if (!ok) {
+        const metaUsd =
+          typeof meta.usdCents === "string" ? Number(meta.usdCents) : NaN;
+        if (
+          !Number.isFinite(metaUsd) ||
+          metaUsd !== submission.payment.amountCents
+        ) {
+          // Allow ~1% FX rounding drift
+          const drift = Math.abs(verified.amount - expectedAmount);
+          if (drift > Math.max(100, expectedAmount * 0.01)) {
+            return jsonError(
+              "Paid amount does not match the APC for this manuscript",
+              400,
+            );
+          }
+        }
+      }
+    }
 
     const updated = await markApcPaid({
       submissionId: submission.id,
-      sessionId: checkout.id,
-      paymentIntentId,
-      customerEmail: checkout.customer_details?.email ?? checkout.customer_email,
+      reference: verified.reference,
+      accessCode: submission.payment?.paystackAccessCode,
+      customerEmail:
+        verified.customer?.email ?? submission.payment?.customerEmail,
     });
 
     return jsonOk({

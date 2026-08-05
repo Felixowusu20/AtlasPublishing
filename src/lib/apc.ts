@@ -6,7 +6,7 @@ const SUBSCRIPTION = /\bsubscription\b/i;
 
 /**
  * Parse a journal APC display string ("$1,200", "USD 850", "Free")
- * into Stripe amount cents. Returns 0 when payment is not required.
+ * into amount cents (Paystack subunit). Returns 0 when payment is not required.
  *
  * Open-access journals with blank or "Subscription" copy still use
  * DEFAULT_APC_CENTS (default $1,200) so accept → pay → production works.

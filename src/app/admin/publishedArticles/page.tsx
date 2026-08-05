@@ -9,6 +9,7 @@ import {
   ManuscriptEditor,
   type ManuscriptFigure,
 } from "@/components/manuscript-editor";
+import { uploadFileDirect } from "@/lib/client-upload";
 
 type QueueItem = {
   id: string;
@@ -271,14 +272,11 @@ export default function PublishedArticlesPage() {
     setUploadingLogo(true);
     setError("");
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("folder", "nahda/branding");
-      fd.append("resourceType", "image");
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Logo upload failed");
-      setForm((f) => ({ ...f, logoUrl: data.url as string }));
+      const data = await uploadFileDirect(file, {
+        folder: "nahda/branding",
+        resourceType: "image",
+      });
+      setForm((f) => ({ ...f, logoUrl: data.url }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Logo upload failed");
     } finally {

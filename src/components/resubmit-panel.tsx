@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { readApiJson, uploadFileDirect } from "@/lib/client-upload";
 
 type Props = {
   submissionId: string;
@@ -29,15 +30,10 @@ export function ResubmitPanel({ submissionId, manuscriptId, onDone }: Props) {
     setError("");
     setOk("");
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("folder", "atlas/manuscripts");
-      fd.append("resourceType", "raw");
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) {
-        throw new Error(uploadData.error ?? "Upload failed");
-      }
+      const uploadData = await uploadFileDirect(file, {
+        folder: "atlas/manuscripts",
+        resourceType: "raw",
+      });
 
       const res = await fetch(`/api/submissions/${submissionId}/resubmit`, {
         method: "POST",
@@ -48,14 +44,12 @@ export function ResubmitPanel({ submissionId, manuscriptId, onDone }: Props) {
           responseToReviewers: response,
         }),
       });
-      const data = await res.json();
+      const data = await readApiJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Resubmission failed");
 
       setFile(null);
       setResponse("");
-      setOk(
-        `${manuscriptId} resubmitted. It is back under review.`,
-      );
+      setOk(`${manuscriptId} resubmitted. It is back under review.`);
       onDone?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Resubmit failed");

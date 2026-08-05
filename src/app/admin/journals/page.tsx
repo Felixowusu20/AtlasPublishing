@@ -7,6 +7,7 @@ import {
   journalCardColor,
   nextJournalCoverColor,
 } from "@/lib/journal-colors";
+import { uploadFileDirect } from "@/lib/client-upload";
 
 type Journal = {
   id: string;
@@ -72,14 +73,10 @@ function formFromJournal(j: Journal): FormState {
 }
 
 async function uploadJournalLogo(file: File) {
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("folder", "nahda/journal-logos");
-  fd.append("resourceType", "image");
-  const res = await fetch("/api/upload", { method: "POST", body: fd });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Logo upload failed");
-  return data as { url: string; publicId: string };
+  return uploadFileDirect(file, {
+    folder: "nahda/journal-logos",
+    resourceType: "image",
+  });
 }
 
 export default function JournalsCmsPage() {

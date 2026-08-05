@@ -180,3 +180,30 @@ body {
 .auth-compact .btn-primary {
   padding: 0.55rem 1rem;
 }
+
+@keyframes paystack-favicon-pump {
+  0%,
+  100% {
+    transform: scale(0.92);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes paystack-load-bar {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.paystack-favicon-pump {
+  animation: paystack-favicon-pump 1.1s ease-in-out infinite;
+}
+
+.paystack-load-bar {
+  animation: paystack-load-bar 1.4s ease-in-out infinite;
+}

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useAdminAuth } from "@/components/admin-auth-provider";
+import { uploadFileDirect } from "@/lib/client-upload";
 
 type Slide = {
   id: string;
@@ -26,14 +27,10 @@ const emptyForm = {
 };
 
 async function uploadImage(file: File) {
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("folder", "atlas/hero");
-  fd.append("resourceType", "image");
-  const res = await fetch("/api/upload", { method: "POST", body: fd });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Upload failed");
-  return data as { url: string; publicId: string };
+  return uploadFileDirect(file, {
+    folder: "atlas/hero",
+    resourceType: "image",
+  });
 }
 
 export default function HeroCmsPage() {
