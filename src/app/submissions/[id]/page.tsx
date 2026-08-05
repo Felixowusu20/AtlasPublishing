@@ -7,6 +7,7 @@ import { RequireAuth } from "@/components/require-auth";
 import { ManuscriptViewer } from "@/components/manuscript-viewer";
 import { ResubmitPanel } from "@/components/resubmit-panel";
 import { ApcPayPanel } from "@/components/apc-pay-panel";
+import { NahdaLoader } from "@/components/nahda-loader";
 import {
   articleDownloadPath,
   canAuthorResubmit,
@@ -79,9 +80,7 @@ function Detail({ id }: { id: string }) {
   }
 
   if (!sub) {
-    return (
-      <p className="p-10 text-center text-sm text-[var(--muted)]">Loading…</p>
-    );
+    return <NahdaLoader variant="panel" label="Loading your manuscript…" />;
   }
 
   const isPublished = sub.status === "PUBLISHED";

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { NahdaLoader } from "@/components/nahda-loader";
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuth();
@@ -15,19 +16,11 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   }, [ready, user, router]);
 
   if (!ready) {
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-20 text-center text-sm text-[var(--muted)]">
-        Loading session…
-      </div>
-    );
+    return <NahdaLoader variant="screen" label="Loading your session…" />;
   }
 
   if (!user) {
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-20 text-center text-sm text-[var(--muted)]">
-        Redirecting to login…
-      </div>
-    );
+    return <NahdaLoader variant="screen" label="Redirecting to login…" />;
   }
 
   return <>{children}</>;

@@ -484,91 +484,76 @@ export function apcReceiptEmailHtml(opts: {
   reference?: string | null;
   receiptNumber: string;
   submissionUrl: string;
-  customerEmail?: string | null;
 }) {
-  const refRow = opts.reference
-    ? `<tr>
-        <td style="padding:8px 0;color:${BRAND.muted};font-size:13px">Payment reference</td>
-        <td style="padding:8px 0;text-align:right;font-size:13px;color:${BRAND.ink};font-family:ui-monospace,Menlo,monospace">${escapeHtml(opts.reference)}</td>
-      </tr>`
-    : "";
+  const row = (
+    label: string,
+    value: string,
+    opt: { mono?: boolean; last?: boolean } = {},
+  ) => {
+    const border = opt.last ? "" : `border-bottom:1px solid ${BRAND.line};`;
+    const mono = opt.mono
+      ? "font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;"
+      : "font-size:14px;";
+    return `<tr>
+      <td style="padding:11px 0;${border}color:${BRAND.muted};font-size:13px;white-space:nowrap">${label}</td>
+      <td style="padding:11px 0;${border}text-align:right;color:${BRAND.ink};${mono}">${value}</td>
+    </tr>`;
+  };
 
   return emailDocument({
-    title: "Payment receipt — Article processing charge",
+    title: "Payment receipt",
     bodyHtml: `
       <p style="margin:0 0 14px">Dear ${escapeHtml(opts.authorName)},</p>
-      <p style="margin:0 0 18px">
-        Thank you. We have received your article processing charge for
-        <strong>${escapeHtml(opts.title)}</strong>
-        (${escapeHtml(opts.manuscriptId)}). Your manuscript is now
+      <p style="margin:0 0 24px">
+        Thank you — your article processing charge has been received in full and
+        your manuscript is now
         <strong style="color:${BRAND.green}">in production</strong>.
       </p>
 
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 22px;border:1px solid ${BRAND.line};border-radius:10px;overflow:hidden">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 8px;border:1px solid ${BRAND.line};border-radius:12px;overflow:hidden">
         <tr>
-          <td style="background:${BRAND.green};padding:14px 18px">
-            <p style="margin:0;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.8);font-weight:700">
-              Official receipt
+          <td style="background:${BRAND.green};padding:22px 24px" align="center">
+            <p style="margin:0;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:rgba(255,255,255,0.75);font-weight:700">
+              Amount paid
             </p>
-            <p style="margin:6px 0 0;font-size:15px;color:#ffffff;font-weight:700">
-              ${escapeHtml(opts.receiptNumber)}
-            </p>
-          </td>
-          <td style="background:${BRAND.green};padding:14px 18px;text-align:right;vertical-align:middle">
-            <p style="margin:0;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75)">
-              Amount paid (USD)
-            </p>
-            <p style="margin:6px 0 0;font-size:26px;line-height:1;color:#ffffff;font-weight:700">
+            <p style="margin:8px 0 0;font-size:38px;line-height:1;color:#ffffff;font-weight:700;letter-spacing:-0.5px">
               ${escapeHtml(opts.amountLabel)}
+              <span style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.8)">USD</span>
+            </p>
+            <p style="margin:14px 0 0">
+              <span style="display:inline-block;background:rgba(255,255,255,0.16);color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;padding:6px 14px;border-radius:999px">
+                Paid
+              </span>
             </p>
           </td>
         </tr>
         <tr>
-          <td colspan="2" style="padding:18px 20px;background:#ffffff">
+          <td style="padding:6px 24px 20px;background:#ffffff">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-family:Georgia,'Times New Roman',serif">
-              <tr>
-                <td style="padding:8px 0;color:${BRAND.muted};font-size:13px;border-bottom:1px solid ${BRAND.line}">Status</td>
-                <td style="padding:8px 0;text-align:right;font-size:13px;font-weight:700;color:${BRAND.green};border-bottom:1px solid ${BRAND.line}">PAID</td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;color:${BRAND.muted};font-size:13px;border-bottom:1px solid ${BRAND.line}">Paid on</td>
-                <td style="padding:8px 0;text-align:right;font-size:13px;color:${BRAND.ink};border-bottom:1px solid ${BRAND.line}">${escapeHtml(opts.paidAtLabel)}</td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;color:${BRAND.muted};font-size:13px;border-bottom:1px solid ${BRAND.line}">Journal</td>
-                <td style="padding:8px 0;text-align:right;font-size:13px;color:${BRAND.ink};border-bottom:1px solid ${BRAND.line}">${escapeHtml(opts.journalTitle)}</td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;color:${BRAND.muted};font-size:13px;border-bottom:1px solid ${BRAND.line}">Manuscript</td>
-                <td style="padding:8px 0;text-align:right;font-size:13px;color:${BRAND.ink};border-bottom:1px solid ${BRAND.line}">${escapeHtml(opts.manuscriptId)}</td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;color:${BRAND.muted};font-size:13px;border-bottom:1px solid ${BRAND.line}">Article title</td>
-                <td style="padding:8px 0;text-align:right;font-size:13px;color:${BRAND.ink};border-bottom:1px solid ${BRAND.line}">${escapeHtml(opts.title)}</td>
-              </tr>
+              ${row("Receipt no.", escapeHtml(opts.receiptNumber), { mono: true })}
+              ${row("Paid on", escapeHtml(opts.paidAtLabel))}
+              ${row("Journal", escapeHtml(opts.journalTitle))}
+              ${row("Manuscript", escapeHtml(opts.manuscriptId), {
+                mono: true,
+                last: !opts.reference,
+              })}
               ${
-                opts.customerEmail
-                  ? `<tr>
-                <td style="padding:8px 0;color:${BRAND.muted};font-size:13px;border-bottom:1px solid ${BRAND.line}">Billed to</td>
-                <td style="padding:8px 0;text-align:right;font-size:13px;color:${BRAND.ink};border-bottom:1px solid ${BRAND.line}">${escapeHtml(opts.customerEmail)}</td>
-              </tr>`
+                opts.reference
+                  ? row("Reference", escapeHtml(opts.reference), {
+                      mono: true,
+                      last: true,
+                    })
                   : ""
               }
-              ${refRow}
-              <tr>
-                <td style="padding:12px 0 4px;color:${BRAND.muted};font-size:13px">Article processing charge</td>
-                <td style="padding:12px 0 4px;text-align:right;font-size:18px;font-weight:700;color:${BRAND.ink}">${escapeHtml(opts.amountLabel)} <span style="font-size:12px;font-weight:600;color:${BRAND.green}">USD</span></td>
-              </tr>
             </table>
           </td>
         </tr>
       </table>
 
-      <p style="margin:0;font-size:14px;color:${BRAND.muted}">
-        This is your official <strong style="color:${BRAND.ink}">Nahda Publications</strong> payment receipt.
-        The amount is stated in <strong style="color:${BRAND.green}">US dollars (USD)</strong>
-        according to this journal’s article processing charge.
-        Please keep this email for your records.
+      <p style="margin:18px 0 0;font-size:13px;color:${BRAND.muted}">
+        Amounts are stated in US dollars (USD) based on this journal’s article
+        processing charge. This email is your official receipt — no signature is
+        required.
       </p>
     `,
     cta: { href: opts.submissionUrl, label: "View your manuscript" },

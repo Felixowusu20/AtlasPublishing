@@ -181,7 +181,7 @@ body {
   padding: 0.55rem 1rem;
 }
 
-@keyframes paystack-favicon-pump {
+@keyframes nahda-favicon-pump {
   0%,
   100% {
     transform: scale(0.92);
@@ -191,7 +191,7 @@ body {
   }
 }
 
-@keyframes paystack-load-bar {
+@keyframes nahda-load-bar {
   0% {
     transform: translateX(-120%);
   }
@@ -200,10 +200,17 @@ body {
   }
 }
 
-.paystack-favicon-pump {
-  animation: paystack-favicon-pump 1.1s ease-in-out infinite;
+.nahda-favicon-pump {
+  animation: nahda-favicon-pump 1.1s ease-in-out infinite;
 }
 
-.paystack-load-bar {
-  animation: paystack-load-bar 1.4s ease-in-out infinite;
+.nahda-load-bar {
+  animation: nahda-load-bar 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nahda-favicon-pump,
+  .nahda-load-bar {
+    animation: none;
+  }
 }

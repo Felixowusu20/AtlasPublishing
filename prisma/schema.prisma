@@ -286,3 +286,50 @@ model Notification {
 
   @@index([userId, unread])
 }
+
+/// Editable site pages (About, Terms, Privacy) for Paystack / public trust.
+model CmsPage {
+  id              String         @id @default(cuid())
+  /// about | terms | privacy
+  slug            String         @unique
+  title           String
+  subtitle        String?
+  /// Plain text; blank lines separate paragraphs. Lines starting with "- " become bullets.
+  body            String
+  heroImageUrl    String?
+  heroImagePublicId String?
+  isActive        Boolean        @default(true)
+  images          CmsPageImage[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([slug])
+}
+
+model CmsPageImage {
+  id            String   @id @default(cuid())
+  pageId        String
+  page          CmsPage  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  imageUrl      String
+  imagePublicId String?
+  caption       String?
+  alt           String?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([pageId, sortOrder])
+}
+
+model FaqItem {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder])
+  @@index([isActive])
+}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState, use } from "react";
 import { ManuscriptViewer } from "@/components/manuscript-viewer";
+import { NahdaLoader } from "@/components/nahda-loader";
 import { uiStatus } from "@/lib/submission-utils";
 
 const statuses = [
@@ -142,7 +143,7 @@ export default function AdminSubmissionDetailPage({
   }
 
   if (!submission) {
-    return <p className="text-sm text-[var(--muted)]">Loading…</p>;
+    return <NahdaLoader variant="panel" label="Loading submission…" />;
   }
 
   return (

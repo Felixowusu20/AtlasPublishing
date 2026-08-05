@@ -7,6 +7,7 @@ import {
   ManuscriptEditor,
   type ManuscriptFigure,
 } from "@/components/manuscript-editor";
+import { NahdaLoader } from "@/components/nahda-loader";
 
 type QueueItem = {
   id: string;
@@ -228,9 +229,7 @@ function ManuscriptsPageInner() {
 
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         <aside>
-          {loading && (
-            <p className="text-sm text-[var(--muted)]">Loading…</p>
-          )}
+          {loading && <NahdaLoader variant="inline" label="Loading queue…" />}
           {!loading && queue.length === 0 && (
             <p className="text-sm text-[var(--muted)]">
               No accepted papers yet. Accept one from the inbox first.
@@ -394,9 +393,7 @@ function ManuscriptsPageInner() {
 export default function ManuscriptsPage() {
   return (
     <Suspense
-      fallback={
-        <p className="text-sm text-[var(--muted)]">Loading manuscripts…</p>
-      }
+      fallback={<NahdaLoader variant="panel" label="Loading manuscripts…" />}
     >
       <ManuscriptsPageInner />
     </Suspense>

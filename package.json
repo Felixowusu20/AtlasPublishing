@@ -16,7 +16,8 @@
     "db:studio": "prisma studio",
     "db:seed:jcm": "tsx prisma/seed-nahda-journals.ts",
     "postinstall": "prisma generate",
-    "db:seed:nahda": "tsx prisma/seed-nahda-journals.ts"
+    "db:seed:nahda": "tsx prisma/seed-nahda-journals.ts",
+    "db:seed:cms": "tsx scripts/seed-cms.ts"
   },
   "dependencies": {
     "@myriaddreamin/typst-ts-node-compiler": "^0.7.0",
