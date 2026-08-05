@@ -16,6 +16,7 @@ import {
   parseMarkdownTable,
   type WordTableModel,
 } from "@/components/word-table-editor";
+import { uploadFileDirect } from "@/lib/client-upload";
 
 export type ManuscriptFigure = {
   id: string;
@@ -530,15 +531,12 @@ export function ManuscriptEditor({
       let insertText = "";
 
       for (const file of images) {
-        const fd = new FormData();
-        fd.append("file", file);
-        fd.append("folder", "atlas/article-figures");
-        fd.append("resourceType", "image");
-        const res = await fetch("/api/upload", { method: "POST", body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Figure upload failed");
+        const data = await uploadFileDirect(file, {
+          folder: "atlas/article-figures",
+          resourceType: "image",
+        });
 
-        const url = data.url as string;
+        const url = data.url;
         const ext = (file.name.split(".").pop() || "png").toLowerCase();
         const id = `fig-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
         const filename = `${id}.${ext}`;

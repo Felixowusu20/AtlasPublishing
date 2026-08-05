@@ -8,10 +8,9 @@ import {
   reviewFeedbackEmailHtml,
   sendEmail,
 } from "@/lib/mail";
-import { formatApcAmount } from "@/lib/apc";
 import { ensureApcCheckout } from "@/lib/apc-checkout";
 import { getAppBaseUrl } from "@/lib/app-url";
-import { stripeConfigured } from "@/lib/stripe";
+import { paystackConfigured } from "@/lib/paystack";
 import type { SubmissionStatus } from "@/generated/prisma/client";
 
 type Params = { params: Promise<{ id: string }> };
@@ -156,12 +155,12 @@ export async function POST(request: Request, { params }: Params) {
     let checkoutUrl: string | null = null;
     let apcAmountLabel: string | null = null;
 
-    // On accept: create Stripe Checkout and email the pay link
+    // On accept: create Paystack Checkout and email the pay link
     if (status === "ACCEPTED") {
       try {
-        if (!stripeConfigured()) {
+        if (!paystackConfigured()) {
           console.warn(
-            "[accept-apc] STRIPE_SECRET_KEY missing — author must use Pay APC once keys are set",
+            "[accept-apc] PAYSTACK_SECRET_KEY missing — author must use Pay APC once keys are set",
           );
         }
         const checkout = await ensureApcCheckout({
@@ -173,9 +172,7 @@ export async function POST(request: Request, { params }: Params) {
         });
         checkoutUrl = checkout.checkoutUrl;
         apcAmountLabel =
-          checkout.amountCents > 0
-            ? formatApcAmount(checkout.amountCents)
-            : null;
+          checkout.amountCents > 0 ? checkout.amountLabel : null;
 
         const refreshed = await prisma.submission.findUnique({
           where: { id },
@@ -196,6 +193,19 @@ export async function POST(request: Request, { params }: Params) {
         if (refreshed) latestSubmission = refreshed;
       } catch (apcErr) {
         console.error("[accept-apc] checkout setup failed", apcErr);
+        // Still mark APC pending so author can pay from the submission page once currency works
+        try {
+          await prisma.submission.update({
+            where: { id },
+            data: {
+              apcPaymentStatus: "PENDING",
+              actionRequired:
+                "Your manuscript was accepted. Open this page and click Pay now to complete the APC.",
+            },
+          });
+        } catch (pendingErr) {
+          console.error("[accept-apc] could not set PENDING", pendingErr);
+        }
       }
     }
 
@@ -219,6 +229,55 @@ export async function POST(request: Request, { params }: Params) {
             checkoutUrl,
             "",
             `Or open: ${base}/submissions/${id}`,
+          ].join("\n"),
+        });
+        emailSent = mail.ok;
+      } else if (
+        status === "ACCEPTED" &&
+        latestSubmission.apcPaymentStatus === "PENDING"
+      ) {
+        // Accepted but checkout URL missing (e.g. temporary Paystack error) — still notify author
+        const mail = await sendEmail({
+          to: submission.author.email,
+          subject: `Accepted: pay APC for ${submission.manuscriptId}`,
+          html: apcPaymentEmailHtml({
+            authorName: submission.author.name,
+            title: submission.title,
+            manuscriptId: submission.manuscriptId,
+            journalTitle: submission.journal.title,
+            amountLabel: apcAmountLabel ?? "APC",
+            checkoutUrl: `${base}/submissions/${id}`,
+            submissionUrl: `${base}/submissions/${id}`,
+          }),
+          text: [
+            `Your manuscript ${submission.manuscriptId} was accepted.`,
+            `Please open your submission and click Pay now to complete the APC:`,
+            `${base}/submissions/${id}`,
+          ].join("\n"),
+        });
+        emailSent = mail.ok;
+      } else if (
+        status === "ACCEPTED" &&
+        (latestSubmission.apcPaymentStatus === "NOT_REQUIRED" ||
+          latestSubmission.apcPaymentStatus === "WAIVED" ||
+          latestSubmission.apcPaymentStatus === "PAID")
+      ) {
+        const mail = await sendEmail({
+          to: submission.author.email,
+          subject: `Accepted: ${submission.manuscriptId} is in production`,
+          html: reviewFeedbackEmailHtml({
+            authorName: submission.author.name,
+            title: submission.title,
+            status: "Accepted — in production",
+            message:
+              body.message ||
+              "Your manuscript was accepted and does not require further APC payment. It is now in production.",
+            manuscriptId: submission.manuscriptId,
+            submissionUrl: `${base}/submissions/${id}`,
+          }),
+          text: [
+            `Your manuscript ${submission.manuscriptId} was accepted and is in production.`,
+            `${base}/submissions/${id}`,
           ].join("\n"),
         });
         emailSent = mail.ok;

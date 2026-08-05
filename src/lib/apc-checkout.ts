@@ -3,9 +3,17 @@ import {
   formatApcAmount,
   parseApcAmountCents,
 } from "@/lib/apc";
-import { appBaseUrl, getStripe } from "@/lib/stripe";
+import {
+  appBaseUrl,
+  getMerchantCurrencies,
+  makePaystackReference,
+  resolvePaystackCharge,
+  usdToPaystackAmount,
+  verifyPaystackTransaction,
+} from "@/lib/paystack";
 import { progressForStatus } from "@/lib/submission-utils";
 import { notifyAdmins } from "@/lib/notify-admins";
+import { apcReceiptEmailHtml, sendEmail } from "@/lib/mail";
 import type { Journal, Payment, Submission } from "@/generated/prisma/client";
 
 type SubmissionWithJournal = Submission & {
@@ -15,22 +23,37 @@ type SubmissionWithJournal = Submission & {
 };
 
 /**
- * After accept: create/update Payment row and a Stripe Checkout Session.
+ * After accept: create/update Payment row for custom Nahda checkout (Paystack Charge).
  * If APC is $0, marks NOT_REQUIRED and moves the paper to IN_PRODUCTION.
+ * Does not open Paystack's hosted popup — authors pay on our branded form.
  */
-export async function ensureApcCheckout(
+export async function prepareApcPayment(
   submission: SubmissionWithJournal,
 ): Promise<{
-  checkoutUrl: string | null;
   amountCents: number;
+  amountLabel: string;
   status: string;
   paymentId: string | null;
+  reference: string | null;
+  authorEmail: string | null;
+  chargedAmount: number;
+  chargedCurrency: string;
 }> {
-  const amountCents = parseApcAmountCents(submission.journal.apc, {
+  const usdCents = parseApcAmountCents(submission.journal.apc, {
     openAccess: submission.journal.openAccess,
   });
+  // Author-facing label always USD; gateway charge uses merchant settlement currency
+  const display = resolvePaystackCharge(usdCents);
+  const merchantCurrencies = await getMerchantCurrencies();
+  const gatewayCurrency = (
+    merchantCurrencies.find((c) => c !== "USD") ||
+    merchantCurrencies[0] ||
+    "GHS"
+  ).toUpperCase();
+  const gatewayAmount = usdToPaystackAmount(usdCents, gatewayCurrency);
+  const displayCurrency = "usd";
 
-  if (amountCents <= 0) {
+  if (usdCents <= 0) {
     await prisma.$transaction([
       prisma.submission.update({
         where: { id: submission.id },
@@ -47,39 +70,42 @@ export async function ensureApcCheckout(
         create: {
           submissionId: submission.id,
           amountCents: 0,
-          currency: "usd",
+          currency: displayCurrency,
           status: "NOT_REQUIRED",
         },
         update: {
           amountCents: 0,
+          currency: displayCurrency,
           status: "NOT_REQUIRED",
           paidAt: null,
         },
       }),
     ]);
     return {
-      checkoutUrl: null,
       amountCents: 0,
+      amountLabel: formatApcAmount(0, "usd"),
       status: "NOT_REQUIRED",
       paymentId: null,
+      reference: null,
+      authorEmail: submission.author?.email ?? null,
+      chargedAmount: 0,
+      chargedCurrency: gatewayCurrency,
     };
   }
 
-  const stripe = getStripe();
-  const base = appBaseUrl();
-  const amountLabel = formatApcAmount(amountCents);
+  const amountLabel = display.label;
 
   const payment = await prisma.payment.upsert({
     where: { submissionId: submission.id },
     create: {
       submissionId: submission.id,
-      amountCents,
-      currency: "usd",
+      amountCents: usdCents,
+      currency: displayCurrency,
       status: "PENDING",
     },
     update: {
-      amountCents,
-      currency: "usd",
+      amountCents: usdCents,
+      currency: displayCurrency,
       status: "PENDING",
       paidAt: null,
       waivedAt: null,
@@ -91,82 +117,105 @@ export async function ensureApcCheckout(
     data: {
       apcPaymentStatus: "PENDING",
       apcPaidAt: null,
+      status: "ACCEPTED",
+      progress: progressForStatus("ACCEPTED"),
       actionRequired: `Please pay the article processing charge (${amountLabel}) to continue to production.`,
     },
   });
 
-  if (payment.stripeCheckoutSessionId) {
+  if (payment.paystackReference) {
     try {
-      const existing = await stripe.checkout.sessions.retrieve(
-        payment.stripeCheckoutSessionId,
-      );
-      if (
-        existing.status === "open" &&
-        typeof existing.url === "string" &&
-        existing.url
-      ) {
+      const existing = await verifyPaystackTransaction(payment.paystackReference);
+      if (existing.status === "success") {
+        await markApcPaid({
+          submissionId: submission.id,
+          reference: existing.reference,
+          accessCode: payment.paystackAccessCode,
+          customerEmail: submission.author?.email,
+        });
         return {
-          checkoutUrl: existing.url,
-          amountCents,
-          status: "PENDING",
+          amountCents: usdCents,
+          amountLabel,
+          status: "PAID",
           paymentId: payment.id,
+          reference: existing.reference,
+          authorEmail: submission.author?.email ?? null,
+          chargedAmount: gatewayAmount,
+          chargedCurrency: gatewayCurrency,
         };
       }
     } catch {
-      // create a fresh session below
+      // Fresh charge below
     }
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer_email: submission.author?.email,
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: amountCents,
-          product_data: {
-            name: `APC: ${submission.journal.shortTitle || submission.journal.title}`,
-            description: `${submission.manuscriptId}: ${submission.title}`.slice(
-              0,
-              500,
-            ),
-          },
-        },
-      },
-    ],
-    metadata: {
-      submissionId: submission.id,
-      manuscriptId: submission.manuscriptId,
-      paymentId: payment.id,
-    },
-    success_url: `${base}/submissions/${submission.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${base}/submissions/${submission.id}?payment=cancelled`,
-  });
+  const email = submission.author?.email?.trim() || null;
+  const reference = makePaystackReference(payment.id);
 
   await prisma.payment.update({
     where: { id: payment.id },
-    data: { stripeCheckoutSessionId: session.id },
+    data: {
+      paystackReference: reference,
+      paystackAccessCode: null,
+      customerEmail: email,
+      amountCents: usdCents,
+      currency: displayCurrency,
+    },
   });
 
-  if (!session.url) {
-    throw new Error("Stripe Checkout Session was created without a URL");
-  }
-
   return {
-    checkoutUrl: session.url,
-    amountCents,
+    amountCents: usdCents,
+    amountLabel,
     status: "PENDING",
     paymentId: payment.id,
+    reference,
+    authorEmail: email,
+    chargedAmount: gatewayAmount,
+    chargedCurrency: gatewayCurrency,
   };
+}
+
+/** @deprecated Prefer prepareApcPayment — kept for any lingering popup callers. */
+export async function ensureApcCheckout(
+  submission: SubmissionWithJournal,
+): Promise<{
+  checkoutUrl: string | null;
+  accessCode?: string | null;
+  reference?: string | null;
+  amountCents: number;
+  amountLabel: string;
+  status: string;
+  paymentId: string | null;
+}> {
+  const prepared = await prepareApcPayment(submission);
+  return {
+    checkoutUrl: null,
+    accessCode: null,
+    reference: prepared.reference,
+    amountCents: prepared.amountCents,
+    amountLabel: prepared.amountLabel,
+    status: prepared.status,
+    paymentId: prepared.paymentId,
+  };
+}
+
+/** Inbox for Paystack’s own notices (authors get Nahda receipt instead). */
+export function paystackNotifyEmail(authorEmail: string): string {
+  return (
+    (process.env.PAYSTACK_RECEIPT_INBOX ?? "").trim() ||
+    (process.env.SMTP_FROM ?? "")
+      .replace(/^.*<([^>]+)>.*$/, "$1")
+      .trim() ||
+    (process.env.SMTP_USER ?? "").trim() ||
+    authorEmail
+  );
 }
 
 /** Mark APC paid and move the manuscript to IN_PRODUCTION (publish queue). */
 export async function markApcPaid(opts: {
   submissionId: string;
-  sessionId?: string | null;
-  paymentIntentId?: string | null;
+  reference?: string | null;
+  accessCode?: string | null;
   customerEmail?: string | null;
   receiptUrl?: string | null;
 }) {
@@ -195,25 +244,39 @@ export async function markApcPaid(opts: {
     return submission;
   }
 
+  // USD amount from journal APC (admin panel). Prefer stored checkout amount when set.
+  const journalUsdCents = parseApcAmountCents(submission.journal.apc, {
+    openAccess: submission.journal.openAccess,
+  });
+  const amountCents =
+    submission.payment?.amountCents && submission.payment.amountCents > 0
+      ? submission.payment.amountCents
+      : journalUsdCents;
+  const amountLabel = formatApcAmount(amountCents, "usd");
+  const currency = "usd";
+  const authorReceiptEmail = submission.author.email;
+
   const updated = await prisma.$transaction(async (tx) => {
     await tx.payment.upsert({
       where: { submissionId: opts.submissionId },
       create: {
         submissionId: opts.submissionId,
-        amountCents: submission.payment?.amountCents ?? 0,
-        currency: "usd",
+        amountCents,
+        currency,
         status: "PAID",
-        stripeCheckoutSessionId: opts.sessionId ?? undefined,
-        stripePaymentIntentId: opts.paymentIntentId ?? undefined,
-        stripeCustomerEmail: opts.customerEmail ?? undefined,
+        paystackReference: opts.reference ?? undefined,
+        paystackAccessCode: opts.accessCode ?? undefined,
+        customerEmail: authorReceiptEmail,
         receiptUrl: opts.receiptUrl ?? undefined,
         paidAt: new Date(),
       },
       update: {
         status: "PAID",
-        stripeCheckoutSessionId: opts.sessionId ?? undefined,
-        stripePaymentIntentId: opts.paymentIntentId ?? undefined,
-        stripeCustomerEmail: opts.customerEmail ?? undefined,
+        amountCents,
+        currency,
+        paystackReference: opts.reference ?? undefined,
+        paystackAccessCode: opts.accessCode ?? undefined,
+        customerEmail: authorReceiptEmail,
         receiptUrl: opts.receiptUrl ?? undefined,
         paidAt: new Date(),
       },
@@ -236,17 +299,73 @@ export async function markApcPaid(opts: {
         userId: sub.authorId,
         submissionId: sub.id,
         title: "Payment received",
-        body: `Payment for “${sub.title}” was received. Your manuscript is now in production.`,
+        body: `Payment of ${amountLabel} USD for “${sub.title}” was received. Your manuscript is now in production.`,
       },
     });
 
     return sub;
   });
 
+  const base = appBaseUrl();
+  const paidAt = updated.payment?.paidAt ?? new Date();
+  const receiptNumber = `NPR-${updated.manuscriptId.replace(/[^A-Za-z0-9]/g, "").slice(0, 12)}-${paidAt.getTime().toString(36).toUpperCase()}`;
+
+  try {
+    const mail = await sendEmail({
+      to: updated.author.email,
+      subject: `Nahda Publications receipt: ${updated.manuscriptId} — ${amountLabel} USD`,
+      html: apcReceiptEmailHtml({
+        authorName: updated.author.name,
+        title: updated.title,
+        manuscriptId: updated.manuscriptId,
+        journalTitle: updated.journal.title,
+        amountLabel,
+        paidAtLabel: paidAt.toLocaleString("en-US", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }),
+        reference: opts.reference ?? updated.payment?.paystackReference,
+        receiptNumber,
+        submissionUrl: `${base}/submissions/${updated.id}`,
+        customerEmail: updated.author.email,
+      }),
+      text: [
+        `Nahda Publications — APC payment receipt`,
+        ``,
+        `Receipt: ${receiptNumber}`,
+        `Status: PAID`,
+        `Amount paid (USD): ${amountLabel}`,
+        `Journal: ${updated.journal.title}`,
+        `Manuscript: ${updated.manuscriptId}`,
+        `Title: ${updated.title}`,
+        `Paid on: ${paidAt.toISOString()}`,
+        opts.reference ? `Reference: ${opts.reference}` : "",
+        ``,
+        `Your manuscript is now in production.`,
+        `${base}/submissions/${updated.id}`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+    if (mail.skipped) {
+      console.warn(
+        "[apc-receipt] SMTP not configured — Nahda receipt was not emailed",
+      );
+    } else if (!mail.ok) {
+      console.error("[apc-receipt] send failed", mail.error);
+    } else {
+      console.info(
+        `[apc-receipt] sent Nahda USD receipt to ${updated.author.email}`,
+      );
+    }
+  } catch (err) {
+    console.error("[apc-receipt] email failed", err);
+  }
+
   void notifyAdmins({
     submissionId: updated.id,
     title: "APC payment received",
-    body: `${updated.author.name} paid the APC for “${updated.title}” (${updated.manuscriptId}). Ready for production.`,
+    body: `${updated.author.name} paid ${amountLabel} USD APC for “${updated.title}” (${updated.manuscriptId}). Ready for production.`,
   }).catch((err) => console.error("[notify-admins apc]", err));
 
   return updated;
