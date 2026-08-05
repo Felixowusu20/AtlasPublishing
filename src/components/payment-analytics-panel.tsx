@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { NahdaLoader } from "@/components/nahda-loader";
 
 const PALETTE = [
   "#1e6847",
@@ -316,9 +317,7 @@ export function PaymentAnalyticsPanel() {
 
         <div className="p-4 sm:p-5">
           {loading && !data ? (
-            <p className="py-12 text-center text-sm text-[var(--muted)]">
-              Loading payment analytics…
-            </p>
+            <NahdaLoader variant="panel" label="Loading payment analytics…" />
           ) : error ? (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
               {error}

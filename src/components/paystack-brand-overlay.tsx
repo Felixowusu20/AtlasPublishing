@@ -65,7 +65,7 @@ export function PaystackBrandOverlay({ open, status, amountLabel }: Props) {
               <img
                 src="/favicon.png"
                 alt=""
-                className="paystack-favicon-pump relative h-16 w-16 rounded-2xl object-cover shadow-xl ring-2 ring-white/30"
+                className="nahda-favicon-pump relative h-16 w-16 rounded-2xl object-cover shadow-xl ring-2 ring-white/30"
               />
             </div>
 
@@ -86,7 +86,7 @@ export function PaystackBrandOverlay({ open, status, amountLabel }: Props) {
             </p>
 
             <div className="mt-8 h-1.5 w-48 overflow-hidden rounded-full bg-white/10">
-              <div className="paystack-load-bar h-full w-1/2 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--brand-orange)]" />
+              <div className="nahda-load-bar h-full w-1/2 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--brand-orange)]" />
             </div>
           </div>
         </div>

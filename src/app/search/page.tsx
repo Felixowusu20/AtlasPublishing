@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { ArticleListingCard } from "@/components/article-listing-card";
+import { NahdaLoader } from "@/components/nahda-loader";
 
 type SearchArticle = {
   id: string;
@@ -325,7 +326,7 @@ export default function SearchPage() {
       fallback={
         <div className="page-wrap">
           <h1 className="page-title">Search</h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">Loading search…</p>
+          <NahdaLoader variant="panel" label="Loading search…" />
         </div>
       }
     >

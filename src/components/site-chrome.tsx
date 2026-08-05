@@ -80,6 +80,8 @@ function useNavItems(journals: NavJournal[]): NavItem[] {
           { label: "Help centre & FAQ", href: "/help" },
           { label: "Contact support", href: "/help#contact" },
           { label: "About Nahda", href: "/about" },
+          { label: "Terms & Conditions", href: "/terms" },
+          { label: "Privacy Policy", href: "/privacy" },
         ],
       },
     ],
@@ -565,19 +567,33 @@ export function SiteFooter() {
           ]}
         />
         <FooterCol
-          title="Account"
+          title="Trust & support"
           links={[
-            ["/login", "Sign in"],
-            ["/register", "Register"],
-            ["/dashboard", "Dashboard"],
             ["/help", "Help & FAQ"],
+            ["/terms", "Terms & Conditions"],
+            ["/privacy", "Privacy Policy"],
+            ["/login", "Sign in"],
           ]}
         />
       </div>
       <div className="border-t border-white/10">
-        <p className="mx-auto max-w-6xl px-4 py-4 text-xs text-slate-500 sm:px-6">
-          © 2026 Nahda Publications.
-        </p>
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p>© 2026 Nahda Publications.</p>
+          <p className="flex flex-wrap gap-x-3 gap-y-1">
+            <Link href="/terms" className="hover:text-white">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:text-white">
+              Privacy
+            </Link>
+            <Link href="/help" className="hover:text-white">
+              FAQ
+            </Link>
+            <Link href="/about" className="hover:text-white">
+              About
+            </Link>
+          </p>
+        </div>
       </div>
     </footer>
   );

@@ -327,7 +327,6 @@ export async function markApcPaid(opts: {
         reference: opts.reference ?? updated.payment?.paystackReference,
         receiptNumber,
         submissionUrl: `${base}/submissions/${updated.id}`,
-        customerEmail: updated.author.email,
       }),
       text: [
         `Nahda Publications — APC payment receipt`,

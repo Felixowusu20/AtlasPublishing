@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { NahdaLoader } from "@/components/nahda-loader";
 import { uiStatus } from "@/lib/submission-utils";
 
 type Submission = {
@@ -138,9 +139,7 @@ export default function AdminSubmissionsPage() {
       )}
 
       <div className="mt-6 space-y-3">
-        {loading && (
-          <p className="text-sm text-[var(--muted)]">Loading inbox…</p>
-        )}
+        {loading && <NahdaLoader variant="panel" label="Loading inbox…" />}
         {!loading && submissions.length === 0 && (
           <p className="rounded-xl border border-[var(--line)] bg-white p-8 text-center text-sm text-[var(--muted)]">
             No submissions yet.

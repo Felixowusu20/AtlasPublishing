@@ -9,6 +9,7 @@ import {
   ManuscriptEditor,
   type ManuscriptFigure,
 } from "@/components/manuscript-editor";
+import { NahdaLoader } from "@/components/nahda-loader";
 import { uploadFileDirect } from "@/lib/client-upload";
 
 type QueueItem = {
@@ -588,7 +589,7 @@ export default function PublishedArticlesPage() {
             Accepted queue
           </h2>
           {loading && (
-            <p className="mt-3 text-sm text-[var(--muted)]">Loading…</p>
+            <NahdaLoader variant="inline" label="Loading accepted queue…" />
           )}
           {!loading && queue.length === 0 && (
             <p className="mt-3 rounded-xl border border-dashed border-[var(--line)] bg-white p-4 text-sm text-[var(--muted)]">

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { NahdaLoader } from "@/components/nahda-loader";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
 import { ResubmitPanel } from "@/components/resubmit-panel";
@@ -311,7 +312,7 @@ function DashboardInner() {
 
             <div className="mt-4 space-y-3">
               {loading && (
-                <p className="text-sm text-[var(--muted)]">Loading manuscripts…</p>
+                <NahdaLoader variant="panel" label="Loading manuscripts…" />
               )}
               {!loading && filtered.length === 0 && (
                 <div className="card px-6 py-12 text-center">

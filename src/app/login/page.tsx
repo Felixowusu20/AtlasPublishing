@@ -8,6 +8,7 @@ import {
   AUTH_IMAGES,
   AuthSplitLayout,
 } from "@/components/auth-split-layout";
+import { NahdaLoader } from "@/components/nahda-loader";
 import { PasswordField } from "@/components/password-field";
 
 function LoginForm() {
@@ -105,7 +106,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="grid h-dvh place-items-center text-sm">Loading…</div>}>
+    <Suspense
+      fallback={
+        <div className="grid h-dvh place-items-center">
+          <NahdaLoader variant="panel" label="Loading sign in…" />
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

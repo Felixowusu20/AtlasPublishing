@@ -83,7 +83,7 @@ export function CookieConsent() {
             to improve your experience on Nahda Publications. You can accept all
             cookies or reject non-essential ones.{" "}
             <Link
-              href="/help"
+              href="/privacy"
               className="font-semibold text-[var(--accent)] underline-offset-2 hover:underline"
             >
               Learn more

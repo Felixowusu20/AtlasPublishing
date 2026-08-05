@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { NahdaLoader } from "@/components/nahda-loader";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 
 type BinArticle = {
@@ -185,7 +186,7 @@ export default function RecycleBinPage() {
       )}
 
       {loading && (
-        <p className="mt-6 text-sm text-[var(--muted)]">Loading recycle bin…</p>
+        <NahdaLoader variant="panel" label="Loading recycle bin…" />
       )}
 
       {empty && (
