@@ -42,8 +42,8 @@ export function NahdaCheckoutModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [hint, setHint] = useState("");
-  const [reference, setReference] = useState<string | null>(null);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
+  const referenceRef = useRef<string | null>(null);
 
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -61,7 +61,7 @@ export function NahdaCheckoutModal({
       setBusy(false);
       setError("");
       setHint("");
-      setReference(null);
+      referenceRef.current = null;
       setAuthUrl(null);
       setCardNumber("");
       setExpiry("");
@@ -83,6 +83,11 @@ export function NahdaCheckoutModal({
     };
   }, []);
 
+  function rememberReference(value: string | null | undefined) {
+    if (!value) return;
+    referenceRef.current = value;
+  }
+
   function applyChargeResult(data: {
     paid?: boolean;
     status?: string;
@@ -90,7 +95,7 @@ export function NahdaCheckoutModal({
     reference?: string;
     authUrl?: string | null;
   }) {
-    if (data.reference) setReference(data.reference);
+    rememberReference(data.reference);
     if (data.paid || data.status === "success") {
       if (pollRef.current) {
         clearInterval(pollRef.current);
@@ -124,10 +129,10 @@ export function NahdaCheckoutModal({
     if (status === "open_url" && data.authUrl) {
       setAuthUrl(data.authUrl);
       setStep("3ds");
-      // Poll until bank auth completes
+      const pollReference = data.reference || referenceRef.current;
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = setInterval(() => {
-        void continueCharge("check");
+        void continueCharge("check", pollReference);
       }, 3000);
       return;
     }
@@ -190,8 +195,10 @@ export function NahdaCheckoutModal({
 
   async function continueCharge(
     action: "pin" | "otp" | "birthday" | "phone" | "check",
+    referenceOverride?: string | null,
   ) {
-    if (!reference) {
+    const ref = referenceOverride || referenceRef.current;
+    if (!ref) {
       setError("Missing payment reference. Start again.");
       setStep("card");
       return;
@@ -208,7 +215,7 @@ export function NahdaCheckoutModal({
         body: JSON.stringify({
           action,
           submissionId,
-          reference,
+          reference: ref,
           pin: action === "pin" ? pin : undefined,
           otp: action === "otp" ? otp : undefined,
           birthday: action === "birthday" ? birthday : undefined,

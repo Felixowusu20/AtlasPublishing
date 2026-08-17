@@ -453,6 +453,19 @@ export async function chargePaystackInSupportedCurrency(opts: {
         card: opts.card,
         metadata: opts.metadata,
       });
+      if (
+        isCurrencyUnsupported(data.message) ||
+        isCurrencyUnsupported(data.gateway_response) ||
+        isCurrencyUnsupported(data.display_text)
+      ) {
+        lastError = new Error(
+          data.message || data.gateway_response || "Currency not supported",
+        );
+        console.warn(
+          `[paystack] ${attempt.currency} not supported — trying next`,
+        );
+        continue;
+      }
       console.info(
         `[paystack] charged in ${attempt.currency} (APC ${usdLabel} USD)`,
       );

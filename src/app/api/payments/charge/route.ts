@@ -242,15 +242,17 @@ export async function POST(request: Request) {
     });
 
     const mapped = mapChargeResponse(data);
+    const reference = mapped.reference || data.reference;
     if (mapped.paid) {
       const done = await finalizeIfPaid({
         submissionId: submission.id,
-        reference: data.reference,
+        reference,
         authorEmail,
       });
       return jsonOk({
         ...mapped,
         ...done,
+        reference,
         amountLabel: prepared.amountLabel,
         currency: DISPLAY_CURRENCY,
         merchant: NAHDA_MERCHANT_NAME,
@@ -259,6 +261,7 @@ export async function POST(request: Request) {
 
     return jsonOk({
       ...mapped,
+      reference,
       amountLabel: prepared.amountLabel,
       currency: DISPLAY_CURRENCY,
       merchant: NAHDA_MERCHANT_NAME,
