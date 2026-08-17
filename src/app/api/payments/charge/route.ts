@@ -9,11 +9,9 @@ import {
   prepareApcPayment,
 } from "@/lib/apc-checkout";
 import {
-  chargePaystackCard,
+  chargePaystackInSupportedCurrency,
   checkPaystackCharge,
-  makePaystackReference,
   paystackConfigured,
-  resolvePaystackCharge,
   submitPaystackBirthday,
   submitPaystackOtp,
   submitPaystackPhone,
@@ -214,29 +212,16 @@ export async function POST(request: Request) {
       return jsonError("Could not prepare payment", 500);
     }
 
-    // Fresh reference for each charge attempt (Paystack refs are one-shot)
-    const reference = makePaystackReference(prepared.paymentId);
-    await prisma.payment.update({
-      where: { id: prepared.paymentId },
-      data: { paystackReference: reference },
-    });
-
-    const chargeMeta = resolvePaystackCharge(
-      prepared.amountCents,
-      DISPLAY_CURRENCY,
-    );
-    const chargedAmount =
-      prepared.chargedCurrency?.toUpperCase() === "USD" &&
-      prepared.chargedAmount > 0
-        ? prepared.chargedAmount
-        : chargeMeta.amount;
-    const chargedCurrency = "USD";
-
-    const data = await chargePaystackCard({
+    const data = await chargePaystackInSupportedCurrency({
       email: paystackNotifyEmail(authorEmail),
-      amount: chargedAmount,
-      currency: chargedCurrency,
-      reference,
+      usdCents: prepared.amountCents,
+      paymentId: prepared.paymentId,
+      persistReference: async (reference) => {
+        await prisma.payment.update({
+          where: { id: prepared.paymentId },
+          data: { paystackReference: reference },
+        });
+      },
       card: {
         number: body.card.number,
         cvv: body.card.cvv,
@@ -259,7 +244,7 @@ export async function POST(request: Request) {
     if (mapped.paid) {
       const done = await finalizeIfPaid({
         submissionId: submission.id,
-        reference,
+        reference: data.reference,
         authorEmail,
       });
       return jsonOk({
@@ -282,9 +267,11 @@ export async function POST(request: Request) {
       return jsonError(err.issues[0]?.message ?? "Invalid input");
     }
     console.error("[payments/charge]", err);
-    return jsonError(
-      err instanceof Error ? err.message : "Payment could not be completed",
-      500,
-    );
+    const raw =
+      err instanceof Error ? err.message : "Payment could not be completed";
+    const userMessage = /currency not supported/i.test(raw)
+      ? "Payment could not be completed. Please try again or contact the editorial office."
+      : raw;
+    return jsonError(userMessage, 500);
   }
 }

@@ -160,9 +160,49 @@ async function paystackFetch<T>(
   return json.data;
 }
 
-function isCurrencyUnsupported(err: unknown): boolean {
+export function isCurrencyUnsupported(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return /currency not supported/i.test(msg);
+}
+
+/**
+ * Try USD first (so international cards can be billed in USD when enabled).
+ * If the merchant has not enabled USD, fall back to their settlement currencies.
+ * Author-facing copy stays USD regardless of which currency Paystack accepts.
+ */
+function gatewayCurrencyAttempts(
+  usdCents: number,
+  merchantCurrencies: string[],
+): Array<{ currency: string; amount: number }> {
+  const ordered: string[] = [];
+  const push = (c: string) => {
+    const code = c.toUpperCase();
+    if (code && !ordered.includes(code)) ordered.push(code);
+  };
+
+  push(paystackCurrency());
+  push("USD");
+  for (const c of merchantCurrencies) push(c);
+  for (const c of ["GHS", "NGN", "KES", "ZAR", "XOF"]) push(c);
+
+  const seen = new Set<string>();
+  const attempts: Array<{ currency: string; amount: number }> = [];
+  for (const currency of ordered) {
+    const amount = usdToPaystackAmount(usdCents, currency);
+    const key = `${currency}:${amount}`;
+    if (seen.has(key) || amount < 100) continue;
+    seen.add(key);
+    attempts.push({ currency, amount });
+  }
+  return attempts;
+}
+
+function unsupportedCurrencyError(lastError: unknown, supported: string): Error {
+  const detail =
+    lastError instanceof Error ? lastError.message : "Currency not supported";
+  return new Error(
+    `${detail}. This Paystack business supports: ${supported}. Nahda still shows the APC in USD; enable USD under Paystack Dashboard → Settings → Preferences → Currency if you want the bank/3DS page in USD too.`,
+  );
 }
 
 /** Currencies enabled on this Paystack business (from /balance). */
@@ -181,8 +221,8 @@ export async function getMerchantCurrencies(): Promise<string[]> {
 
 /**
  * Start Paystack hosted checkout (card channel).
- * USD transactions are initialized in USD only so the cardholder never sees a
- * converted GHS (or other local) amount.
+ * Tries USD first; falls back to the merchant’s enabled currency so checkout
+ * still works when USD is not turned on in Paystack.
  */
 export async function initializePaystackTransaction(opts: {
   email: string;
@@ -193,41 +233,13 @@ export async function initializePaystackTransaction(opts: {
 }): Promise<
   PaystackInitializeData & { chargedAmount: number; chargedCurrency: string }
 > {
-  const preferred = paystackCurrency();
+  const merchantCurrencies = await getMerchantCurrencies();
   const usdLabel = formatApcAmount(opts.usdCents, "usd");
-
-  const ordered: string[] = [];
-  const push = (c: string) => {
-    const code = c.toUpperCase();
-    if (code && !ordered.includes(code)) ordered.push(code);
-  };
-
-  // USD APCs must initialize as USD — do not fall back to GHS conversion.
-  if (preferred === "USD") {
-    push("USD");
-  } else {
-    const merchantCurrencies = await getMerchantCurrencies();
-    push(preferred);
-    for (const c of merchantCurrencies) push(c);
-  }
-
-  const attempts = ordered.map((currency) => ({
-    currency,
-    amount: usdToPaystackAmount(opts.usdCents, currency),
-  }));
+  const attempts = gatewayCurrencyAttempts(opts.usdCents, merchantCurrencies);
 
   let lastError: unknown;
-  const seen = new Set<string>();
 
   for (const attempt of attempts) {
-    const key = `${attempt.currency}:${attempt.amount}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    if (attempt.amount < 100) {
-      continue;
-    }
-
     try {
       const body: Record<string, unknown> = {
         email: opts.email,
@@ -301,17 +313,12 @@ export async function initializePaystackTransaction(opts: {
     }
   }
 
-  const supportedList = await getMerchantCurrencies();
   const supported =
-    supportedList.length > 0
-      ? supportedList.join(", ")
+    merchantCurrencies.length > 0
+      ? merchantCurrencies.join(", ")
       : "unknown (check Paystack Dashboard → Settings → Preferences → Currency)";
 
-  throw new Error(
-    lastError instanceof Error
-      ? `${lastError.message}. This Paystack business supports: ${supported}. Enable USD in Paystack Dashboard → Settings → Preferences → Currency so cardholders are charged the original USD APC.`
-      : `USD is not enabled on this Paystack business. Supported: ${supported}.`,
-  );
+  throw unsupportedCurrencyError(lastError, supported);
 }
 
 export async function verifyPaystackTransaction(
@@ -407,6 +414,68 @@ export async function chargePaystackCard(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * Charge a card, trying USD first then the merchant’s enabled currencies.
+ * Used because many Ghana Paystack businesses have not enabled USD yet —
+ * charging USD-only would fail with "Currency not supported by merchant".
+ * Nahda checkout/receipts still show the original USD APC.
+ */
+export async function chargePaystackInSupportedCurrency(opts: {
+  email: string;
+  usdCents: number;
+  paymentId: string;
+  card: ChargeCardInput["card"];
+  metadata?: Record<string, string>;
+  persistReference: (reference: string) => Promise<void>;
+}): Promise<
+  PaystackChargeData & {
+    chargedAmount: number;
+    chargedCurrency: string;
+    reference: string;
+  }
+> {
+  const merchantCurrencies = await getMerchantCurrencies();
+  const attempts = gatewayCurrencyAttempts(opts.usdCents, merchantCurrencies);
+  const usdLabel = formatApcAmount(opts.usdCents, "usd");
+  let lastError: unknown;
+
+  for (const attempt of attempts) {
+    const reference = makePaystackReference(opts.paymentId);
+    await opts.persistReference(reference);
+    try {
+      const data = await chargePaystackCard({
+        email: opts.email,
+        amount: attempt.amount,
+        currency: attempt.currency,
+        reference,
+        card: opts.card,
+        metadata: opts.metadata,
+      });
+      console.info(
+        `[paystack] charged in ${attempt.currency} (APC ${usdLabel} USD)`,
+      );
+      return {
+        ...data,
+        chargedAmount: attempt.amount,
+        chargedCurrency: attempt.currency,
+        reference: data.reference || reference,
+      };
+    } catch (err) {
+      lastError = err;
+      if (!isCurrencyUnsupported(err)) throw err;
+      console.warn(
+        `[paystack] ${attempt.currency} not supported — trying next`,
+      );
+    }
+  }
+
+  const supported =
+    merchantCurrencies.length > 0
+      ? merchantCurrencies.join(", ")
+      : "unknown (check Paystack Dashboard → Settings → Preferences → Currency)";
+  throw unsupportedCurrencyError(lastError, supported);
 }
 
 export async function submitPaystackPin(opts: {
