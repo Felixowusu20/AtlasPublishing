@@ -9,6 +9,7 @@ import {
   usdToPaystackAmount,
   verifyPaystackTransaction,
 } from "@/lib/paystack";
+import { DISPLAY_CURRENCY } from "@/lib/payment-display";
 
 /**
  * Author: prepare APC payment for the custom Nahda checkout (USD display).
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
         amountLabel: submission.payment
           ? formatApcAmount(submission.payment.amountCents, "usd")
           : null,
+        currency: DISPLAY_CURRENCY,
       });
     }
 
@@ -68,6 +70,8 @@ export async function POST(request: Request) {
       reference: prepared.reference ?? null,
       amountCents: prepared.amountCents,
       amountLabel: prepared.amountLabel,
+      currency: DISPLAY_CURRENCY,
+      chargedCurrency: prepared.chargedCurrency,
     });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -145,9 +149,10 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Payment.amountCents is always USD; Paystack charges merchant currency after FX.
+    // Payment.amountCents is always USD. New charges are initialized in USD.
+    // Legacy GHS settlements are still accepted when metadata.usdCents matches.
     if (submission.payment && verified.amount > 0) {
-      const chargedCurrency = (verified.currency || "GHS").toUpperCase();
+      const chargedCurrency = (verified.currency || DISPLAY_CURRENCY).toUpperCase();
       const expectedAmount = usdToPaystackAmount(
         submission.payment.amountCents,
         chargedCurrency,
@@ -163,7 +168,7 @@ export async function PUT(request: Request) {
           !Number.isFinite(metaUsd) ||
           metaUsd !== submission.payment.amountCents
         ) {
-          // Allow ~1% FX rounding drift
+          // Allow ~1% FX rounding drift on legacy local-currency charges
           const drift = Math.abs(verified.amount - expectedAmount);
           if (drift > Math.max(100, expectedAmount * 0.01)) {
             return jsonError(

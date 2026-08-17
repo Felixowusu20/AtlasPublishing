@@ -21,6 +21,11 @@ import {
   verifyPaystackTransaction,
   type PaystackChargeData,
 } from "@/lib/paystack";
+import {
+  DISPLAY_CURRENCY,
+  NAHDA_MERCHANT_NAME,
+  sanitizeCardholderMessage,
+} from "@/lib/payment-display";
 
 const cardSchema = z.object({
   number: z.string().min(12).max(23),
@@ -50,9 +55,13 @@ function mapChargeResponse(data: PaystackChargeData) {
   return {
     reference: data.reference,
     status,
-    message: data.display_text || data.message || data.gateway_response || null,
+    message: sanitizeCardholderMessage(
+      data.display_text || data.message || data.gateway_response || null,
+    ),
     authUrl: data.url || null,
     paid: status === "success",
+    currency: DISPLAY_CURRENCY,
+    merchant: NAHDA_MERCHANT_NAME,
   };
 }
 
@@ -196,6 +205,8 @@ export async function POST(request: Request) {
         status: "success",
         alreadyCleared: true,
         amountLabel: prepared.amountLabel,
+        currency: DISPLAY_CURRENCY,
+        merchant: NAHDA_MERCHANT_NAME,
       });
     }
 
@@ -210,12 +221,16 @@ export async function POST(request: Request) {
       data: { paystackReference: reference },
     });
 
-    const chargeMeta = resolvePaystackCharge(prepared.amountCents);
-    // Prefer merchant settlement currency (GHS on this account) for the actual charge
+    const chargeMeta = resolvePaystackCharge(
+      prepared.amountCents,
+      DISPLAY_CURRENCY,
+    );
     const chargedAmount =
-      prepared.chargedAmount > 0 ? prepared.chargedAmount : chargeMeta.amount;
-    const chargedCurrency =
-      prepared.chargedCurrency || chargeMeta.currency || "GHS";
+      prepared.chargedCurrency?.toUpperCase() === "USD" &&
+      prepared.chargedAmount > 0
+        ? prepared.chargedAmount
+        : chargeMeta.amount;
+    const chargedCurrency = "USD";
 
     const data = await chargePaystackCard({
       email: paystackNotifyEmail(authorEmail),
@@ -235,6 +250,8 @@ export async function POST(request: Request) {
         apcUsd: prepared.amountLabel,
         authorEmail,
         usdCents: String(prepared.amountCents),
+        merchant: NAHDA_MERCHANT_NAME,
+        displayCurrency: DISPLAY_CURRENCY,
       },
     });
 
@@ -249,12 +266,16 @@ export async function POST(request: Request) {
         ...mapped,
         ...done,
         amountLabel: prepared.amountLabel,
+        currency: DISPLAY_CURRENCY,
+        merchant: NAHDA_MERCHANT_NAME,
       });
     }
 
     return jsonOk({
       ...mapped,
       amountLabel: prepared.amountLabel,
+      currency: DISPLAY_CURRENCY,
+      merchant: NAHDA_MERCHANT_NAME,
     });
   } catch (err) {
     if (err instanceof z.ZodError) {

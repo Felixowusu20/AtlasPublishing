@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { NahdaCheckoutModal } from "@/components/nahda-checkout-modal";
+import { looksLikeLocalCurrencyCopy } from "@/lib/payment-display";
 
 type Props = {
   submissionId: string;
@@ -93,7 +94,13 @@ export function ApcPayPanel({
         return;
       }
 
-      if (data.amountLabel) setAmountLabel(data.amountLabel as string);
+      if (
+        typeof data.amountLabel === "string" &&
+        data.amountLabel &&
+        !looksLikeLocalCurrencyCopy(data.amountLabel)
+      ) {
+        setAmountLabel(data.amountLabel);
+      }
       setCheckoutOpen(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Checkout failed");
@@ -156,8 +163,9 @@ export function ApcPayPanel({
               : ""}
         </h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Amount due is shown in US dollars. Pay securely on the Nahda checkout
-          — you will receive an official Nahda Publications receipt by email.
+          Amount due is shown in US dollars (USD). International cards are
+          charged the original USD amount — not converted to GHS. You will
+          receive an official Nahda Publications receipt by email.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
