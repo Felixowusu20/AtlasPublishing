@@ -530,6 +530,9 @@ export function apcReceiptEmailHtml(opts: {
         <tr>
           <td style="padding:6px 24px 20px;background:#ffffff">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-family:Georgia,'Times New Roman',serif">
+              ${row("Merchant", escapeHtml("Nahda Publications"))}
+              ${row("Currency", "USD")}
+              ${row("Amount", `${escapeHtml(opts.amountLabel)} USD`)}
               ${row("Receipt no.", escapeHtml(opts.receiptNumber), { mono: true })}
               ${row("Paid on", escapeHtml(opts.paidAtLabel))}
               ${row("Journal", escapeHtml(opts.journalTitle))}

@@ -35,7 +35,7 @@ You must provide accurate registration details and keep your login credentials c
 Authors confirm that submitted work is original, that they have the right to submit it, and that it does not infringe third-party rights. Editorial decisions (including acceptance, revision, or rejection) are at the discretion of the journal and do not create a guarantee of publication.
 
 4. Article processing charges (APCs)
-Where an APC applies, the amount shown for the relevant journal in our Fees pages is due after acceptance and before production. Payments are collected through Paystack. Currency display on checkout may use merchant-supported currencies; official Nahda receipts are issued in US dollars (USD) based on the journal APC.
+Where an APC applies, the amount shown for the relevant journal in our Fees pages is due after acceptance and before production. Payments are collected through Paystack in US dollars (USD). Checkout, confirmation, and official Nahda receipts display the original USD amount; we do not convert USD APCs to GHS or another local currency for display.
 
 5. Refunds
 APC payments are generally non-refundable once production has begun. If a charge was made in error, contact nahdapublications@gmail.com within 14 days with your manuscript ID and payment reference. Refund eligibility is assessed case by case.

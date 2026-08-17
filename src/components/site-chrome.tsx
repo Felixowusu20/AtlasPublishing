@@ -98,7 +98,7 @@ export function SiteHeader() {
   const [open, setOpen] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mobileSection, setMobileSection] = useState<string | null>("Journals");
+  const [mobileSection, setMobileSection] = useState<string | null>(null);
   const navRef = useRef<HTMLElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
   const hydrated = useRef(false);
@@ -132,6 +132,20 @@ export function SiteHeader() {
     setAccountOpen(false);
     setMobileOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMobileOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
@@ -357,130 +371,148 @@ export function SiteHeader() {
       </div>
 
       {mobileOpen && (
-        <div className="border-t border-[var(--line)] bg-[var(--surface)]/70 lg:hidden">
-          <div className="mx-auto max-w-6xl space-y-3 px-3 py-4 sm:px-6">
-            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
-              Browse
-            </p>
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="absolute inset-0 bg-[var(--ink)]/45 backdrop-blur-sm"
+            onClick={() => setMobileOpen(false)}
+          />
 
-            <NavbarSearch variant="mobile" />
-
-            <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-sm">
-              {nav.map((item, index) => {
-                const sectionOpen = mobileSection === item.label;
-                return (
-                  <div
-                    key={item.label}
-                    className={
-                      index > 0 ? "border-t border-[var(--line)]" : undefined
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
-                      aria-expanded={sectionOpen}
-                      onClick={() =>
-                        setMobileSection((prev) =>
-                          prev === item.label ? null : item.label,
-                        )
-                      }
-                    >
-                      <span>
-                        <span className="block text-sm font-semibold text-[var(--ink)]">
-                          {item.label}
-                        </span>
-                        <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
-                          {item.children.length} links
-                        </span>
-                      </span>
-                      <span
-                        className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
-                          sectionOpen
-                            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                            : "bg-[var(--surface)] text-[var(--muted)]"
-                        }`}
-                      >
-                        <Chevron open={sectionOpen} />
-                      </span>
-                    </button>
-
-                    {sectionOpen && (
-                      <div className="space-y-1 bg-[var(--surface)]/50 px-2 pb-3">
-                        <Link
-                          href={item.href}
-                          className="flex items-center justify-between rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-[var(--accent)] ring-1 ring-[var(--line)]"
-                          onClick={() => setMobileOpen(false)}
-                        >
-                          View all {item.label.toLowerCase()}
-                          <span aria-hidden>→</span>
-                        </Link>
-                        {item.children.map((child) => (
-                          <Link
-                            key={child.href + child.label}
-                            href={child.href}
-                            className="block rounded-xl px-3 py-2.5 transition hover:bg-white"
-                            onClick={() => setMobileOpen(false)}
-                          >
-                            <span className="block text-sm font-medium text-[var(--ink)]">
-                              {child.label}
-                            </span>
-                            {child.hint ? (
-                              <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
-                                {child.hint}
-                              </span>
-                            ) : null}
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Site menu"
+            className="absolute inset-y-0 right-0 flex h-dvh w-full max-w-sm flex-col bg-white shadow-2xl"
+          >
+            <div className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] px-4">
+              <BrandLogo variant="full" className="!max-w-[150px]" />
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                aria-label="Close menu"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--line)] text-[var(--ink)]"
+              >
+                <HamburgerIcon open />
+              </button>
             </div>
 
-            {user ? (
-              <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-3 shadow-sm">
-                <p className="truncate px-1 text-sm font-semibold text-[var(--ink)]">
-                  {user.name}
-                </p>
-                <p className="truncate px-1 text-xs text-[var(--muted)]">
-                  {user.email}
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+              <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                Menu
+              </p>
+
+              <nav className="space-y-1">
+                {nav.map((item) => {
+                  const sectionOpen = mobileSection === item.label;
+                  const active =
+                    pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`) ||
+                    item.children.some((c) => {
+                      const base = c.href.split("?")[0];
+                      return pathname === base || pathname.startsWith(`${base}/`);
+                    });
+
+                  return (
+                    <div key={item.label}>
+                      <button
+                        type="button"
+                        className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition ${
+                          sectionOpen || active
+                            ? "bg-[var(--accent-soft)]"
+                            : "hover:bg-[var(--surface)]"
+                        }`}
+                        aria-expanded={sectionOpen}
+                        onClick={() =>
+                          setMobileSection((prev) =>
+                            prev === item.label ? null : item.label,
+                          )
+                        }
+                      >
+                        <span
+                          className={`text-[15px] font-semibold ${
+                            sectionOpen || active
+                              ? "text-[var(--accent)]"
+                              : "text-[var(--ink)]"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                        <Chevron open={sectionOpen} />
+                      </button>
+
+                      {sectionOpen && (
+                        <div className="mt-1 ml-3 space-y-0.5 border-l border-[var(--line)] pl-3">
+                          <Link
+                            href={item.href}
+                            className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-[var(--accent)] transition hover:bg-[var(--surface)]"
+                            onClick={() => setMobileOpen(false)}
+                          >
+                            View all {item.label.toLowerCase()}
+                          </Link>
+                          {item.children.map((child) => (
+                            <Link
+                              key={child.href + child.label}
+                              href={child.href}
+                              className="block rounded-lg px-3 py-2.5 text-sm text-[var(--ink)] transition hover:bg-[var(--surface)]"
+                              onClick={() => setMobileOpen(false)}
+                            >
+                              {child.label}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </nav>
+            </div>
+
+            <div className="shrink-0 border-t border-[var(--line)] bg-white p-4">
+              {user ? (
+                <>
+                  <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                    {user.name}
+                  </p>
+                  <p className="truncate text-xs text-[var(--muted)]">
+                    {user.email}
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Link
+                      href="/dashboard"
+                      className="rounded-xl bg-[var(--surface)] px-3 py-2.5 text-center text-sm font-semibold text-[var(--ink)]"
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      Dashboard
+                    </Link>
+                    <button
+                      type="button"
+                      className="rounded-xl bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-700"
+                      onClick={handleSignOut}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
                   <Link
-                    href="/dashboard"
-                    className="rounded-xl bg-[var(--surface)] px-3 py-2.5 text-center text-sm font-semibold text-[var(--ink)]"
+                    href="/login"
+                    className="rounded-xl border border-[var(--line)] px-3 py-3 text-center text-sm font-semibold text-[var(--ink)]"
                     onClick={() => setMobileOpen(false)}
                   >
-                    Dashboard
+                    Sign in
                   </Link>
-                  <button
-                    type="button"
-                    className="rounded-xl bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-700"
-                    onClick={handleSignOut}
+                  <Link
+                    href="/register"
+                    className="rounded-xl bg-[var(--accent)] px-3 py-3 text-center text-sm font-semibold text-white"
+                    onClick={() => setMobileOpen(false)}
                   >
-                    Sign out
-                  </button>
+                    Register
+                  </Link>
                 </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <Link
-                  href="/login"
-                  className="rounded-xl border border-[var(--line)] bg-white px-3 py-3 text-center text-sm font-semibold text-[var(--ink)] shadow-sm"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/register"
-                  className="rounded-xl bg-[var(--accent)] px-3 py-3 text-center text-sm font-semibold text-white shadow-sm"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Register
-                </Link>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

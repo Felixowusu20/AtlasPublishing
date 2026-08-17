@@ -77,7 +77,7 @@ export function PaystackBrandOverlay({ open, status, amountLabel }: Props) {
             </h2>
             {amountLabel ? (
               <p className="mt-3 rounded-full bg-white/10 px-4 py-1.5 text-sm font-semibold text-white ring-1 ring-white/15">
-                APC due: {amountLabel}
+                APC due: {amountLabel} USD
               </p>
             ) : null}
             <p className="mt-4 max-w-md text-sm leading-relaxed text-white/65">
@@ -94,7 +94,7 @@ export function PaystackBrandOverlay({ open, status, amountLabel }: Props) {
         <div className="pointer-events-none flex flex-1 items-start justify-center px-4 pt-3">
           <p className="rounded-full bg-[var(--ink)]/80 px-4 py-1.5 text-xs font-medium text-white/85 ring-1 ring-white/10">
             {message}
-            {amountLabel ? ` · ${amountLabel}` : ""}
+            {amountLabel ? ` · ${amountLabel} USD` : ""}
           </p>
         </div>
       )}

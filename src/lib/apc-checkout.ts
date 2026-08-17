@@ -5,12 +5,11 @@ import {
 } from "@/lib/apc";
 import {
   appBaseUrl,
-  getMerchantCurrencies,
   makePaystackReference,
   resolvePaystackCharge,
-  usdToPaystackAmount,
   verifyPaystackTransaction,
 } from "@/lib/paystack";
+import { DISPLAY_CURRENCY } from "@/lib/payment-display";
 import { progressForStatus } from "@/lib/submission-utils";
 import { notifyAdmins } from "@/lib/notify-admins";
 import { apcReceiptEmailHtml, sendEmail } from "@/lib/mail";
@@ -42,15 +41,8 @@ export async function prepareApcPayment(
   const usdCents = parseApcAmountCents(submission.journal.apc, {
     openAccess: submission.journal.openAccess,
   });
-  // Author-facing label always USD; gateway charge uses merchant settlement currency
-  const display = resolvePaystackCharge(usdCents);
-  const merchantCurrencies = await getMerchantCurrencies();
-  const gatewayCurrency = (
-    merchantCurrencies.find((c) => c !== "USD") ||
-    merchantCurrencies[0] ||
-    "GHS"
-  ).toUpperCase();
-  const gatewayAmount = usdToPaystackAmount(usdCents, gatewayCurrency);
+  // Charge and display the original USD APC — never convert to GHS for the cardholder.
+  const charge = resolvePaystackCharge(usdCents, DISPLAY_CURRENCY);
   const displayCurrency = "usd";
 
   if (usdCents <= 0) {
@@ -89,11 +81,11 @@ export async function prepareApcPayment(
       reference: null,
       authorEmail: submission.author?.email ?? null,
       chargedAmount: 0,
-      chargedCurrency: gatewayCurrency,
+      chargedCurrency: charge.currency,
     };
   }
 
-  const amountLabel = display.label;
+  const amountLabel = charge.label;
 
   const payment = await prisma.payment.upsert({
     where: { submissionId: submission.id },
@@ -140,8 +132,8 @@ export async function prepareApcPayment(
           paymentId: payment.id,
           reference: existing.reference,
           authorEmail: submission.author?.email ?? null,
-          chargedAmount: gatewayAmount,
-          chargedCurrency: gatewayCurrency,
+          chargedAmount: charge.amount,
+          chargedCurrency: charge.currency,
         };
       }
     } catch {
@@ -170,8 +162,8 @@ export async function prepareApcPayment(
     paymentId: payment.id,
     reference,
     authorEmail: email,
-    chargedAmount: gatewayAmount,
-    chargedCurrency: gatewayCurrency,
+    chargedAmount: charge.amount,
+    chargedCurrency: charge.currency,
   };
 }
 
@@ -333,7 +325,9 @@ export async function markApcPaid(opts: {
         ``,
         `Receipt: ${receiptNumber}`,
         `Status: PAID`,
-        `Amount paid (USD): ${amountLabel}`,
+        `Amount paid: ${amountLabel} USD`,
+        `Currency: USD`,
+        `Merchant: Nahda Publications`,
         `Journal: ${updated.journal.title}`,
         `Manuscript: ${updated.manuscriptId}`,
         `Title: ${updated.title}`,

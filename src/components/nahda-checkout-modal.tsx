@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { sanitizeCardholderMessage } from "@/lib/payment-display";
 
 type Step = "card" | "pin" | "otp" | "birthday" | "phone" | "3ds" | "success";
 
@@ -102,7 +103,7 @@ export function NahdaCheckoutModal({
     }
 
     const status = (data.status || "").toLowerCase();
-    setHint(data.message || "");
+    setHint(sanitizeCardholderMessage(data.message) || "");
 
     if (status === "send_pin") {
       setStep("pin");
@@ -135,12 +136,18 @@ export function NahdaCheckoutModal({
       return;
     }
     if (status === "failed" || status === "abandoned" || status === "reversed") {
-      setError(data.message || "Payment failed. Please try again.");
+      setError(
+        sanitizeCardholderMessage(data.message) ||
+          "Payment failed. Please try again.",
+      );
       setStep("card");
       return;
     }
 
-    setError(data.message || "Could not complete payment. Please try again.");
+    setError(
+      sanitizeCardholderMessage(data.message) ||
+        "Could not complete payment. Please try again.",
+    );
   }
 
   async function startCharge(e: React.FormEvent) {
@@ -274,12 +281,18 @@ export function NahdaCheckoutModal({
 
           <div className="mt-4 rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/15">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100/80">
-              Amount due (USD)
+              Amount due
             </p>
             <p className="mt-1 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight">
-              {amountLabel}
+              {amountLabel} USD
             </p>
-            <p className="mt-1 truncate text-xs text-emerald-50/85">
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-emerald-50/90">
+              <dt className="text-emerald-100/70">Currency</dt>
+              <dd className="font-semibold">USD</dd>
+              <dt className="text-emerald-100/70">Merchant</dt>
+              <dd className="font-semibold">Nahda Publications</dd>
+            </dl>
+            <p className="mt-2 truncate text-xs text-emerald-50/85">
               Manuscript {manuscriptId}
             </p>
           </div>
@@ -296,8 +309,26 @@ export function NahdaCheckoutModal({
               </h3>
               <p className="mt-2 text-sm text-[var(--muted)]">
                 Your manuscript is now in production. An official Nahda
-                Publications receipt in USD has been sent to your email.
+                Publications receipt has been sent to your email.
               </p>
+              <dl className="mx-auto mt-4 max-w-xs text-left text-sm">
+                <div className="flex justify-between gap-3 border-b border-[var(--surface)] py-2">
+                  <dt className="text-[var(--muted)]">Amount</dt>
+                  <dd className="font-semibold text-[var(--ink)]">
+                    {amountLabel} USD
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3 border-b border-[var(--surface)] py-2">
+                  <dt className="text-[var(--muted)]">Currency</dt>
+                  <dd className="font-semibold text-[var(--ink)]">USD</dd>
+                </div>
+                <div className="flex justify-between gap-3 py-2">
+                  <dt className="text-[var(--muted)]">Merchant</dt>
+                  <dd className="font-semibold text-[var(--ink)]">
+                    Nahda Publications
+                  </dd>
+                </div>
+              </dl>
               <button
                 type="button"
                 onClick={onClose}
@@ -357,7 +388,7 @@ export function NahdaCheckoutModal({
                 disabled={busy || pin.length < 4}
                 className="btn-primary w-full !py-3 disabled:opacity-60"
               >
-                {busy ? "Authorizing…" : `Confirm ${amountLabel}`}
+                {busy ? "Authorizing…" : `Confirm ${amountLabel} USD`}
               </button>
             </form>
           ) : step === "otp" ? (
@@ -459,7 +490,9 @@ export function NahdaCheckoutModal({
             <form onSubmit={startCharge} className="space-y-4">
               <p className="text-sm text-[var(--muted)]">
                 Pay your article processing charge with Visa, Mastercard, or
-                Verve. You will receive a Nahda receipt in USD after payment.
+                Verve. International cards are charged in USD
+                ({amountLabel}). You will receive a Nahda Publications receipt
+                in USD after payment.
               </p>
 
               <label className="block text-sm">

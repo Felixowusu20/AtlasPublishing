@@ -1,5 +1,9 @@
 import { getAppBaseUrl } from "@/lib/app-url";
 import { formatApcAmount } from "@/lib/apc";
+import {
+  DISPLAY_CURRENCY,
+  NAHDA_MERCHANT_NAME,
+} from "@/lib/payment-display";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -32,12 +36,13 @@ export function getPaystackSecretKey(): string {
 
 /**
  * Preferred Paystack charge currency from env.
- * Defaults to USD so the Paystack popup matches author-facing APC amounts.
- * If USD is not enabled on the merchant, initialize falls back to other currencies.
+ * Defaults to USD so the cardholder, checkout, and gateway all show the APC in USD.
  */
 export function paystackCurrency(): string {
-  const raw = (process.env.PAYSTACK_CURRENCY ?? "USD").trim().toUpperCase();
-  return raw || "USD";
+  const raw = (process.env.PAYSTACK_CURRENCY ?? DISPLAY_CURRENCY)
+    .trim()
+    .toUpperCase();
+  return raw || DISPLAY_CURRENCY;
 }
 
 function fxPerUsd(currency: string): number {
@@ -64,7 +69,11 @@ function fxPerUsd(currency: string): number {
   }
 }
 
-/** Convert USD cents → Paystack subunit for a merchant currency. */
+/**
+ * Convert USD cents → Paystack subunit.
+ * USD charges are never FX-converted — the original APC cents are sent as-is.
+ * Non-USD conversion is kept only to verify legacy settlements.
+ */
 export function usdToPaystackAmount(usdCents: number, currency: string): number {
   const code = currency.toUpperCase();
   if (code === "USD") return Math.max(0, Math.round(usdCents));
@@ -75,7 +84,8 @@ export function usdToPaystackAmount(usdCents: number, currency: string): number 
 
 /**
  * Journal APC is parsed as USD cents.
- * Author-facing label is always USD.
+ * When the transaction currency is USD, the gateway amount is the original USD
+ * cents — no GHS (or other local) conversion for charge or display.
  */
 export function resolvePaystackCharge(
   usdCents: number,
@@ -88,6 +98,14 @@ export function resolvePaystackCharge(
 } {
   const currency = (currencyOverride || paystackCurrency()).toUpperCase();
   const usdLabel = formatApcAmount(usdCents, "usd");
+  if (currency === "USD") {
+    return {
+      amount: Math.max(0, Math.round(usdCents)),
+      currency: "USD",
+      label: usdLabel,
+      usdCents,
+    };
+  }
   return {
     amount: usdToPaystackAmount(usdCents, currency),
     currency,
@@ -163,8 +181,8 @@ export async function getMerchantCurrencies(): Promise<string[]> {
 
 /**
  * Start Paystack hosted checkout (card channel).
- * Tries USD first so the popup can show "Pay USD …" when the merchant supports it.
- * Falls back to the merchant’s settlement currency (e.g. GHS) if USD is not enabled.
+ * USD transactions are initialized in USD only so the cardholder never sees a
+ * converted GHS (or other local) amount.
  */
 export async function initializePaystackTransaction(opts: {
   email: string;
@@ -175,7 +193,6 @@ export async function initializePaystackTransaction(opts: {
 }): Promise<
   PaystackInitializeData & { chargedAmount: number; chargedCurrency: string }
 > {
-  const merchantCurrencies = await getMerchantCurrencies();
   const preferred = paystackCurrency();
   const usdLabel = formatApcAmount(opts.usdCents, "usd");
 
@@ -185,11 +202,14 @@ export async function initializePaystackTransaction(opts: {
     if (code && !ordered.includes(code)) ordered.push(code);
   };
 
-  // Prefer USD (or PAYSTACK_CURRENCY) so the Paystack popup matches when supported
-  push(preferred);
-  push("USD");
-  for (const c of merchantCurrencies) push(c);
-  for (const c of ["GHS", "NGN", "KES", "ZAR", "XOF"]) push(c);
+  // USD APCs must initialize as USD — do not fall back to GHS conversion.
+  if (preferred === "USD") {
+    push("USD");
+  } else {
+    const merchantCurrencies = await getMerchantCurrencies();
+    push(preferred);
+    for (const c of merchantCurrencies) push(c);
+  }
 
   const attempts = ordered.map((currency) => ({
     currency,
@@ -220,15 +240,27 @@ export async function initializePaystackTransaction(opts: {
           ...opts.metadata,
           usdCents: String(opts.usdCents),
           apcUsd: usdLabel,
+          merchant: NAHDA_MERCHANT_NAME,
+          displayCurrency: DISPLAY_CURRENCY,
           cancel_action: opts.callbackUrl.replace(
             "payment=success",
             "payment=cancelled",
           ),
           custom_fields: [
             {
-              display_name: "APC amount (USD)",
+              display_name: "Merchant",
+              variable_name: "merchant",
+              value: NAHDA_MERCHANT_NAME,
+            },
+            {
+              display_name: "Currency",
+              variable_name: "currency",
+              value: DISPLAY_CURRENCY,
+            },
+            {
+              display_name: "Amount",
               variable_name: "apc_usd",
-              value: usdLabel,
+              value: `${usdLabel} ${DISPLAY_CURRENCY}`,
             },
             ...(opts.metadata.authorEmail
               ? [
@@ -269,15 +301,16 @@ export async function initializePaystackTransaction(opts: {
     }
   }
 
+  const supportedList = await getMerchantCurrencies();
   const supported =
-    merchantCurrencies.length > 0
-      ? merchantCurrencies.join(", ")
+    supportedList.length > 0
+      ? supportedList.join(", ")
       : "unknown (check Paystack Dashboard → Settings → Preferences → Currency)";
 
   throw new Error(
     lastError instanceof Error
-      ? `${lastError.message}. This Paystack business supports: ${supported}. To show USD in the popup, enable USD in Paystack Dashboard or ask Paystack support.`
-      : `Currency not supported by merchant. Supported: ${supported}.`,
+      ? `${lastError.message}. This Paystack business supports: ${supported}. Enable USD in Paystack Dashboard → Settings → Preferences → Currency so cardholders are charged the original USD APC.`
+      : `USD is not enabled on this Paystack business. Supported: ${supported}.`,
   );
 }
 
@@ -346,11 +379,25 @@ export async function chargePaystackCard(
   if (input.metadata) {
     body.metadata = {
       ...input.metadata,
+      merchant: input.metadata.merchant || NAHDA_MERCHANT_NAME,
+      displayCurrency: DISPLAY_CURRENCY,
       custom_fields: [
         {
-          display_name: "APC amount (USD)",
+          display_name: "Merchant",
+          variable_name: "merchant",
+          value: input.metadata.merchant || NAHDA_MERCHANT_NAME,
+        },
+        {
+          display_name: "Currency",
+          variable_name: "currency",
+          value: DISPLAY_CURRENCY,
+        },
+        {
+          display_name: "Amount",
           variable_name: "apc_usd",
-          value: input.metadata.apcUsd ?? "",
+          value: input.metadata.apcUsd
+            ? `${input.metadata.apcUsd} ${DISPLAY_CURRENCY}`
+            : "",
         },
       ],
     };
