@@ -208,17 +208,18 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!prepared.reference || !prepared.paymentId) {
+    const paymentId = prepared.paymentId;
+    if (!prepared.reference || !paymentId) {
       return jsonError("Could not prepare payment", 500);
     }
 
     const data = await chargePaystackInSupportedCurrency({
       email: paystackNotifyEmail(authorEmail),
       usdCents: prepared.amountCents,
-      paymentId: prepared.paymentId,
+      paymentId,
       persistReference: async (reference) => {
         await prisma.payment.update({
-          where: { id: prepared.paymentId },
+          where: { id: paymentId },
           data: { paystackReference: reference },
         });
       },
@@ -231,7 +232,7 @@ export async function POST(request: Request) {
       metadata: {
         submissionId: submission.id,
         manuscriptId: submission.manuscriptId,
-        paymentId: prepared.paymentId,
+        paymentId,
         apcUsd: prepared.amountLabel,
         authorEmail,
         usdCents: String(prepared.amountCents),
