@@ -10,8 +10,18 @@ import {
   type ManuscriptFigure,
 } from "@/components/manuscript-editor";
 import { NahdaLoader } from "@/components/nahda-loader";
+import { AuthorOrcidLine, OrcidIdIcon } from "@/components/orcid-id";
 import { uploadFileDirect } from "@/lib/client-upload";
-import { formatAuthorWithOrcid } from "@/lib/orcid";
+import {
+  formatAuthorWithOrcid,
+  normalizeOrcid,
+  parseAuthorOrcid,
+} from "@/lib/orcid";
+
+type AuthorEntry = {
+  name: string;
+  orcid: string;
+};
 
 type QueueItem = {
   id: string;
@@ -64,7 +74,7 @@ type PublishedItem = {
 
 type TemplateForm = {
   title: string;
-  authors: string;
+  authorEntries: AuthorEntry[];
   affiliations: string;
   abstract: string;
   keywords: string;
@@ -84,19 +94,34 @@ type TemplateForm = {
 
 type Pane = "edit" | "preview";
 
-function authorsFromSubmission(sub: QueueItem): string {
+function authorEntriesFromSubmission(sub: QueueItem): AuthorEntry[] {
   if (Array.isArray(sub.authorsJson) && sub.authorsJson.length > 0) {
-    return sub.authorsJson
+    const rows = sub.authorsJson
       .map((a, i) => {
-        const name = a.name?.trim();
-        if (!name) return "";
-        const orcid = a.orcid || (i === 0 ? sub.author.orcid : undefined);
-        return formatAuthorWithOrcid(name, orcid);
+        const parsed = parseAuthorOrcid(a.name ?? "");
+        if (!parsed.name) return null;
+        const orcid =
+          normalizeOrcid(a.orcid) ||
+          parsed.orcid ||
+          (i === 0 ? normalizeOrcid(sub.author.orcid) : null);
+        return { name: parsed.name, orcid: orcid ?? "" };
       })
-      .filter(Boolean)
-      .join(", ");
+      .filter((row): row is AuthorEntry => Boolean(row));
+    if (rows.length) return rows;
   }
-  return formatAuthorWithOrcid(sub.author.name, sub.author.orcid);
+  const parsed = parseAuthorOrcid(sub.author.name);
+  return [
+    {
+      name: parsed.name || sub.author.name,
+      orcid: normalizeOrcid(sub.author.orcid) ?? parsed.orcid ?? "",
+    },
+  ];
+}
+
+function boundAuthorNames(entries: AuthorEntry[]): string[] {
+  return entries
+    .map((row) => formatAuthorWithOrcid(row.name, row.orcid))
+    .filter(Boolean);
 }
 
 function affiliationsFromSubmission(sub: QueueItem): string {
@@ -112,7 +137,7 @@ function affiliationsFromSubmission(sub: QueueItem): string {
 function emptyForm(): TemplateForm {
   return {
     title: "",
-    authors: "",
+    authorEntries: [{ name: "", orcid: "" }],
     affiliations: "",
     abstract: "",
     keywords: "",
@@ -177,8 +202,8 @@ export default function PublishedArticlesPage() {
   );
 
   const previewAuthors = useMemo(
-    () => splitList(form.authors, ","),
-    [form.authors],
+    () => boundAuthorNames(form.authorEntries),
+    [form.authorEntries],
   );
   const previewAffiliations = useMemo(
     () => splitList(form.affiliations, "\n"),
@@ -200,7 +225,7 @@ export default function PublishedArticlesPage() {
     // Title, abstract, keywords always come from the accepted submission
     setForm({
       title: sub.title?.trim() || "",
-      authors: authorsFromSubmission(sub),
+      authorEntries: authorEntriesFromSubmission(sub),
       affiliations: affiliationsFromSubmission(sub),
       abstract: sub.abstract?.trim() || "",
       keywords: (sub.keywords ?? []).join(", "),
@@ -229,6 +254,36 @@ export default function PublishedArticlesPage() {
         }
       })
       .catch(() => undefined);
+  }
+
+  function updateAuthorEntry(
+    index: number,
+    key: keyof AuthorEntry,
+    value: string,
+  ) {
+    setForm((f) => ({
+      ...f,
+      authorEntries: f.authorEntries.map((row, i) =>
+        i === index ? { ...row, [key]: value } : row,
+      ),
+    }));
+  }
+
+  function addAuthorEntry() {
+    setForm((f) => ({
+      ...f,
+      authorEntries: [...f.authorEntries, { name: "", orcid: "" }],
+    }));
+  }
+
+  function removeAuthorEntry(index: number) {
+    setForm((f) => {
+      const next = f.authorEntries.filter((_, i) => i !== index);
+      return {
+        ...f,
+        authorEntries: next.length ? next : [{ name: "", orcid: "" }],
+      };
+    });
   }
 
   async function load(preferId?: string | null) {
@@ -306,7 +361,7 @@ export default function PublishedArticlesPage() {
       coverColor: selected.journal.coverColor,
       manuscriptId: selected.manuscriptId,
       title: form.title,
-      authors: splitList(form.authors, ","),
+      authors: boundAuthorNames(form.authorEntries),
       affiliations: splitList(form.affiliations, "\n"),
       abstract: form.abstract,
       keywords: splitList(form.keywords, ","),
@@ -377,9 +432,15 @@ export default function PublishedArticlesPage() {
     setError("");
     setSuccess("");
 
-    const authors = splitList(form.authors, ",");
+    const authors = boundAuthorNames(form.authorEntries);
     const affiliations = splitList(form.affiliations, "\n");
     const keywords = splitList(form.keywords, ",");
+
+    if (!authors.length) {
+      setPublishing(false);
+      setError("Add at least one author name.");
+      return;
+    }
 
     const res = await fetch("/api/admin/publish-queue", {
       method: "POST",
@@ -828,21 +889,105 @@ export default function PublishedArticlesPage() {
                       Pre-filled from the accepted submission
                     </span>
                   </label>
-                  <label className="field">
-                    <span>Authors (comma-separated)</span>
-                    <input
-                      required
-                      value={form.authors}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, authors: e.target.value }))
-                      }
-                    />
-                    <span className="mt-1 block text-[11px] text-[var(--muted)]">
-                      Bind an ORCID after a name — it becomes the green iD
-                      mark on the template. Example: Jane Doe
-                      0000-0002-1825-0097
-                    </span>
-                  </label>
+                  <div>
+                    <div className="flex items-end justify-between gap-3">
+                      <span className="text-sm font-medium text-[var(--ink)]">
+                        Authors &amp; ORCID
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-[var(--accent)] hover:underline"
+                        onClick={addAuthorEntry}
+                      >
+                        Add author
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                      Each ORCID is bound to that author’s name and shows as
+                      the green iD mark in preview and on the published paper.
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {form.authorEntries.map((row, i) => {
+                        const bound = normalizeOrcid(row.orcid);
+                        return (
+                          <div
+                            key={`author-${i}`}
+                            className="rounded-xl border border-[var(--line)] bg-white p-3"
+                          >
+                            <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                              <label className="field !mb-0">
+                                <span>Name</span>
+                                <input
+                                  required
+                                  value={row.name}
+                                  placeholder="Julian M. Yabut"
+                                  onChange={(e) =>
+                                    updateAuthorEntry(i, "name", e.target.value)
+                                  }
+                                />
+                              </label>
+                              <label className="field !mb-0">
+                                <span>ORCID</span>
+                                <input
+                                  value={row.orcid}
+                                  placeholder="0000-0002-1825-0097"
+                                  autoComplete="off"
+                                  inputMode="text"
+                                  onChange={(e) =>
+                                    updateAuthorEntry(i, "orcid", e.target.value)
+                                  }
+                                />
+                              </label>
+                              <div className="flex items-end">
+                                <button
+                                  type="button"
+                                  className="mb-[1px] rounded-lg border border-[var(--line)] px-2.5 py-2 text-xs text-[var(--muted)] hover:border-rose-200 hover:text-rose-700 disabled:opacity-40"
+                                  onClick={() => removeAuthorEntry(i)}
+                                  disabled={form.authorEntries.length <= 1}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                            {row.name.trim() ? (
+                              <p className="mt-2 text-[12.5px] leading-relaxed">
+                                <AuthorOrcidLine
+                                  authors={[
+                                    formatAuthorWithOrcid(row.name, row.orcid),
+                                  ]}
+                                  correspondingLast={false}
+                                />
+                                {bound ? (
+                                  <span className="ml-2 align-middle text-[10px] text-[var(--muted)]">
+                                    linked
+                                  </span>
+                                ) : row.orcid.trim() ? (
+                                  <span className="ml-2 align-middle text-[10px] text-amber-700">
+                                    Enter a valid ORCID to bind the iD
+                                  </span>
+                                ) : (
+                                  <span className="ml-2 inline-flex items-center gap-1 align-middle text-[10px] text-[var(--muted)]">
+                                    <OrcidIdIcon className="h-3 w-3 opacity-40" />
+                                    Add ORCID to show the iD
+                                  </span>
+                                )}
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {previewAuthors.length > 0 ? (
+                      <div className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--surface)]/70 px-3 py-2.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                          Name line preview
+                        </p>
+                        <p className="mt-1.5 text-[13.5px] leading-relaxed">
+                          <AuthorOrcidLine authors={previewAuthors} />
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
                   <label className="field">
                     <span>Affiliations (one per line)</span>
                     <textarea
