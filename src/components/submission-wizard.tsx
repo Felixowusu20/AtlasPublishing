@@ -24,6 +24,7 @@ type FormState = {
   authorName: string;
   authorEmail: string;
   affiliation: string;
+  orcid: string;
   funding: string;
   conflictOfInterest: string;
   ethicsStatement: string;
@@ -39,6 +40,7 @@ const emptyForm: FormState = {
   authorName: "",
   authorEmail: "",
   affiliation: "",
+  orcid: "",
   funding: "",
   conflictOfInterest: "The authors declare no conflict of interest.",
   ethicsStatement: "",
@@ -87,6 +89,7 @@ export function SubmissionWizard() {
       authorName: prev.authorName || user.name,
       authorEmail: prev.authorEmail || user.email,
       affiliation: prev.affiliation || user.institution,
+      orcid: prev.orcid || user.orcid || "",
     }));
   }, [user]);
 
@@ -153,6 +156,7 @@ export function SubmissionWizard() {
               name: form.authorName,
               email: form.authorEmail,
               affiliation: form.affiliation,
+              orcid: form.orcid.trim() || undefined,
               isCorresponding: true,
             },
           ],
@@ -356,6 +360,19 @@ export function SubmissionWizard() {
                 onChange={(e) => update("affiliation", e.target.value)}
               />
             </label>
+            <label className="field">
+              <span>ORCID (optional)</span>
+              <input
+                value={form.orcid}
+                onChange={(e) => update("orcid", e.target.value)}
+                placeholder="0000-0002-1825-0097"
+                autoComplete="off"
+              />
+              <span className="mt-1 block text-[11px] text-[var(--muted)]">
+                Shown as a green iD mark next to your name on the published
+                article.
+              </span>
+            </label>
           </div>
         )}
 
@@ -429,6 +446,7 @@ export function SubmissionWizard() {
             </p>
             <p>
               <span className="font-semibold">Author:</span> {form.authorName}
+              {form.orcid.trim() ? ` · ORCID ${form.orcid.trim()}` : ""}
             </p>
             <p>
               <span className="font-semibold">File:</span> {file?.name}

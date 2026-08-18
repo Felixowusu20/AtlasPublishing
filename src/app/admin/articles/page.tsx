@@ -371,6 +371,9 @@ export default function ArticlesCmsPage() {
                 setForm((p) => ({ ...p, authors: e.target.value }))
               }
             />
+            <span className="mt-1 block text-[11px] text-[var(--muted)]">
+              Optional ORCID after a name, e.g. Jane Doe 0000-0002-1825-0097
+            </span>
           </label>
           <label className="field">
             <span>Abstract</span>

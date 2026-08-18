@@ -37,7 +37,7 @@ export async function GET() {
         include: {
           journal: true,
           author: {
-            select: { id: true, name: true, email: true, institution: true },
+            select: { id: true, name: true, email: true, institution: true, orcid: true },
           },
           payment: true,
         },

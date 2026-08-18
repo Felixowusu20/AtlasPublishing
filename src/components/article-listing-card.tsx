@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArticleMetrics } from "@/components/article-metrics";
+import { authorDisplayName } from "@/lib/orcid";
 
 export type ArticleCardData = {
   slug: string;
@@ -100,7 +101,7 @@ export function ArticleListingCard({
         </Link>
 
         <p className="mt-2 break-words text-[13px] leading-relaxed text-[var(--ink)]/80 sm:text-sm">
-          {article.authors.slice(0, 4).join(", ")}
+          {article.authors.slice(0, 4).map(authorDisplayName).join(", ")}
           {article.authors.length > 4 ? " et al." : ""}
         </p>
 

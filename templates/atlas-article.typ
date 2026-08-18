@@ -50,7 +50,8 @@
 #text(font: sans, size: 17.5pt, weight: "bold")[*TITLE*]
 
 #v(10pt)
-#text(size: 10.5pt)[*AUTHORS*]
+#text(font: sans, size: 10.5pt, weight: "bold")[*AUTHORS*]
+// Runtime: bold names + ORCID iD icon (green, linked to orcid.org) + corresponding *
 
 #v(14pt)
 #grid(

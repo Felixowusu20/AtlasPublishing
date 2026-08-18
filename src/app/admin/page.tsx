@@ -136,7 +136,7 @@ export default function AdminHomePage() {
             Admin overview
           </p>
           <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)] sm:text-3xl">
-            Welcome, {user.name}
+            Welcome to Nahda Publications
           </h1>
           <p className="mt-2 max-w-xl text-sm text-[var(--muted)]">
             {user.role === "SUPER_ADMIN"

@@ -61,6 +61,7 @@ const schema = z.object({
         name: z.string(),
         email: z.string().email(),
         affiliation: z.string(),
+        orcid: z.string().optional(),
         isCorresponding: z.boolean().optional(),
       }),
     )

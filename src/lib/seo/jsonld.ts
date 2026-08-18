@@ -1,5 +1,6 @@
 import { absoluteUrl, articleCanonicalPath, articlePdfUrl } from "@/lib/seo/scholar";
 import { normalizeDoi } from "@/lib/doi";
+import { orcidUrl, parseAuthorOrcid } from "@/lib/orcid";
 
 type ScholarlyArticleJsonLdInput = {
   slug: string;
@@ -35,11 +36,22 @@ export function scholarlyArticleJsonLd(article: ScholarlyArticleJsonLdInput) {
       ? new Date(article.publishedAt).toISOString()
       : article.publishedAt.toISOString();
 
-  const authors = article.authors.map((name, i) => {
+  const authors = article.authors.map((raw, i) => {
+    const { name, orcid } = parseAuthorOrcid(raw);
     const affiliation = article.affiliations?.[i] || article.affiliations?.[0];
     return {
       "@type": "Person",
-      name,
+      name: name || raw,
+      ...(orcid
+        ? {
+            identifier: {
+              "@type": "PropertyValue",
+              propertyID: "ORCID",
+              value: orcid,
+            },
+            sameAs: orcidUrl(orcid),
+          }
+        : {}),
       ...(affiliation
         ? {
             affiliation: {

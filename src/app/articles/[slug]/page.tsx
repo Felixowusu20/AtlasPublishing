@@ -12,6 +12,7 @@ import {
 import { CiteActions } from "@/components/cite-actions";
 import { JsonLd } from "@/components/json-ld";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import { authorDisplayName } from "@/lib/orcid";
 import {
   ArticleMasthead,
   type MastheadRecommendation,
@@ -604,7 +605,7 @@ function ArticleView({
                       {rec.title}
                     </h3>
                     <p className="mt-2 text-xs text-[var(--muted)]">
-                      {rec.authors.slice(0, 2).join(", ")}
+                      {rec.authors.slice(0, 2).map(authorDisplayName).join(", ")}
                       {rec.authors.length > 2 ? " et al." : ""}
                       {" · "}
                       {rec.publishedAt}

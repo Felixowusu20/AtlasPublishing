@@ -8,6 +8,7 @@ import { formatMetric } from "@/components/article-metrics";
 import { JsonLd } from "@/components/json-ld";
 import { scholarlyArticleJsonLd } from "@/lib/seo/jsonld";
 import { absoluteUrl, buildArticleMetadata } from "@/lib/seo/scholar";
+import { authorDisplayName } from "@/lib/orcid";
 
 type Props = {
   params: Promise<{ path: string[] }>;
@@ -93,7 +94,7 @@ export default async function DoiRecordPage({ params, searchParams }: Props) {
     month: "long",
     day: "numeric",
   });
-  const authors = article.authors.join(", ");
+  const authors = article.authors.map(authorDisplayName).join(", ");
   const downloadHref = article.manuscriptUrl
     ? articleDownloadPath(article.slug)
     : null;

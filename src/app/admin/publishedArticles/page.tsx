@@ -11,6 +11,7 @@ import {
 } from "@/components/manuscript-editor";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { uploadFileDirect } from "@/lib/client-upload";
+import { formatAuthorWithOrcid } from "@/lib/orcid";
 
 type QueueItem = {
   id: string;
@@ -21,7 +22,11 @@ type QueueItem = {
   articleType: string;
   status: string;
   progress: number;
-  authorsJson?: { name?: string; affiliation?: string }[] | null;
+  authorsJson?: {
+    name?: string;
+    affiliation?: string;
+    orcid?: string | null;
+  }[] | null;
   submittedAt: string;
   manuscriptUrl?: string | null;
   productionBody?: string | null;
@@ -40,6 +45,7 @@ type QueueItem = {
     name: string;
     email: string;
     institution?: string | null;
+    orcid?: string | null;
   };
 };
 
@@ -81,11 +87,16 @@ type Pane = "edit" | "preview";
 function authorsFromSubmission(sub: QueueItem): string {
   if (Array.isArray(sub.authorsJson) && sub.authorsJson.length > 0) {
     return sub.authorsJson
-      .map((a) => a.name)
+      .map((a, i) => {
+        const name = a.name?.trim();
+        if (!name) return "";
+        const orcid = a.orcid || (i === 0 ? sub.author.orcid : undefined);
+        return formatAuthorWithOrcid(name, orcid);
+      })
       .filter(Boolean)
       .join(", ");
   }
-  return sub.author.name;
+  return formatAuthorWithOrcid(sub.author.name, sub.author.orcid);
 }
 
 function affiliationsFromSubmission(sub: QueueItem): string {
@@ -826,6 +837,11 @@ export default function PublishedArticlesPage() {
                         setForm((f) => ({ ...f, authors: e.target.value }))
                       }
                     />
+                    <span className="mt-1 block text-[11px] text-[var(--muted)]">
+                      Bind an ORCID after a name — it becomes the green iD
+                      mark on the template. Example: Jane Doe
+                      0000-0002-1825-0097
+                    </span>
                   </label>
                   <label className="field">
                     <span>Affiliations (one per line)</span>

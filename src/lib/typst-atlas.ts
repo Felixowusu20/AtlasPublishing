@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { journalArticlePalette } from "@/lib/journal-colors";
+import { orcidUrl, parseAuthorOrcid } from "@/lib/orcid";
 
 export type AtlasTypstFigure = {
   url: string;
@@ -662,22 +663,45 @@ export function bodyToTypst(body?: string, figureMap: FigureMap = new Map()): st
   return out.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
-/** ACS-style author line: "A and B*" with link-colored corresponding asterisk. */
+function orcidTypstBadge(orcid: string): string {
+  const href = JSON.stringify(orcidUrl(orcid));
+  return `#box(baseline: 14%, inset: (left: 1.8pt, right: 0.4pt))[#{
+    show link: it => it
+    link(${href})[#image("figures/orcid-id.svg", width: 9.4pt, height: 9.4pt)]
+  }]`;
+}
+
+/** ACS-style author line: bold names, ORCID iD mark, corresponding asterisk. */
 function formatAuthorsAcsTypst(authors: string[], linkColor: string): string {
   if (authors.length === 0) {
-    return "#text(font: serif, size: 10.5pt, fill: ink)[Author]";
+    return `#text(font: sans, size: 10.5pt, weight: "bold", fill: ink)[Author]`;
   }
-  // Strip trailing * from names — we add the corresponding-author mark ourselves
-  const cleaned = authors.map((name) => name.replace(/\*+\s*$/g, "").trim()).filter(Boolean);
-  const names = (cleaned.length ? cleaned : ["Author"]).map((name) =>
-    escapeTypst(name),
-  );
+  const parsed = authors
+    .map((name) => parseAuthorOrcid(name))
+    .filter((a) => a.name);
+  const list = parsed.length ? parsed : [{ name: "Author", orcid: null }];
+
+  const chips = list.map((author, i) => {
+    const name = `#text(font: sans, size: 10.5pt, weight: "bold", fill: ink)[${escapeTypst(author.name)}]`;
+    const badge = author.orcid ? orcidTypstBadge(author.orcid) : "";
+    const corr =
+      i === list.length - 1
+        ? `#text(fill: rgb("${linkColor}"), weight: "bold")[\\*]`
+        : "";
+    return `${name}${badge}${corr}`;
+  });
+
   let line: string;
-  if (names.length === 1) line = names[0];
-  else if (names.length === 2) line = `${names[0]} and ${names[1]}`;
-  else line = `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
-  // Asterisk must sit outside the author text bracket (Typst treats * as emphasis).
-  return `#text(font: serif, size: 10.5pt, fill: ink)[${line}]#text(fill: rgb("${linkColor}"), weight: "bold")[\\*]`;
+  const comma = `#text(font: sans, size: 10.5pt, fill: ink)[, ]`;
+  const amp = `#text(font: sans, size: 10.5pt, weight: "bold", fill: ink)[ \\& ]`;
+  const andWord = `#text(font: sans, size: 10.5pt, fill: ink)[and ]`;
+  if (chips.length === 1) line = chips[0];
+  else if (chips.length === 2) line = `${chips[0]}${amp}${chips[1]}`;
+  else {
+    line = `${chips.slice(0, -1).join(comma)}${comma}${andWord}${chips[chips.length - 1]}`;
+  }
+
+  return line;
 }
 
 function formatAffiliationsTypst(affiliations: string[]): string {
@@ -1247,6 +1271,17 @@ export async function compileAtlasTypstPdf(
       publisherLogoPath = "figures/nahda-logo.png";
     } catch (err) {
       console.warn("[typst] skip publisher logo", err);
+    }
+
+    try {
+      const orcidSvg = join(process.cwd(), "public", "brand", "orcid-id.svg");
+      await copyFile(orcidSvg, join(figuresDir, "orcid-id.svg"));
+    } catch {
+      await writeFile(
+        join(figuresDir, "orcid-id.svg"),
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="#A6CE39" d="M256 128c0 70.7-57.3 128-128 128S0 198.7 0 128 57.3 0 128 0s128 57.3 128 128z"/><path fill="#FFF" d="M86.3 186.2H70.9V79.1h15.4v107.1zM108.9 79.1h41.6c39.6 0 57 28.3 57 53.6 0 27.5-21.5 53.6-56.8 53.6h-41.8V79.1zm15.4 93.3h24.5c34.9 0 42.9-26.5 42.9-39.7 0-21.5-13.7-39.7-43.7-39.7h-23.7v79.4z"/><circle fill="#FFF" cx="78.6" cy="56.8" r="10.1"/></svg>`,
+        "utf8",
+      );
     }
 
     const source = buildAtlasTypstSource(

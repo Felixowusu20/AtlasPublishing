@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import { authorDisplayName } from "@/lib/orcid";
 
 type Props = {
   authors: string[];
@@ -21,14 +22,15 @@ export function buildCitationText(opts: {
   publishedAt: string;
   doi: string;
 }) {
+  const names = opts.authors.map(authorDisplayName).filter(Boolean);
   const authorLabel =
-    opts.authors.length === 0
+    names.length === 0
       ? "Author"
-      : opts.authors.length === 1
-        ? opts.authors[0]
-        : opts.authors.length === 2
-          ? `${opts.authors[0]} & ${opts.authors[1]}`
-          : `${opts.authors[0]} et al.`;
+      : names.length === 1
+        ? names[0]
+        : names.length === 2
+          ? `${names[0]} & ${names[1]}`
+          : `${names[0]} et al.`;
   const doiPart =
     opts.doi && opts.doi !== "Pending" ? ` DOI: ${normalizeDoi(opts.doi)}` : "";
   return `${authorLabel}. ${opts.title}. ${opts.journalTitle}. ${opts.publishedAt}.${doiPart}`;
@@ -47,12 +49,13 @@ export function ArticleCitation({
   variant = "card",
   className = "",
 }: Props) {
+  const names = authors.map(authorDisplayName).filter(Boolean);
   const authorList =
-    authors.length === 0
+    names.length === 0
       ? ["Author"]
-      : authors.length <= 3
-        ? authors
-        : [...authors.slice(0, 2), `et al.`];
+      : names.length <= 3
+        ? names
+        : [...names.slice(0, 2), `et al.`];
 
   const doiNorm = doi && doi !== "Pending" ? normalizeDoi(doi) : null;
   const doiHref = doiNorm ? atlasDoiPath(doiNorm) : null;

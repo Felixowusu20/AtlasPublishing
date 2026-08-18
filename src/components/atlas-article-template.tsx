@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import { AuthorOrcidLine } from "@/components/orcid-id";
 import { journalArticlePalette } from "@/lib/journal-colors";
 
 type Props = {
@@ -207,27 +208,6 @@ function renderBodyPreview(body?: string) {
   return nodes;
 }
 
-function formatAuthors(authors: string[], linkColor: string) {
-  if (authors.length === 0) return "Author names";
-  return authors.map((a, i) => {
-    const isLast = i === authors.length - 1;
-    const sep = isLast
-      ? ""
-      : i === authors.length - 2
-        ? " and "
-        : ", ";
-    return (
-      <span key={`${a}-${i}`}>
-        {a}
-        {isLast ? (
-          <span style={{ color: linkColor, fontWeight: 700 }}>*</span>
-        ) : null}
-        {sep}
-      </span>
-    );
-  });
-}
-
 /**
  * HTML preview aligned with the ACS-level Typst publication engine.
  * Colors follow the journal cover/brand palette.
@@ -405,8 +385,11 @@ export function NahdaArticleTemplate({
           {title || "Article title"}
         </h1>
 
-        <p className="mt-3.5 text-[13px] leading-relaxed text-[#0b1f33]">
-          {formatAuthors(authors, palette.link)}
+        <p className="mt-3.5 text-[13.5px] leading-relaxed text-[#0b1f33]">
+          <AuthorOrcidLine
+            authors={authors}
+            correspondingColor={palette.link}
+          />
         </p>
 
         {affiliations.length > 0 && (

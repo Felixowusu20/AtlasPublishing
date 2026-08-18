@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getAppBaseUrlOptional } from "@/lib/app-url";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import { authorDisplayName } from "@/lib/orcid";
 import { articleDownloadPath } from "@/lib/submission-utils";
 
 /** Absolute site origin for SEO tags (never throws). */
@@ -97,8 +98,10 @@ export function buildArticleMetadata(article: ScholarArticleInput): Metadata {
     citation_fulltext_html_url: canonical,
   };
 
-  if (article.authors.length) {
-    other.citation_author = article.authors;
+  const authorNames = article.authors.map(authorDisplayName).filter(Boolean);
+
+  if (authorNames.length) {
+    other.citation_author = authorNames;
   }
   if (date) other.citation_publication_date = date;
   if (article.volume && article.volume !== "—") {
@@ -123,13 +126,13 @@ export function buildArticleMetadata(article: ScholarArticleInput): Metadata {
     other.citation_keywords = article.keywords.join("; ");
   }
 
-  const authorsLine = article.authors.join(", ");
+  const authorsLine = authorNames.join(", ");
 
   return {
     title: `${article.title} | ${article.journal.shortTitle || article.journal.title}`,
     description,
     keywords: article.keywords,
-    authors: article.authors.map((name) => ({ name })),
+    authors: authorNames.map((name) => ({ name })),
     alternates: {
       canonical,
       types: pdfUrl
@@ -148,7 +151,7 @@ export function buildArticleMetadata(article: ScholarArticleInput): Metadata {
         typeof article.publishedAt === "string"
           ? new Date(article.publishedAt).toISOString()
           : article.publishedAt.toISOString(),
-      authors: article.authors,
+      authors: authorNames,
       section: article.journal.title,
       tags: article.keywords,
       images: article.coverImageUrl

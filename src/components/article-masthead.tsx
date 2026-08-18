@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArticleMetricsPanel } from "@/components/article-metrics";
+import { AuthorOrcidLine } from "@/components/orcid-id";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import { authorDisplayName } from "@/lib/orcid";
 
 export type MastheadRecommendation = {
   slug: string;
@@ -211,17 +213,11 @@ export function ArticleMasthead({
           </h1>
 
           <p className="mt-4 text-[14px] leading-relaxed text-[var(--ink)] sm:text-[15px]">
-            {authors.map((name, i) => (
-              <span key={`${name}-${i}`}>
-                {i > 0 ? (i === authors.length - 1 ? ", and " : ", ") : ""}
-                {name}
-                {affiliations[i] || affiliations.length === 1 ? (
-                  <sup className="ml-0.5 text-[10px] text-[var(--accent)]">
-                    {affiliations.length === 1 ? 1 : i + 1}
-                  </sup>
-                ) : null}
-              </span>
-            ))}
+            <AuthorOrcidLine
+              authors={authors}
+              affiliations={affiliations}
+              correspondingLast={false}
+            />
           </p>
 
           {affiliations.length > 0 && (
@@ -359,7 +355,10 @@ export function ArticleMasthead({
                             {rec.title}
                           </Link>
                           <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                            {rec.authors.slice(0, 2).join(", ")}
+                            {rec.authors
+                              .slice(0, 2)
+                              .map(authorDisplayName)
+                              .join(", ")}
                             {rec.authors.length > 2 ? " et al." : ""}
                           </p>
                         </li>
