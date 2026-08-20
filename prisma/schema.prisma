@@ -207,7 +207,7 @@ model Submission {
   ethicsStatement    String?
   manuscriptUrl      String?
   manuscriptPublicId String?
-  /// Full article body prepared for Atlas template / Typst PDF (Markdown-ish).
+  /// Full article body (HTML) bound to the journal template.
   productionBody     String?
   /// Uploaded figures for the production body: [{ id, url, filename, caption }]
   productionFigures  Json?
@@ -241,8 +241,15 @@ model Payment {
   id                 String           @id @default(cuid())
   submissionId       String           @unique
   submission         Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  /// Customer-facing APC in USD cents. Never treat this as the Paystack amount.
   amountCents        Int
   currency           String           @default("usd")
+  /// Internal Paystack amount in subunits (GHS pesewas). Admin/processing only.
+  internalAmount     Int?
+  /// Internal Paystack currency (typically GHS). Admin/processing only.
+  internalCurrency   String?          @default("GHS")
+  /// GHS per 1 USD used to compute internalAmount. Admin/processing only.
+  exchangeRate       Float?
   status             ApcPaymentStatus @default(PENDING)
   paystackReference  String?          @unique
   paystackAccessCode String?

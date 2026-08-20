@@ -13,11 +13,9 @@ export type SessionPayload = {
   role: Role;
 };
 
-function getSecret() {
+export function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
   if (!secret || secret === "replace-with-a-long-random-secret") {
-    // Allow local bootstrap with a fixed fallback so generate still works;
-    // production must set AUTH_SECRET.
     return new TextEncoder().encode(
       secret || "dev-only-nahda-secret-change-me-please-32chars",
     );
@@ -43,12 +41,12 @@ export async function createToken(payload: SessionPayload, days = 7) {
     .setSubject(payload.sub)
     .setIssuedAt()
     .setExpirationTime(`${days}d`)
-    .sign(getSecret());
+    .sign(getAuthSecret());
 }
 
 export async function verifyToken(token: string): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    const { payload } = await jwtVerify(token, getAuthSecret());
     if (!payload.sub || typeof payload.email !== "string") return null;
     return {
       sub: payload.sub,

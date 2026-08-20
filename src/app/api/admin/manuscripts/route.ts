@@ -4,6 +4,7 @@ import { prisma, prismaFailureMessage } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
 import { progressForStatus } from "@/lib/submission-utils";
+import { ensureManuscriptHtml } from "@/lib/import-manuscript";
 
 /**
  * List accepted papers waiting for full manuscript typing (before publish).
@@ -25,9 +26,24 @@ export async function GET(request: Request) {
         apcPaymentStatus: { in: ["PAID", "WAIVED", "NOT_REQUIRED"] },
       },
       include: {
-        journal: { select: { id: true, title: true, shortTitle: true } },
+        journal: {
+          select: {
+            id: true,
+            title: true,
+            shortTitle: true,
+            slug: true,
+            coverColor: true,
+            coverImageUrl: true,
+          },
+        },
         author: {
-          select: { id: true, name: true, email: true, institution: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            institution: true,
+            orcid: true,
+          },
         },
         payment: true,
       },
@@ -45,9 +61,24 @@ export async function GET(request: Request) {
           apcPaymentStatus: { in: ["PAID", "WAIVED", "NOT_REQUIRED"] },
         },
         include: {
-          journal: { select: { id: true, title: true, shortTitle: true } },
+          journal: {
+            select: {
+              id: true,
+              title: true,
+              shortTitle: true,
+              slug: true,
+              coverColor: true,
+              coverImageUrl: true,
+            },
+          },
           author: {
-            select: { id: true, name: true, email: true, institution: true },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              institution: true,
+              orcid: true,
+            },
           },
           payment: true,
         },
@@ -253,7 +284,7 @@ export async function PATCH(request: Request) {
 
     const updated = await saveProductionFields({
       id: data.submissionId,
-      body: data.body,
+      body: ensureManuscriptHtml(data.body),
       figures: data.figures ?? [],
       done: Boolean(data.done),
       existingReadyAt,

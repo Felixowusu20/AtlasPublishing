@@ -424,10 +424,14 @@ export function SubmissionWizard() {
             </label>
             <p className="text-xs text-[var(--muted)]">
               PDF opens best in the admin reader. Word files can still be opened
-              from the inbox.
+              from the inbox. Files over 10 MB are compressed automatically when
+              possible.
             </p>
             {file && (
-              <p className="text-xs text-[var(--muted)]">Selected: {file.name}</p>
+              <p className="text-xs text-[var(--muted)]">
+                Selected: {file.name} ({(file.size / (1024 * 1024)).toFixed(1)}{" "}
+                MB)
+              </p>
             )}
           </div>
         )}

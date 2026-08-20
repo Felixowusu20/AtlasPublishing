@@ -17,11 +17,102 @@ export type WordTableModel = {
 
 type Props = {
   initial?: WordTableModel | null;
-  onInsert: (markdown: string) => void;
+  onInsert: (html: string) => void;
   onCancel?: () => void;
   /** When true, button says “Update table in manuscript” */
   updateMode?: boolean;
 };
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function tableCaptionHtml(caption: string): string {
+  const t = caption.trim();
+  if (!t) return "";
+  const numbered = t.match(/^(table(?:\s+\d+)?)\.?\s*[:.—–-]?\s*(.*)$/i);
+  if (numbered) {
+    const label = numbered[1].replace(/^t/i, "T");
+    const rest = numbered[2].trim();
+    return rest
+      ? `<figcaption><strong>${escapeHtml(label)}.</strong> ${escapeHtml(rest)}</figcaption>`
+      : `<figcaption><strong>${escapeHtml(label)}.</strong></figcaption>`;
+  }
+  return `<figcaption><strong>Table.</strong> ${escapeHtml(t)}</figcaption>`;
+}
+
+export function tableModelToHtml(model: WordTableModel): string {
+  const cols = Math.max(1, model.headers.length);
+  const headers = model.headers.map((h) => escapeHtml(h.trim() || " "));
+  const body = model.rows
+    .map((r) => {
+      const cells = Array.from({ length: cols }, (_, i) =>
+        escapeHtml((r[i] ?? "").trim() || " "),
+      );
+      return `<tr>${cells.map((c) => `<td>${c}</td>`).join("")}</tr>`;
+    })
+    .join("");
+  const caption = tableCaptionHtml(model.caption);
+  return `<figure class="table-full">${caption}<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></figure>`;
+}
+
+function cellText(el: Element): string {
+  return (el.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+/** Read an existing manuscript table (or caption-only placeholder) into the layout editor. */
+export function htmlToTableModel(
+  root: Element,
+  captionFallback = "",
+): WordTableModel {
+  const figure =
+    root.tagName === "FIGURE" ? root : root.closest("figure");
+  const table = (
+    root.tagName === "TABLE" ? root : root.querySelector("table")
+  ) as HTMLTableElement | null;
+  const capEl = figure?.querySelector(":scope > figcaption") ?? null;
+  const caption = (capEl ? cellText(capEl) : captionFallback).trim();
+
+  if (!table) {
+    return {
+      headers: ["Column 1", "Column 2", "Column 3"],
+      rows: [
+        ["", "", ""],
+        ["", "", ""],
+        ["", "", ""],
+      ],
+      caption,
+      fullWidth: true,
+    };
+  }
+
+  const trs = Array.from(table.querySelectorAll("tr")).filter((tr) =>
+    tr.querySelector("th, td"),
+  );
+  const headerRow = table.querySelector("thead tr") ?? trs[0];
+  const headers = headerRow
+    ? Array.from(headerRow.querySelectorAll("th, td")).map((c) => cellText(c) || " ")
+    : ["Column 1"];
+  const bodyTrs = table.querySelector("thead")
+    ? Array.from(table.querySelectorAll("tbody tr"))
+    : trs.slice(1);
+  const rows = bodyTrs.map((tr) => {
+    const cells = Array.from(tr.querySelectorAll("th, td")).map((c) => cellText(c));
+    while (cells.length < headers.length) cells.push("");
+    return cells.slice(0, headers.length);
+  });
+
+  return {
+    headers: headers.length ? headers : ["Column 1"],
+    rows: rows.length ? rows : [headers.map(() => "")],
+    caption,
+    fullWidth: true,
+  };
+}
 
 function emptyGrid(rows: number, cols: number): WordTableModel {
   return {
@@ -30,7 +121,7 @@ function emptyGrid(rows: number, cols: number): WordTableModel {
       Array.from({ length: cols }, () => ""),
     ),
     caption: "",
-    fullWidth: false,
+    fullWidth: true,
   };
 }
 
@@ -255,11 +346,11 @@ export function WordTableEditor({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-[var(--ink)]">
-            Table
+            {updateMode ? "Edit table layout" : "Table"}
           </p>
           <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-            Click a cell to type · Drag row/column handles to reorder · Use + to
-            add rows and columns
+            Adjust caption, columns, and rows, then apply. Drag handles to
+            reorder.
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -275,7 +366,7 @@ export function WordTableEditor({
           <button
             type="button"
             className="btn-primary !px-3 !py-1.5 text-[11px]"
-            onClick={() => onInsert(tableModelToMarkdown(model))}
+            onClick={() => onInsert(tableModelToHtml(model))}
           >
             {updateMode ? "Update in manuscript" : "Insert into manuscript"}
           </button>
@@ -302,7 +393,7 @@ export function WordTableEditor({
               setModel((m) => ({ ...m, fullWidth: e.target.checked }))
             }
           />
-          Span both columns
+          Span full page
         </label>
       </div>
 

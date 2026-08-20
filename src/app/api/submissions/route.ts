@@ -10,6 +10,7 @@ import {
   sendEmail,
   submissionAcknowledgementEmailHtml,
 } from "@/lib/mail";
+import { withCustomerPayment } from "@/lib/payment-dto";
 
 export async function GET() {
   const session = await requireUser(["AUTHOR"]);
@@ -40,7 +41,9 @@ export async function GET() {
     orderBy: { updatedAt: "desc" },
   });
 
-  return jsonOk({ submissions });
+  return jsonOk({
+    submissions: submissions.map((s) => withCustomerPayment(s)),
+  });
 }
 
 const schema = z.object({

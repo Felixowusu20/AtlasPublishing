@@ -20,10 +20,11 @@ import {
   type PaystackChargeData,
 } from "@/lib/paystack";
 import {
-  DISPLAY_CURRENCY,
   NAHDA_MERCHANT_NAME,
   sanitizeCardholderMessage,
 } from "@/lib/payment-display";
+import { CUSTOMER_CURRENCY } from "@/lib/payment-currency";
+import { verifyApcPayToken } from "@/lib/payment-link";
 
 const cardSchema = z.object({
   number: z.string().min(12).max(23),
@@ -34,12 +35,14 @@ const cardSchema = z.object({
 
 const startSchema = z.object({
   submissionId: z.string().min(1),
+  token: z.string().min(1).optional(),
   action: z.literal("charge"),
   card: cardSchema,
 });
 
 const continueSchema = z.object({
   submissionId: z.string().min(1),
+  token: z.string().min(1).optional(),
   action: z.enum(["pin", "otp", "birthday", "phone", "check"]),
   reference: z.string().min(1),
   pin: z.string().min(4).max(4).optional(),
@@ -58,9 +61,48 @@ function mapChargeResponse(data: PaystackChargeData) {
     ),
     authUrl: data.url || null,
     paid: status === "success",
-    currency: DISPLAY_CURRENCY,
+    currency: CUSTOMER_CURRENCY,
     merchant: NAHDA_MERCHANT_NAME,
   };
+}
+
+async function loadPayableSubmission(raw: {
+  submissionId?: string;
+  token?: string;
+}) {
+  if (raw.token) {
+    const fromLink = await verifyApcPayToken(raw.token);
+    if (!fromLink) {
+      return {
+        error: jsonError("This payment link is invalid or has expired.", 401),
+      };
+    }
+    const submission = await prisma.submission.findFirst({
+      where: { id: fromLink.submissionId },
+      include: {
+        journal: true,
+        author: { select: { name: true, email: true } },
+        payment: true,
+      },
+    });
+    if (!submission) return { error: jsonError("Submission not found", 404) };
+    return { submission };
+  }
+
+  const session = await requireUser(["AUTHOR"]);
+  if (!session) return { error: unauthorized() };
+  if (!raw.submissionId) return { error: jsonError("Missing payment", 400) };
+
+  const submission = await prisma.submission.findFirst({
+    where: { id: raw.submissionId, authorId: session.sub },
+    include: {
+      journal: true,
+      author: { select: { name: true, email: true } },
+      payment: true,
+    },
+  });
+  if (!submission) return { error: jsonError("Submission not found", 404) };
+  return { submission };
 }
 
 async function finalizeIfPaid(opts: {
@@ -83,13 +125,10 @@ async function finalizeIfPaid(opts: {
 }
 
 /**
- * Custom Nahda checkout — charge card via Paystack Charge API (no hosted popup).
- * Card details are forwarded to Paystack only and never stored.
+ * Custom Nahda checkout — charge via Paystack Charge API.
+ * The author never sees Paystack's hosted checkout (no GHS popup).
  */
 export async function POST(request: Request) {
-  const session = await requireUser(["AUTHOR"]);
-  if (!session) return unauthorized();
-
   try {
     if (!paystackConfigured()) {
       return jsonError(
@@ -100,20 +139,12 @@ export async function POST(request: Request) {
 
     const raw = await request.json();
     const action = typeof raw?.action === "string" ? raw.action : "charge";
-
-    const submission = await prisma.submission.findFirst({
-      where: {
-        id: String(raw?.submissionId ?? ""),
-        authorId: session.sub,
-      },
-      include: {
-        journal: true,
-        author: { select: { name: true, email: true } },
-        payment: true,
-      },
+    const loaded = await loadPayableSubmission({
+      submissionId: typeof raw?.submissionId === "string" ? raw.submissionId : "",
+      token: typeof raw?.token === "string" ? raw.token : undefined,
     });
-
-    if (!submission) return jsonError("Submission not found", 404);
+    if ("error" in loaded) return loaded.error;
+    const { submission } = loaded;
 
     if (!needsApcPayment(submission.apcPaymentStatus)) {
       return jsonOk({
@@ -121,6 +152,7 @@ export async function POST(request: Request) {
         status: "success",
         alreadyCleared: true,
         apcStatus: submission.apcPaymentStatus,
+        currency: CUSTOMER_CURRENCY,
       });
     }
 
@@ -136,7 +168,6 @@ export async function POST(request: Request) {
       return jsonError("Author email is required to pay", 400);
     }
 
-    // —— Continue auth (PIN / OTP / birthday / phone / poll) ——
     if (action !== "charge") {
       const body = continueSchema.parse(raw);
       if (submission.payment?.paystackReference !== body.reference) {
@@ -193,7 +224,6 @@ export async function POST(request: Request) {
       return jsonOk(mapped);
     }
 
-    // —— Start card charge ——
     const body = startSchema.parse(raw);
     const prepared = await prepareApcPayment(submission);
 
@@ -203,7 +233,7 @@ export async function POST(request: Request) {
         status: "success",
         alreadyCleared: true,
         amountLabel: prepared.amountLabel,
-        currency: DISPLAY_CURRENCY,
+        currency: CUSTOMER_CURRENCY,
         merchant: NAHDA_MERCHANT_NAME,
       });
     }
@@ -233,11 +263,18 @@ export async function POST(request: Request) {
         submissionId: submission.id,
         manuscriptId: submission.manuscriptId,
         paymentId,
-        apcUsd: prepared.amountLabel,
         authorEmail,
         usdCents: String(prepared.amountCents),
         merchant: NAHDA_MERCHANT_NAME,
-        displayCurrency: DISPLAY_CURRENCY,
+      },
+    });
+
+    await prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        paystackReference: data.reference,
+        internalAmount: data.chargedAmount,
+        internalCurrency: data.chargedCurrency,
       },
     });
 
@@ -254,7 +291,7 @@ export async function POST(request: Request) {
         ...done,
         reference,
         amountLabel: prepared.amountLabel,
-        currency: DISPLAY_CURRENCY,
+        currency: CUSTOMER_CURRENCY,
         merchant: NAHDA_MERCHANT_NAME,
       });
     }
@@ -263,7 +300,7 @@ export async function POST(request: Request) {
       ...mapped,
       reference,
       amountLabel: prepared.amountLabel,
-      currency: DISPLAY_CURRENCY,
+      currency: CUSTOMER_CURRENCY,
       merchant: NAHDA_MERCHANT_NAME,
     });
   } catch (err) {

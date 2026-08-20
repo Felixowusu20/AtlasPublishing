@@ -5,6 +5,8 @@ import { ArticleListingCard } from "@/components/article-listing-card";
 import { JsonLd } from "@/components/json-ld";
 import { getBoardByJournal } from "@/data/mock";
 import { prisma } from "@/lib/db";
+import { parseApcAmountCents } from "@/lib/apc";
+import { formatCustomerUsd } from "@/lib/format-usd";
 import { journalColorFromKey } from "@/lib/journal-colors";
 import { issueKey } from "@/lib/seo/article-seo";
 import { periodicalJsonLd } from "@/lib/seo/jsonld";
@@ -27,6 +29,14 @@ function reviewTypeLabel(value: string) {
     .split("_")
     .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
     .join(" ");
+}
+
+function apcDisplay(journal: { apc?: string | null; openAccess: boolean }) {
+  const cents = parseApcAmountCents(journal.apc, {
+    openAccess: journal.openAccess,
+  });
+  if (cents > 0) return formatCustomerUsd(cents);
+  return journal.apc?.trim() || "—";
 }
 
 export async function generateMetadata({
@@ -261,7 +271,7 @@ export default async function JournalDetailPage({
               {(
                 [
                   ["Impact factor", journal.impactFactor ?? "N/A"],
-                  ["APC", journal.apc ?? "—"],
+                  ["APC", apcDisplay(journal)],
                   ["Frequency", journal.frequency ?? "—"],
                   ["DOI prefix", journal.doiPrefix ?? "—"],
                   ["Editor-in-Chief", journal.editorInChief ?? "—"],
@@ -433,7 +443,7 @@ export default async function JournalDetailPage({
             <p className="mt-3 text-sm leading-relaxed text-[var(--muted)]">
               Use the submission wizard to enter metadata, authors, statements,
               and files. APC for this journal:{" "}
-              <strong>{journal.apc ?? "—"}</strong>. Review model:{" "}
+              <strong>{apcDisplay(journal)}</strong>. Review model:{" "}
               <strong>{reviewTypeLabel(journal.reviewType)}</strong>.
             </p>
             <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-[var(--muted)]">

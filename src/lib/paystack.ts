@@ -1,9 +1,11 @@
 import { getAppBaseUrl } from "@/lib/app-url";
-import { formatApcAmount } from "@/lib/apc";
+import { NAHDA_MERCHANT_NAME } from "@/lib/payment-display";
 import {
-  DISPLAY_CURRENCY,
-  NAHDA_MERCHANT_NAME,
-} from "@/lib/payment-display";
+  INTERNAL_PAYSTACK_CURRENCY,
+  formatCustomerUsd,
+  internalPaystackCurrency,
+  usdToGhsRate,
+} from "@/lib/payment-currency";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -35,27 +37,24 @@ export function getPaystackSecretKey(): string {
 }
 
 /**
- * Preferred Paystack charge currency from env.
- * Defaults to USD so the cardholder, checkout, and gateway all show the APC in USD.
+ * Internal Paystack processing currency. Defaults to GHS.
+ * Customer-facing UI never uses this value.
  */
 export function paystackCurrency(): string {
-  const raw = (process.env.PAYSTACK_CURRENCY ?? DISPLAY_CURRENCY)
-    .trim()
-    .toUpperCase();
-  return raw || DISPLAY_CURRENCY;
+  return internalPaystackCurrency();
 }
 
 function fxPerUsd(currency: string): number {
-  const envKey = `PAYSTACK_${currency}_PER_USD`;
+  const code = currency.toUpperCase();
+  if (code === "GHS") return usdToGhsRate();
+
+  const envKey = `PAYSTACK_${code}_PER_USD`;
   const fromEnv = Number(process.env[envKey]);
   if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
 
-  // Sensible defaults for Paystack markets (override via env)
-  switch (currency) {
+  switch (code) {
     case "NGN":
       return Number(process.env.PAYSTACK_NGN_PER_USD ?? "1600") || 1600;
-    case "GHS":
-      return Number(process.env.PAYSTACK_GHS_PER_USD ?? "15.5") || 15.5;
     case "KES":
       return Number(process.env.PAYSTACK_KES_PER_USD ?? "130") || 130;
     case "ZAR":
@@ -70,9 +69,8 @@ function fxPerUsd(currency: string): number {
 }
 
 /**
- * Convert USD cents → Paystack subunit.
- * USD charges are never FX-converted — the original APC cents are sent as-is.
- * Non-USD conversion is kept only to verify legacy settlements.
+ * Convert trusted USD cents → Paystack subunit for the internal currency.
+ * GHS uses pesewas: usdMajor × rate × 100.
  */
 export function usdToPaystackAmount(usdCents: number, currency: string): number {
   const code = currency.toUpperCase();
@@ -83,9 +81,8 @@ export function usdToPaystackAmount(usdCents: number, currency: string): number 
 }
 
 /**
- * Journal APC is parsed as USD cents.
- * When the transaction currency is USD, the gateway amount is the original USD
- * cents — no GHS (or other local) conversion for charge or display.
+ * Backend-only: USD customer price → internal Paystack amount.
+ * The returned `label` is always the customer USD label.
  */
 export function resolvePaystackCharge(
   usdCents: number,
@@ -95,22 +92,15 @@ export function resolvePaystackCharge(
   currency: string;
   label: string;
   usdCents: number;
+  exchangeRate: number;
 } {
   const currency = (currencyOverride || paystackCurrency()).toUpperCase();
-  const usdLabel = formatApcAmount(usdCents, "usd");
-  if (currency === "USD") {
-    return {
-      amount: Math.max(0, Math.round(usdCents)),
-      currency: "USD",
-      label: usdLabel,
-      usdCents,
-    };
-  }
   return {
     amount: usdToPaystackAmount(usdCents, currency),
     currency,
-    label: usdLabel,
+    label: formatCustomerUsd(usdCents),
     usdCents,
+    exchangeRate: fxPerUsd(currency),
   };
 }
 
@@ -166,9 +156,8 @@ export function isCurrencyUnsupported(err: unknown): boolean {
 }
 
 /**
- * Try USD first (so international cards can be billed in USD when enabled).
- * If the merchant has not enabled USD, fall back to their settlement currencies.
- * Author-facing copy stays USD regardless of which currency Paystack accepts.
+ * Internal Paystack currencies only. GHS first for Ghana settlement.
+ * USD is not attempted — we do not create a USD Paystack transaction.
  */
 function gatewayCurrencyAttempts(
   usdCents: number,
@@ -177,11 +166,12 @@ function gatewayCurrencyAttempts(
   const ordered: string[] = [];
   const push = (c: string) => {
     const code = c.toUpperCase();
-    if (code && !ordered.includes(code)) ordered.push(code);
+    if (!code || code === "USD") return;
+    if (!ordered.includes(code)) ordered.push(code);
   };
 
+  push(INTERNAL_PAYSTACK_CURRENCY);
   push(paystackCurrency());
-  push("USD");
   for (const c of merchantCurrencies) push(c);
   for (const c of ["GHS", "NGN", "KES", "ZAR", "XOF"]) push(c);
 
@@ -201,7 +191,7 @@ function unsupportedCurrencyError(lastError: unknown, supported: string): Error 
   const detail =
     lastError instanceof Error ? lastError.message : "Currency not supported";
   return new Error(
-    `${detail}. This Paystack business supports: ${supported}. Nahda still shows the APC in USD; enable USD under Paystack Dashboard → Settings → Preferences → Currency if you want the bank/3DS page in USD too.`,
+    `${detail}. This Paystack business supports: ${supported}. Enable GHS under Paystack Dashboard → Settings → Preferences → Currency.`,
   );
 }
 
@@ -220,9 +210,8 @@ export async function getMerchantCurrencies(): Promise<string[]> {
 }
 
 /**
- * Start Paystack hosted checkout (card channel).
- * Tries USD first; falls back to the merchant’s enabled currency so checkout
- * still works when USD is not turned on in Paystack.
+ * Start Paystack hosted checkout. Amount/currency sent to Paystack are internal
+ * (GHS). Do not overlay or alter Paystack's hosted checkout UI.
  */
 export async function initializePaystackTransaction(opts: {
   email: string;
@@ -231,10 +220,13 @@ export async function initializePaystackTransaction(opts: {
   callbackUrl: string;
   metadata: Record<string, string>;
 }): Promise<
-  PaystackInitializeData & { chargedAmount: number; chargedCurrency: string }
+  PaystackInitializeData & {
+    chargedAmount: number;
+    chargedCurrency: string;
+    exchangeRate: number;
+  }
 > {
   const merchantCurrencies = await getMerchantCurrencies();
-  const usdLabel = formatApcAmount(opts.usdCents, "usd");
   const attempts = gatewayCurrencyAttempts(opts.usdCents, merchantCurrencies);
 
   let lastError: unknown;
@@ -251,39 +243,11 @@ export async function initializePaystackTransaction(opts: {
         metadata: {
           ...opts.metadata,
           usdCents: String(opts.usdCents),
-          apcUsd: usdLabel,
           merchant: NAHDA_MERCHANT_NAME,
-          displayCurrency: DISPLAY_CURRENCY,
           cancel_action: opts.callbackUrl.replace(
             "payment=success",
             "payment=cancelled",
           ),
-          custom_fields: [
-            {
-              display_name: "Merchant",
-              variable_name: "merchant",
-              value: NAHDA_MERCHANT_NAME,
-            },
-            {
-              display_name: "Currency",
-              variable_name: "currency",
-              value: DISPLAY_CURRENCY,
-            },
-            {
-              display_name: "Amount",
-              variable_name: "apc_usd",
-              value: `${usdLabel} ${DISPLAY_CURRENCY}`,
-            },
-            ...(opts.metadata.authorEmail
-              ? [
-                  {
-                    display_name: "Author email",
-                    variable_name: "author_email",
-                    value: opts.metadata.authorEmail,
-                  },
-                ]
-              : []),
-          ],
         },
       };
 
@@ -296,13 +260,14 @@ export async function initializePaystackTransaction(opts: {
       );
 
       console.info(
-        `[paystack] checkout initialized in ${attempt.currency} (APC ${usdLabel})`,
+        `[paystack] checkout initialized internally in ${attempt.currency}`,
       );
 
       return {
         ...data,
         chargedAmount: attempt.amount,
         chargedCurrency: attempt.currency,
+        exchangeRate: fxPerUsd(attempt.currency),
       };
     } catch (err) {
       lastError = err;
@@ -387,26 +352,6 @@ export async function chargePaystackCard(
     body.metadata = {
       ...input.metadata,
       merchant: input.metadata.merchant || NAHDA_MERCHANT_NAME,
-      displayCurrency: DISPLAY_CURRENCY,
-      custom_fields: [
-        {
-          display_name: "Merchant",
-          variable_name: "merchant",
-          value: input.metadata.merchant || NAHDA_MERCHANT_NAME,
-        },
-        {
-          display_name: "Currency",
-          variable_name: "currency",
-          value: DISPLAY_CURRENCY,
-        },
-        {
-          display_name: "Amount",
-          variable_name: "apc_usd",
-          value: input.metadata.apcUsd
-            ? `${input.metadata.apcUsd} ${DISPLAY_CURRENCY}`
-            : "",
-        },
-      ],
     };
   }
 
@@ -438,7 +383,7 @@ export async function chargePaystackInSupportedCurrency(opts: {
 > {
   const merchantCurrencies = await getMerchantCurrencies();
   const attempts = gatewayCurrencyAttempts(opts.usdCents, merchantCurrencies);
-  const usdLabel = formatApcAmount(opts.usdCents, "usd");
+  const usdLabel = formatCustomerUsd(opts.usdCents);
   let lastError: unknown;
 
   for (const attempt of attempts) {

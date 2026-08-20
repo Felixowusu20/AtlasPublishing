@@ -41,7 +41,7 @@ export function CookieConsent() {
 
   useEffect(() => {
     if (!mounted) return;
-    if (pathname.startsWith("/admin")) {
+    if (pathname.startsWith("/admin") || pathname.startsWith("/pay")) {
       setVisible(false);
       return;
     }

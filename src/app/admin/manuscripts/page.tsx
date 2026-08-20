@@ -2,12 +2,25 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useAutosave } from "@/hooks/use-autosave";
+import { NahdaArticleTemplate } from "@/components/atlas-article-template";
 import {
   ManuscriptEditor,
   type ManuscriptFigure,
 } from "@/components/manuscript-editor";
+import { ManuscriptImportPanel } from "@/components/manuscript-import";
 import { NahdaLoader } from "@/components/nahda-loader";
+import { formatAuthorWithOrcid, parseAuthorOrcid } from "@/lib/orcid";
+import { htmlToPlainText } from "@/lib/import-manuscript";
+import { journalArticlePalette } from "@/lib/journal-colors";
 
 type QueueItem = {
   id: string;
@@ -18,42 +31,59 @@ type QueueItem = {
   articleType: string;
   status: string;
   progress: number;
+  submittedAt?: string;
   manuscriptUrl?: string | null;
   productionBody?: string | null;
   productionFigures?: ManuscriptFigure[] | null;
   manuscriptReadyAt?: string | null;
-  journal: { id: string; title: string; shortTitle: string };
+  funding?: string | null;
+  conflictOfInterest?: string | null;
+  authorsJson?: {
+    name?: string;
+    affiliation?: string;
+    orcid?: string | null;
+  }[] | null;
+  journal: {
+    id: string;
+    title: string;
+    shortTitle: string;
+    slug?: string;
+    coverColor?: string;
+    coverImageUrl?: string | null;
+  };
   author: {
     id: string;
     name: string;
     email: string;
     institution?: string | null;
+    orcid?: string | null;
   };
 };
 
-const DEFAULT_BODY = `# Introduction
+function authorsForTemplate(sub: QueueItem): string[] {
+  if (Array.isArray(sub.authorsJson) && sub.authorsJson.length > 0) {
+    const rows = sub.authorsJson
+      .map((a, i) => {
+        const parsed = parseAuthorOrcid(a.name ?? "");
+        if (!parsed.name) return "";
+        const orcid = a.orcid || parsed.orcid || (i === 0 ? sub.author.orcid : null);
+        return formatAuthorWithOrcid(parsed.name, orcid);
+      })
+      .filter(Boolean);
+    if (rows.length) return rows;
+  }
+  return [formatAuthorWithOrcid(sub.author.name, sub.author.orcid)];
+}
 
-Paste or write the full manuscript sections here.
-
-## Methods
-
-
-
-## Results
-
-
-
-## Discussion
-
-
-
-## Conclusion
-
-
-
-## References
-
-`;
+function affiliationsForTemplate(sub: QueueItem): string[] {
+  if (Array.isArray(sub.authorsJson) && sub.authorsJson.length > 0) {
+    const list = sub.authorsJson
+      .map((a) => a.affiliation?.trim())
+      .filter((v): v is string => Boolean(v));
+    if (list.length) return list;
+  }
+  return sub.author.institution ? [sub.author.institution] : [];
+}
 
 function parseFigures(value: unknown): ManuscriptFigure[] {
   if (!Array.isArray(value)) return [];
@@ -74,10 +104,11 @@ function ManuscriptsPageInner() {
   const [title, setTitle] = useState("");
   const [abstractText, setAbstractText] = useState("");
   const [keywords, setKeywords] = useState("");
-  const [body, setBody] = useState(DEFAULT_BODY);
+  const [body, setBody] = useState("");
   const [figures, setFigures] = useState<ManuscriptFigure[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [autosaveNote, setAutosaveNote] = useState("");
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
 
@@ -86,14 +117,135 @@ function ManuscriptsPageInner() {
     [queue, selectedId],
   );
 
+  const draftRef = useRef({
+    selectedId,
+    title,
+    abstractText,
+    keywords,
+    body,
+    figures,
+    dirty,
+  });
+  useEffect(() => {
+    draftRef.current = {
+      selectedId,
+      title,
+      abstractText,
+      keywords,
+      body,
+      figures,
+      dirty,
+    };
+  });
+
+  const persist = useCallback(async (opts: { done: boolean; silent?: boolean }) => {
+    const draft = draftRef.current;
+    if (!draft.selectedId) return;
+    if (!opts.silent) {
+      if (!draft.title.trim()) {
+        setError("Title from the submission is required.");
+        return;
+      }
+      if (!draft.abstractText.trim()) {
+        setError("Abstract from the submission is required.");
+        return;
+      }
+      if (!htmlToPlainText(draft.body)) {
+        setError(
+          "Import the Introduction–References from Word or Google Docs before continuing.",
+        );
+        return;
+      }
+    }
+
+    const submissionId = draft.selectedId;
+    if (!opts.silent) {
+      setSaving(true);
+      setError("");
+    } else {
+      setAutosaveNote("Saving…");
+    }
+
+    const payload: Record<string, unknown> = {
+      submissionId,
+      body: draft.body,
+      figures: draft.figures,
+      done: opts.done,
+      keywords: draft.keywords
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean),
+    };
+    if (draft.title.trim().length >= 2) payload.title = draft.title.trim();
+    if (draft.abstractText.trim().length >= 10) {
+      payload.abstract = draft.abstractText.trim();
+    }
+
+    try {
+      const res = await fetch("/api/admin/manuscripts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        keepalive: Boolean(opts.silent),
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      if (draftRef.current.selectedId !== submissionId) return;
+
+      setDirty(false);
+      setAutosaveNote("Saved");
+      setQueue((prev) =>
+        prev.map((q) =>
+          q.id === submissionId
+            ? {
+                ...q,
+                title: data.submission?.title ?? draft.title.trim(),
+                abstract: data.submission?.abstract ?? draft.abstractText.trim(),
+                keywords: data.submission?.keywords ?? q.keywords,
+                productionBody: draft.body,
+                productionFigures: draft.figures,
+                manuscriptReadyAt:
+                  data.submission?.manuscriptReadyAt ?? q.manuscriptReadyAt,
+                status: data.submission?.status ?? q.status,
+              }
+            : q,
+        ),
+      );
+
+      if (opts.done) {
+        window.location.assign(
+          data.publishUrl || `/admin/publishedArticles?id=${submissionId}`,
+        );
+        return;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Save failed";
+      if (opts.silent) setAutosaveNote("Couldn’t autosave");
+      else setError(message);
+      if (!opts.silent) setSaving(false);
+      return;
+    }
+    if (!opts.silent) setSaving(false);
+  }, []);
+
+  useAutosave({
+    enabled: Boolean(selectedId),
+    dirty,
+    delayMs: 1200,
+    save: () => persist({ done: false, silent: true }),
+  });
+
   function selectItem(sub: QueueItem) {
+    if (draftRef.current.dirty && draftRef.current.selectedId) {
+      void persist({ done: false, silent: true });
+    }
     setSelectedId(sub.id);
     setError("");
-    // Always pull title + abstract from the accepted submission record
+    setAutosaveNote("");
     setTitle(sub.title?.trim() || "");
     setAbstractText(sub.abstract?.trim() || "");
     setKeywords((sub.keywords ?? []).join(", "));
-    setBody(sub.productionBody?.trim() ? sub.productionBody : DEFAULT_BODY);
+    setBody(sub.productionBody?.trim() ? sub.productionBody : "");
     setFigures(parseFigures(sub.productionFigures));
     setDirty(false);
   }
@@ -140,73 +292,7 @@ function ManuscriptsPageInner() {
   }, []);
 
   async function save(opts: { done: boolean }) {
-    if (!selected) return;
-    if (!title.trim()) {
-      setError("Title from the submission is required.");
-      return;
-    }
-    if (!abstractText.trim()) {
-      setError("Abstract from the submission is required.");
-      return;
-    }
-    if (!body.trim()) {
-      setError("Add the full manuscript text before continuing.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const res = await fetch("/api/admin/manuscripts", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId: selected.id,
-          title: title.trim(),
-          abstract: abstractText.trim(),
-          keywords: keywords
-            .split(",")
-            .map((k) => k.trim())
-            .filter(Boolean),
-          body,
-          figures,
-          done: opts.done,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
-
-      setDirty(false);
-      setQueue((prev) =>
-        prev.map((q) =>
-          q.id === selected.id
-            ? {
-                ...q,
-                title: data.submission?.title ?? title.trim(),
-                abstract: data.submission?.abstract ?? abstractText.trim(),
-                keywords: data.submission?.keywords ?? q.keywords,
-                productionBody: body,
-                productionFigures: figures,
-                manuscriptReadyAt:
-                  data.submission?.manuscriptReadyAt ?? q.manuscriptReadyAt,
-                status: data.submission?.status ?? q.status,
-              }
-            : q,
-        ),
-      );
-
-      if (opts.done) {
-        // Hard navigate so Publish loads the saved body with a fresh client
-        window.location.assign(
-          data.publishUrl || `/admin/publishedArticles?id=${selected.id}`,
-        );
-        return;
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-      setSaving(false);
-      return;
-    }
-    setSaving(false);
+    await persist({ done: opts.done, silent: false });
   }
 
   return (
@@ -216,8 +302,9 @@ function ManuscriptsPageInner() {
           Full manuscripts
         </h1>
         <p className="text-xs text-[var(--muted)]">
-          {queue.length} paper{queue.length === 1 ? "" : "s"} · Title and
-          abstract load from the accepted submission
+          {queue.length} paper{queue.length === 1 ? "" : "s"} · This journal’s
+          template holds the header; import Word or Google Docs, then edit
+          Introduction–References
         </p>
       </div>
 
@@ -280,7 +367,11 @@ function ManuscriptsPageInner() {
                   </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
                     {selected.manuscriptId} · {selected.author.name}
-                    {dirty ? " · Unsaved" : ""}
+                    {dirty
+                      ? " · Unsaved"
+                      : autosaveNote
+                        ? ` · ${autosaveNote}`
+                        : ""}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -313,7 +404,42 @@ function ManuscriptsPageInner() {
                 </div>
               </div>
 
-              <div className="space-y-3 rounded-xl border border-[var(--line)] bg-white p-4">
+              <div className="overflow-visible rounded-xl border border-[var(--line)] bg-[#e8edf2] p-3 sm:p-5">
+                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Journal template · header through abstract
+                </p>
+                <NahdaArticleTemplate
+                  journalTitle={selected.journal.title}
+                  journalShortTitle={selected.journal.shortTitle}
+                  journalSlug={selected.journal.slug}
+                  coverColor={selected.journal.coverColor}
+                  logoUrl={selected.journal.coverImageUrl || null}
+                  journalUrl={
+                    selected.journal.slug
+                      ? `/journals/${selected.journal.slug}`
+                      : undefined
+                  }
+                  manuscriptId={selected.manuscriptId}
+                  title={title}
+                  authors={authorsForTemplate(selected)}
+                  affiliations={affiliationsForTemplate(selected)}
+                  abstract={abstractText}
+                  keywords={keywords
+                    .split(",")
+                    .map((k) => k.trim())
+                    .filter(Boolean)}
+                  articleType={selected.articleType}
+                  receivedAt={selected.submittedAt}
+                  funding={selected.funding}
+                  conflictOfInterest={selected.conflictOfInterest}
+                />
+              </div>
+
+              <details className="rounded-xl border border-[var(--line)] bg-white p-4">
+                <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
+                  Edit title, abstract, and keywords
+                </summary>
+                <div className="mt-3 space-y-3">
                 <label className="field">
                   <span>Title</span>
                   <input
@@ -347,24 +473,54 @@ function ManuscriptsPageInner() {
                     }}
                   />
                 </label>
-              </div>
+                </div>
+              </details>
 
-              <ManuscriptEditor
-                value={body}
-                onChange={(next) => {
-                  setBody(next);
-                  setDirty(true);
-                }}
-                figures={figures}
-                onFiguresChange={(next) => {
-                  setFigures(next);
-                  setDirty(true);
-                }}
-                onError={setError}
-                rows={24}
-                label="Full manuscript body"
-                hint="Title and abstract above are taken from the accepted submission. Write the article sections here."
-              />
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-[var(--ink)]">
+                    Introduction to References
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
+                    Upload a Word file or a shared Google Doc. Title, authors,
+                    abstract, and keywords stay on this journal&apos;s template.
+                    After import you can bold, color, and tidy the body here.
+                  </p>
+                </div>
+                <ManuscriptImportPanel
+                  hasExistingBody={Boolean(htmlToPlainText(body))}
+                  onError={setError}
+                  onImported={(result) => {
+                    setBody(result.body);
+                    setFigures(result.figures);
+                    setDirty(true);
+                  }}
+                />
+                <ManuscriptEditor
+                  key={selected.id}
+                  value={body}
+                  onChange={(next) => {
+                    setBody(next);
+                    setDirty(true);
+                  }}
+                  figures={figures}
+                  onFiguresChange={(next) => {
+                    setFigures(next);
+                    setDirty(true);
+                  }}
+                  onError={setError}
+                  rows={18}
+                  showImport={false}
+                  journalPrimary={
+                    journalArticlePalette(
+                      selected.journal.coverColor,
+                      selected.journal.slug || selected.journal.shortTitle,
+                    ).primary
+                  }
+                  label="Imported body"
+                  hint="Select a heading such as Challenges, then pick a color. The first swatch restores the journal color. Title, authors, ORCID, abstract, and keywords stay on the template above."
+                />
+              </div>
 
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 <Link

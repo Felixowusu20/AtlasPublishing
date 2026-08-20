@@ -4,7 +4,12 @@ const nextConfig: NextConfig = {
   // Avoid streaming-metadata hydration mismatches in browsers
   // (MetadataWrapper <div hidden> vs whitespace).
   htmlLimitedBots: /.*/,
-  serverExternalPackages: ["@myriaddreamin/typst-ts-node-compiler"],
+  experimental: {
+    proxyClientMaxBodySize: "50mb",
+    serverActions: {
+      bodySizeLimit: "50mb",
+    },
+  },
   images: {
     remotePatterns: [
       {

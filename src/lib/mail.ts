@@ -449,25 +449,33 @@ export function apcPaymentEmailHtml(opts: {
   submissionUrl: string;
 }) {
   return emailDocument({
-    title: "Manuscript accepted: payment required",
+    title: "Payment request",
     bodyHtml: `
+      <p style="margin:0 0 6px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;color:${BRAND.muted}">
+        Payment request
+      </p>
       <p style="margin:0 0 14px">Dear ${escapeHtml(opts.authorName)},</p>
       <p style="margin:0 0 14px">
-        <strong>${escapeHtml(opts.title)}</strong>
+        Thank you for your order. <strong>${escapeHtml(opts.title)}</strong>
         (${escapeHtml(opts.manuscriptId)}) has been accepted for publication in
         <em>${escapeHtml(opts.journalTitle)}</em>.
       </p>
+      <p style="margin:0 0 6px;font-size:13px;color:${BRAND.muted}">Amount due</p>
+      <p style="margin:0 0 14px;font-size:28px;line-height:1.2;font-weight:700;color:${BRAND.ink}">
+        ${escapeHtml(opts.amountLabel)}
+      </p>
       <p style="margin:0 0 14px">
-        To proceed to production, please pay the article processing charge of
-        <strong>${escapeHtml(opts.amountLabel)}</strong>
-        <span style="color:${BRAND.muted}">(USD)</span>.
+        Please click the button below to complete your secure payment.
+      </p>
+      <p style="margin:0 0 14px;font-size:13px;color:${BRAND.muted}">
+        Secure payment • Visa • Mastercard
       </p>
       <p style="margin:0 0 14px;font-size:14px;color:${BRAND.muted}">
         You may also open your manuscript page:
         <a href="${opts.submissionUrl}" style="color:${BRAND.green}">${escapeHtml(opts.submissionUrl)}</a>
       </p>
     `,
-    cta: { href: opts.checkoutUrl, label: "Pay article processing charge" },
+    cta: { href: opts.checkoutUrl, label: `Pay ${opts.amountLabel}` },
   });
 }
 
@@ -477,7 +485,7 @@ export function apcReceiptEmailHtml(opts: {
   title: string;
   manuscriptId: string;
   journalTitle: string;
-  /** Formatted USD amount, e.g. "$1,200.00" */
+  /** Formatted customer amount, e.g. "$1,200 USD" */
   amountLabel: string;
   /** ISO / display date */
   paidAtLabel: string;
@@ -518,7 +526,6 @@ export function apcReceiptEmailHtml(opts: {
             </p>
             <p style="margin:8px 0 0;font-size:38px;line-height:1;color:#ffffff;font-weight:700;letter-spacing:-0.5px">
               ${escapeHtml(opts.amountLabel)}
-              <span style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.8)">USD</span>
             </p>
             <p style="margin:14px 0 0">
               <span style="display:inline-block;background:rgba(255,255,255,0.16);color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;padding:6px 14px;border-radius:999px">
@@ -532,7 +539,7 @@ export function apcReceiptEmailHtml(opts: {
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-family:Georgia,'Times New Roman',serif">
               ${row("Merchant", escapeHtml("Nahda Publications"))}
               ${row("Currency", "USD")}
-              ${row("Amount", `${escapeHtml(opts.amountLabel)} USD`)}
+              ${row("Amount", escapeHtml(opts.amountLabel))}
               ${row("Receipt no.", escapeHtml(opts.receiptNumber), { mono: true })}
               ${row("Paid on", escapeHtml(opts.paidAtLabel))}
               ${row("Journal", escapeHtml(opts.journalTitle))}

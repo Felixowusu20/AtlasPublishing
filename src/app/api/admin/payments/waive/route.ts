@@ -2,7 +2,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
-import { formatApcAmount } from "@/lib/apc";
+import { formatCustomerUsd } from "@/lib/payment-currency";
+import { withAdminPayment } from "@/lib/payment-dto";
 import { progressForStatus } from "@/lib/submission-utils";
 
 /** Admin: waive APC and move the paper to IN_PRODUCTION. */
@@ -52,9 +53,15 @@ export async function POST(request: Request) {
             payment: true,
           },
         });
-        return jsonOk({ submission: moved, alreadyCleared: true });
+        return jsonOk({
+          submission: withAdminPayment(moved),
+          alreadyCleared: true,
+        });
       }
-      return jsonOk({ submission, alreadyCleared: true });
+      return jsonOk({
+        submission: withAdminPayment(submission),
+        alreadyCleared: true,
+      });
     }
 
     const amountCents = submission.payment?.amountCents ?? 0;
@@ -110,8 +117,8 @@ export async function POST(request: Request) {
     });
 
     return jsonOk({
-      submission: updated,
-      amountLabel: formatApcAmount(amountCents),
+      submission: withAdminPayment(updated),
+      amountLabel: formatCustomerUsd(amountCents),
       waived: true,
     });
   } catch (err) {

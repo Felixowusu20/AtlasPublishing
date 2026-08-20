@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireUser } from "@/lib/session";
+import { withCustomerPayment } from "@/lib/payment-dto";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -34,5 +35,5 @@ export async function GET(_request: Request, { params }: Params) {
   });
 
   if (!submission) return jsonError("Not found", 404);
-  return jsonOk({ submission });
+  return jsonOk({ submission: withCustomerPayment(submission) });
 }

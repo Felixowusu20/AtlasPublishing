@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { formatApcAmount, parseApcAmountCents } from "@/lib/apc";
+import { parseApcAmountCents } from "@/lib/apc";
+import { formatCustomerUsd } from "@/lib/payment-currency";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export default async function FeesPage() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 font-medium">
                       {cents > 0
-                        ? formatApcAmount(cents)
+                        ? formatCustomerUsd(cents)
                         : j.apc?.trim() || "No APC"}
                     </td>
                   </tr>

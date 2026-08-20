@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { NahdaArticleTemplate } from "@/components/atlas-article-template";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -9,14 +9,18 @@ import {
   ManuscriptEditor,
   type ManuscriptFigure,
 } from "@/components/manuscript-editor";
+import { ManuscriptImportPanel } from "@/components/manuscript-import";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { AuthorOrcidLine, OrcidIdIcon } from "@/components/orcid-id";
+import { useAutosave } from "@/hooks/use-autosave";
 import { uploadFileDirect } from "@/lib/client-upload";
 import {
   formatAuthorWithOrcid,
   normalizeOrcid,
   parseAuthorOrcid,
 } from "@/lib/orcid";
+import { htmlToPlainText } from "@/lib/import-manuscript";
+import { journalArticlePalette } from "@/lib/journal-colors";
 
 type AuthorEntry = {
   name: string;
@@ -42,6 +46,8 @@ type QueueItem = {
   productionBody?: string | null;
   productionFigures?: ManuscriptFigure[] | null;
   manuscriptReadyAt?: string | null;
+  funding?: string | null;
+  conflictOfInterest?: string | null;
   journal: {
     id: string;
     title: string;
@@ -150,7 +156,7 @@ function emptyForm(): TemplateForm {
     openAccess: true,
     isFeatured: true,
     logoUrl: "",
-    body: "# Introduction\n\nPaste or write the full manuscript sections here.\n\n## Methods\n\n\n\n## Results\n\n\n\n## Discussion\n\n\n\n## Conclusion\n\n\n\n## References\n\n",
+    body: "",
     figures: [],
     pdfUrl: "",
   };
@@ -185,9 +191,11 @@ export default function PublishedArticlesPage() {
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [draftDirty, setDraftDirty] = useState(false);
+  const [autosaveNote, setAutosaveNote] = useState("");
   const [pending, setPending] = useState<{
     id: string;
     title: string;
@@ -214,7 +222,82 @@ export default function PublishedArticlesPage() {
     [form.keywords],
   );
 
+  const skipDirty = useRef(false);
+  const formRef = useRef(form);
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => {
+    formRef.current = form;
+    selectedIdRef.current = selectedId;
+  });
+
+  const persistDraft = useCallback(async () => {
+    const id = selectedIdRef.current;
+    const f = formRef.current;
+    if (!id) return;
+    setAutosaveNote("Saving…");
+    const payload: Record<string, unknown> = {
+      submissionId: id,
+      body: f.body,
+      figures: f.figures,
+      done: false,
+      keywords: splitList(f.keywords, ","),
+    };
+    if (f.title.trim().length >= 2) payload.title = f.title.trim();
+    if (f.abstract.trim().length >= 10) payload.abstract = f.abstract.trim();
+    try {
+      const res = await fetch("/api/admin/manuscripts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      if (selectedIdRef.current !== id) return;
+      setDraftDirty(false);
+      setAutosaveNote("Saved");
+      setQueue((prev) =>
+        prev.map((q) =>
+          q.id === id
+            ? {
+                ...q,
+                title: data.submission?.title ?? f.title.trim(),
+                abstract: data.submission?.abstract ?? f.abstract.trim(),
+                keywords: data.submission?.keywords ?? q.keywords,
+                productionBody: f.body,
+                productionFigures: f.figures,
+              }
+            : q,
+        ),
+      );
+    } catch {
+      setAutosaveNote("Couldn’t autosave");
+    }
+  }, []);
+
+  useAutosave({
+    enabled: Boolean(selectedId),
+    dirty: draftDirty,
+    delayMs: 1200,
+    save: persistDraft,
+  });
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (skipDirty.current) {
+      skipDirty.current = false;
+      return;
+    }
+    setDraftDirty(true);
+  }, [form, selectedId]);
+
   function selectSubmission(sub: QueueItem) {
+    if (draftDirty && selectedIdRef.current && selectedIdRef.current !== sub.id) {
+      void persistDraft();
+    }
+    skipDirty.current = true;
+    setDraftDirty(false);
+    setAutosaveNote("");
     setSelectedId(sub.id);
     setError("");
     setSuccess("");
@@ -351,83 +434,46 @@ export default function PublishedArticlesPage() {
     }
   }
 
-  function typstPayload() {
-    if (!selected) return null;
-    return {
-      submissionId: selected.id,
-      journalTitle: selected.journal.title,
-      journalShortTitle: selected.journal.shortTitle,
-      journalSlug: selected.journal.slug,
-      coverColor: selected.journal.coverColor,
-      manuscriptId: selected.manuscriptId,
-      title: form.title,
-      authors: boundAuthorNames(form.authorEntries),
-      affiliations: splitList(form.affiliations, "\n"),
-      abstract: form.abstract,
-      keywords: splitList(form.keywords, ","),
-      articleType: form.articleType,
-      doi: form.doi || undefined,
-      volume: form.volume || undefined,
-      issue: form.issue || undefined,
-      pages: form.pages || undefined,
-      license: form.license || undefined,
-      openAccess: form.openAccess,
-      body: form.body || undefined,
-      figures: form.figures.map((f) => ({
-        url: f.url,
-        filename: f.filename,
-        caption: f.caption,
-      })),
-      logoUrl: form.logoUrl || selected.journal.coverImageUrl || undefined,
-    };
-  }
-
-  async function generatePdf(mode: "preview" | "upload") {
-    if (!selected) return;
-    const payload = typstPayload();
-    if (!payload) return;
-    setGeneratingPdf(true);
+  async function onPdfUpload(file: File | null) {
+    if (!file) return;
+    setUploadingPdf(true);
     setError("");
     try {
-      const res = await fetch("/api/admin/typst-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...payload,
-          upload: mode === "upload",
-        }),
+      const data = await uploadFileDirect(file, {
+        folder: "atlas/published-pdfs",
+        resourceType: "raw",
       });
-
-      if (mode === "preview") {
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new Error(data?.error ?? "PDF preview failed");
-        }
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank", "noopener,noreferrer");
-        return;
-      }
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "PDF upload failed");
-      setForm((f) => ({ ...f, pdfUrl: data.url as string }));
-      setSuccess("Nahda PDF generated and ready. You can publish now.");
+      setForm((f) => ({ ...f, pdfUrl: data.url }));
+      setSuccess("PDF uploaded and ready to publish.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "PDF generation failed");
+      setError(err instanceof Error ? err.message : "PDF upload failed");
     } finally {
-      setGeneratingPdf(false);
+      setUploadingPdf(false);
     }
   }
 
+  const printAfterPreview = useRef(false);
+
   function printPreview() {
+    if (pane === "preview") {
+      window.print();
+      return;
+    }
+    printAfterPreview.current = true;
     setPane("preview");
-    requestAnimationFrame(() => window.print());
   }
+
+  useEffect(() => {
+    if (pane !== "preview" || !printAfterPreview.current) return;
+    printAfterPreview.current = false;
+    const timer = window.setTimeout(() => window.print(), 450);
+    return () => window.clearTimeout(timer);
+  }, [pane]);
 
   async function onPublish(e: FormEvent) {
     e.preventDefault();
     if (!selected) return;
+    if (draftDirty) await persistDraft();
     setPublishing(true);
     setError("");
     setSuccess("");
@@ -608,19 +654,26 @@ export default function PublishedArticlesPage() {
       />
       <style jsx global>{`
         @media print {
-          body * {
-            visibility: hidden !important;
+          html,
+          body {
+            display: block !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            background: white !important;
           }
-          #nahda-article-template,
-          #nahda-article-template * {
-            visibility: visible !important;
-          }
+
           #nahda-article-template {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
+            position: static !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
             box-shadow: none !important;
+            outline: none !important;
+            border: none !important;
+            background: white !important;
           }
         }
       `}</style>
@@ -631,8 +684,8 @@ export default function PublishedArticlesPage() {
             Publish accepted papers
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Edit metadata, generate the Nahda PDF from the full
-            manuscript, then publish and email the author.
+            Edit metadata on this journal’s template, import Word or Google
+            Docs for the body, then print or upload a PDF and publish.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -770,6 +823,11 @@ export default function PublishedArticlesPage() {
                   </h2>
                   <p className="mt-1 text-xs text-[var(--muted)]">
                     {selected.journal.title} · {selected.author.email}
+                    {draftDirty
+                      ? " · Unsaved"
+                      : autosaveNote
+                        ? ` · ${autosaveNote}`
+                        : " · Autosaves as you edit"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1025,18 +1083,53 @@ export default function PublishedArticlesPage() {
                     />
                   </label>
 
-                  <div className="rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 p-4">
+                  <div className="overflow-visible rounded-xl border border-[var(--line)] bg-[#e8edf2] p-3 sm:p-4">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Journal template · header through abstract
+                    </p>
+                    <NahdaArticleTemplate
+                      journalTitle={selected.journal.title}
+                      journalShortTitle={selected.journal.shortTitle}
+                      journalSlug={selected.journal.slug}
+                      coverColor={selected.journal.coverColor}
+                      journalUrl={`/journals/${selected.journal.slug}`}
+                      manuscriptId={selected.manuscriptId}
+                      title={form.title}
+                      authors={previewAuthors}
+                      affiliations={previewAffiliations}
+                      abstract={form.abstract}
+                      keywords={previewKeywords}
+                      articleType={form.articleType}
+                      doi={form.doi}
+                      volume={form.volume}
+                      issue={form.issue}
+                      pages={form.pages}
+                      license={form.license}
+                      openAccess={form.openAccess}
+                      logoUrl={
+                        form.logoUrl || selected.journal.coverImageUrl || null
+                      }
+                      funding={selected.funding}
+                      conflictOfInterest={selected.conflictOfInterest}
+                      body={undefined}
+                    />
+                  </div>
+
+                  <div className="space-y-3 rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <p className="text-xs font-semibold text-[var(--ink)]">
-                          Full manuscript
+                          Introduction to References
                         </p>
                         <p className="mt-1 text-[11px] text-[var(--muted)]">
+                          Import Word or Google Docs. Title, authors, abstract,
+                          and keywords stay on this journal&apos;s template.
+                          After import you can bold, color, and tidy the body.
                           {selected.manuscriptReadyAt
-                            ? "Marked ready from Full manuscripts. You can still tweak below before generating the PDF."
+                            ? " A draft is already loaded from Full manuscripts."
                             : selected.productionBody?.trim()
-                              ? "Draft loaded from Full manuscripts."
-                              : "No full text yet — write it in Full manuscripts first for best results."}
+                              ? " A saved body is loaded."
+                              : ""}
                         </p>
                       </div>
                       <Link
@@ -1046,46 +1139,68 @@ export default function PublishedArticlesPage() {
                         Open Full manuscripts
                       </Link>
                     </div>
+                    <ManuscriptImportPanel
+                      hasExistingBody={Boolean(htmlToPlainText(form.body))}
+                      onError={setError}
+                      onImported={(result) =>
+                        setForm((f) => ({
+                          ...f,
+                          body: result.body,
+                          figures: result.figures,
+                        }))
+                      }
+                    />
+                    <ManuscriptEditor
+                      key={selected.id}
+                      value={form.body}
+                      onChange={(body) => setForm((f) => ({ ...f, body }))}
+                      figures={form.figures}
+                      onFiguresChange={(figures) =>
+                        setForm((f) => ({ ...f, figures }))
+                      }
+                      onError={setError}
+                      rows={12}
+                      showImport={false}
+                      journalPrimary={
+                        journalArticlePalette(
+                          selected.journal.coverColor,
+                          selected.journal.slug || selected.journal.shortTitle,
+                        ).primary
+                      }
+                      label="Imported body"
+                      hint="Select a heading, then pick a color. The first swatch restores the journal color. The journal template above stays bound to this paper."
+                    />
                   </div>
-
-                  <ManuscriptEditor
-                    value={form.body}
-                    onChange={(body) => setForm((f) => ({ ...f, body }))}
-                    figures={form.figures}
-                    onFiguresChange={(figures) =>
-                      setForm((f) => ({ ...f, figures }))
-                    }
-                    onError={setError}
-                    rows={14}
-                    label="Article body (for PDF)"
-                    hint="Prefer writing the full paper on Full manuscripts, then return here to publish. Changes here are used for this publish session’s PDF."
-                  />
 
                   <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 p-4">
                     <p className="text-xs font-semibold text-[var(--ink)]">
-                      Nahda PDF
+                      Downloadable PDF
                     </p>
                     <p className="mt-1 text-[11px] text-[var(--muted)]">
-                      Generate the branded downloadable article PDF the author
-                      will receive after publication.
+                      Print the live preview (Save as PDF) or upload a Word /
+                      Google Docs export. Optional — you can still publish
+                      without it.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         type="button"
                         className="btn-secondary !px-3 !py-2 text-xs"
-                        disabled={generatingPdf}
-                        onClick={() => void generatePdf("preview")}
+                        onClick={printPreview}
                       >
-                        {generatingPdf ? "Generating…" : "Preview PDF"}
+                        Print preview
                       </button>
-                      <button
-                        type="button"
-                        className="btn-secondary !px-3 !py-2 text-xs"
-                        disabled={generatingPdf}
-                        onClick={() => void generatePdf("upload")}
-                      >
-                        {generatingPdf ? "Generating…" : "Generate and save PDF"}
-                      </button>
+                      <label className="btn-secondary cursor-pointer !px-3 !py-2 text-xs">
+                        {uploadingPdf ? "Uploading…" : "Upload PDF"}
+                        <input
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          className="hidden"
+                          disabled={uploadingPdf}
+                          onChange={(e) =>
+                            void onPdfUpload(e.target.files?.[0] ?? null)
+                          }
+                        />
+                      </label>
                     </div>
                     {form.pdfUrl && (
                       <p className="mt-2 text-[11px] text-emerald-800">
@@ -1254,7 +1369,7 @@ export default function PublishedArticlesPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="overflow-hidden rounded-xl border border-[var(--line)] bg-[#e8edf2] p-4 sm:p-6">
+                  <div className="overflow-visible rounded-xl border border-[var(--line)] bg-[#e8edf2] p-4 sm:p-6 print:rounded-none print:border-0 print:bg-white print:p-0">
                     <NahdaArticleTemplate
                       journalTitle={selected.journal.title}
                       journalShortTitle={selected.journal.shortTitle}
@@ -1277,6 +1392,8 @@ export default function PublishedArticlesPage() {
                       logoUrl={
                         form.logoUrl || selected.journal.coverImageUrl || null
                       }
+                      funding={selected.funding}
+                      conflictOfInterest={selected.conflictOfInterest}
                       body={form.body}
                     />
                   </div>

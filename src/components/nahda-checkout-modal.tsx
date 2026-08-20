@@ -11,6 +11,8 @@ type Props = {
   submissionId: string;
   manuscriptId: string;
   amountLabel: string;
+  payToken?: string | null;
+  closable?: boolean;
   onPaid: () => void;
 };
 
@@ -35,6 +37,8 @@ export function NahdaCheckoutModal({
   submissionId,
   manuscriptId,
   amountLabel,
+  payToken,
+  closable = true,
   onPaid,
 }: Props) {
   const titleId = useId();
@@ -175,6 +179,7 @@ export function NahdaCheckoutModal({
         body: JSON.stringify({
           action: "charge",
           submissionId,
+          ...(payToken ? { token: payToken } : {}),
           card: {
             number: onlyDigits(cardNumber),
             cvv: onlyDigits(cvv),
@@ -215,6 +220,7 @@ export function NahdaCheckoutModal({
         body: JSON.stringify({
           action,
           submissionId,
+          ...(payToken ? { token: payToken } : {}),
           reference: ref,
           pin: action === "pin" ? pin : undefined,
           otp: action === "otp" ? otp : undefined,
@@ -243,14 +249,16 @@ export function NahdaCheckoutModal({
       aria-modal="true"
       aria-labelledby={titleId}
     >
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default"
-        aria-label="Close checkout"
-        onClick={() => {
-          if (!busy && step !== "success") onClose();
-        }}
-      />
+      {closable ? (
+        <button
+          type="button"
+          className="absolute inset-0 cursor-default"
+          aria-label="Close checkout"
+          onClick={() => {
+            if (!busy && step !== "success") onClose();
+          }}
+        />
+      ) : null}
 
       <div className="relative z-10 flex max-h-[95vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
         <header className="border-b border-[var(--surface)] bg-gradient-to-br from-[var(--accent)] to-[#164f36] px-5 py-5 text-white">
@@ -274,7 +282,7 @@ export function NahdaCheckoutModal({
                 </h2>
               </div>
             </div>
-            {step !== "success" && (
+            {closable && step !== "success" && (
               <button
                 type="button"
                 onClick={onClose}
@@ -291,7 +299,7 @@ export function NahdaCheckoutModal({
               Amount due
             </p>
             <p className="mt-1 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight">
-              {amountLabel} USD
+              {amountLabel}
             </p>
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-emerald-50/90">
               <dt className="text-emerald-100/70">Currency</dt>
@@ -316,13 +324,14 @@ export function NahdaCheckoutModal({
               </h3>
               <p className="mt-2 text-sm text-[var(--muted)]">
                 Your manuscript is now in production. An official Nahda
-                Publications receipt has been sent to your email.
+                Publications receipt has been sent to your email. Taking you
+                to your dashboard…
               </p>
               <dl className="mx-auto mt-4 max-w-xs text-left text-sm">
                 <div className="flex justify-between gap-3 border-b border-[var(--surface)] py-2">
                   <dt className="text-[var(--muted)]">Amount</dt>
                   <dd className="font-semibold text-[var(--ink)]">
-                    {amountLabel} USD
+                    {amountLabel}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-3 border-b border-[var(--surface)] py-2">
@@ -395,7 +404,7 @@ export function NahdaCheckoutModal({
                 disabled={busy || pin.length < 4}
                 className="btn-primary w-full !py-3 disabled:opacity-60"
               >
-                {busy ? "Authorizing…" : `Confirm ${amountLabel} USD`}
+                {busy ? "Authorizing…" : `Confirm ${amountLabel}`}
               </button>
             </form>
           ) : step === "otp" ? (
@@ -497,9 +506,8 @@ export function NahdaCheckoutModal({
             <form onSubmit={startCharge} className="space-y-4">
               <p className="text-sm text-[var(--muted)]">
                 Pay your article processing charge with Visa, Mastercard, or
-                Verve. International cards are charged in USD
-                ({amountLabel}). You will receive a Nahda Publications receipt
-                in USD after payment.
+                Verve. You will be charged {amountLabel}. You will receive a
+                Nahda Publications receipt after payment.
               </p>
 
               <label className="block text-sm">
@@ -559,7 +567,7 @@ export function NahdaCheckoutModal({
                 disabled={busy}
                 className="btn-primary w-full !py-3.5 text-base disabled:opacity-60"
               >
-                {busy ? "Processing…" : `Pay ${amountLabel} USD`}
+                {busy ? "Processing…" : `Pay ${amountLabel}`}
               </button>
 
               <p className="text-center text-[11px] text-[var(--muted)]">

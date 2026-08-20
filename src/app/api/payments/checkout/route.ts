@@ -2,17 +2,35 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireUser } from "@/lib/session";
-import { formatApcAmount, needsApcPayment } from "@/lib/apc";
+import { needsApcPayment } from "@/lib/apc";
 import { markApcPaid, prepareApcPayment } from "@/lib/apc-checkout";
 import {
   paystackConfigured,
-  usdToPaystackAmount,
   verifyPaystackTransaction,
 } from "@/lib/paystack";
-import { DISPLAY_CURRENCY } from "@/lib/payment-display";
+import {
+  CUSTOMER_CURRENCY,
+  formatCustomerUsd,
+} from "@/lib/payment-currency";
+import {
+  customerCheckoutRequestSchema,
+  toCustomerCheckoutResponse,
+  toCustomerPayment,
+} from "@/lib/payment-dto";
+import {
+  internalChargeMatches,
+  isApcAlreadyCleared,
+  metadataMatchesSubmission,
+} from "@/lib/payment-verify";
+
+const confirmSchema = z.object({
+  submissionId: z.string().min(1),
+  reference: z.string().min(1).optional(),
+});
 
 /**
- * Author: prepare APC payment for the custom Nahda checkout (USD display).
+ * Author: prepare APC payment for the Nahda checkout popup (USD display).
+ * Does not open Paystack hosted checkout.
  */
 export async function POST(request: Request) {
   const session = await requireUser(["AUTHOR"]);
@@ -26,9 +44,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = z
-      .object({ submissionId: z.string().min(1) })
-      .parse(await request.json());
+    const body = customerCheckoutRequestSchema.parse(await request.json());
 
     const submission = await prisma.submission.findFirst({
       where: { id: body.submissionId, authorId: session.sub },
@@ -49,30 +65,34 @@ export async function POST(request: Request) {
     }
 
     if (!needsApcPayment(submission.apcPaymentStatus)) {
+      const customer = toCustomerPayment(submission.payment);
       return jsonOk({
         alreadyCleared: true,
         status: submission.apcPaymentStatus,
-        amountLabel: submission.payment
-          ? formatApcAmount(submission.payment.amountCents, "usd")
-          : null,
-        currency: DISPLAY_CURRENCY,
+        currency: CUSTOMER_CURRENCY,
+        amount: customer?.amount ?? 0,
+        amountLabel:
+          customer?.amountLabel ??
+          (submission.payment
+            ? formatCustomerUsd(submission.payment.amountCents)
+            : null),
+        paymentId: customer?.paymentId ?? null,
       });
     }
 
     const prepared = await prepareApcPayment(submission);
-    const cleared =
-      prepared.status === "PAID" ||
-      prepared.status === "NOT_REQUIRED" ||
-      prepared.status === "WAIVED";
-    return jsonOk({
-      alreadyCleared: cleared,
-      status: prepared.status,
-      reference: prepared.reference ?? null,
+    const payment = prepared.payment ?? {
+      id: prepared.paymentId ?? "none",
       amountCents: prepared.amountCents,
-      amountLabel: prepared.amountLabel,
-      currency: DISPLAY_CURRENCY,
-      chargedCurrency: prepared.chargedCurrency,
-    });
+      status: prepared.status,
+    };
+    return jsonOk(
+      toCustomerCheckoutResponse({
+        payment,
+        productName: submission.title,
+        alreadyCleared: isApcAlreadyCleared(prepared.status),
+      }),
+    );
   } catch (err) {
     if (err instanceof z.ZodError) {
       return jsonError(err.issues[0]?.message ?? "Invalid input");
@@ -87,10 +107,7 @@ export async function POST(request: Request) {
 
 /**
  * Author: confirm payment after Paystack success redirect.
- * No webhook required — we verify the transaction reference with Paystack.
- *
- * Body: { submissionId, reference? }
- * If reference is omitted, uses the stored paystackReference.
+ * Verifies with Paystack server-side. Customer response is USD only.
  */
 export async function PUT(request: Request) {
   const session = await requireUser(["AUTHOR"]);
@@ -101,82 +118,62 @@ export async function PUT(request: Request) {
       return jsonError("Paystack is not configured", 503);
     }
 
-    const body = z
-      .object({
-        submissionId: z.string().min(1),
-        reference: z.string().min(1).optional(),
-      })
-      .parse(await request.json());
+    const body = confirmSchema.parse(await request.json());
 
     const submission = await prisma.submission.findFirst({
       where: { id: body.submissionId, authorId: session.sub },
-      include: { payment: true },
+      include: { payment: true, journal: true },
     });
     if (!submission) return jsonError("Submission not found", 404);
 
     if (!needsApcPayment(submission.apcPaymentStatus)) {
+      const customer = toCustomerPayment(submission.payment);
       return jsonOk({
         status: submission.apcPaymentStatus,
         paid: true,
+        currency: CUSTOMER_CURRENCY,
+        amount: customer?.amount ?? 0,
+        amountLabel: customer?.amountLabel ?? formatCustomerUsd(0),
       });
     }
 
     const reference =
-      body.reference || submission.payment?.paystackReference || null;
+      (typeof body.reference === "string" ? body.reference : null) ||
+      submission.payment?.paystackReference ||
+      null;
     if (!reference) {
       return jsonError(
-        "No Paystack reference found. Click Pay now first.",
+        "No payment to confirm yet. Start checkout from this page first.",
         400,
       );
     }
 
     const verified = await verifyPaystackTransaction(reference);
 
-    const meta =
-      typeof verified.metadata === "object" && verified.metadata
-        ? verified.metadata
-        : {};
-    const metaSubmissionId =
-      typeof meta.submissionId === "string" ? meta.submissionId : null;
-    if (metaSubmissionId && metaSubmissionId !== submission.id) {
+    if (!metadataMatchesSubmission(verified.metadata, submission.id)) {
       return jsonError("Payment does not match this manuscript", 400);
     }
 
     if (verified.status !== "success") {
       return jsonError(
-        "Payment not recorded yet. Finish checkout, then click I’ve paid.",
+        "Payment not recorded yet. Finish checkout, then return to this page.",
         400,
       );
     }
 
-    // Payment.amountCents is always USD. New charges are initialized in USD.
-    // Legacy GHS settlements are still accepted when metadata.usdCents matches.
     if (submission.payment && verified.amount > 0) {
-      const chargedCurrency = (verified.currency || DISPLAY_CURRENCY).toUpperCase();
-      const expectedAmount = usdToPaystackAmount(
-        submission.payment.amountCents,
-        chargedCurrency,
-      );
-      const ok =
-        verified.amount === expectedAmount ||
-        (chargedCurrency === "USD" &&
-          verified.amount === submission.payment.amountCents);
+      const ok = internalChargeMatches({
+        verifiedAmount: verified.amount,
+        verifiedCurrency: verified.currency,
+        usdCents: submission.payment.amountCents,
+        storedInternalAmount: submission.payment.internalAmount,
+        storedInternalCurrency: submission.payment.internalCurrency,
+      });
       if (!ok) {
-        const metaUsd =
-          typeof meta.usdCents === "string" ? Number(meta.usdCents) : NaN;
-        if (
-          !Number.isFinite(metaUsd) ||
-          metaUsd !== submission.payment.amountCents
-        ) {
-          // Allow ~1% FX rounding drift on legacy local-currency charges
-          const drift = Math.abs(verified.amount - expectedAmount);
-          if (drift > Math.max(100, expectedAmount * 0.01)) {
-            return jsonError(
-              "Paid amount does not match the APC for this manuscript",
-              400,
-            );
-          }
-        }
+        return jsonError(
+          "Paid amount does not match the APC for this manuscript",
+          400,
+        );
       }
     }
 
@@ -188,9 +185,17 @@ export async function PUT(request: Request) {
         verified.customer?.email ?? submission.payment?.customerEmail,
     });
 
+    const paidPayment = updated?.payment ?? submission.payment;
+    const customer = toCustomerPayment(paidPayment);
+
     return jsonOk({
       status: updated?.apcPaymentStatus ?? "PAID",
       paid: true,
+      currency: CUSTOMER_CURRENCY,
+      amount: customer?.amount ?? 0,
+      amountLabel:
+        customer?.amountLabel ??
+        formatCustomerUsd(paidPayment?.amountCents ?? 0),
     });
   } catch (err) {
     if (err instanceof z.ZodError) {

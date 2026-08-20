@@ -162,6 +162,7 @@ export function SiteHeader() {
   }, []);
 
   if (pathname.startsWith("/admin")) return null;
+  if (pathname.startsWith("/pay")) return null;
   if (
     pathname === "/login" ||
     pathname === "/register" ||
@@ -562,6 +563,7 @@ function Chevron({ open }: { open: boolean }) {
 export function SiteFooter() {
   const pathname = usePathname();
   if (pathname.startsWith("/admin")) return null;
+  if (pathname.startsWith("/pay")) return null;
   if (
     pathname === "/login" ||
     pathname === "/register" ||

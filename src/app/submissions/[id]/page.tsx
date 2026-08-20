@@ -37,7 +37,11 @@ type Submission = {
   manuscriptPublicId?: string | null;
   journal: { title: string; apc?: string | null };
   payment?: {
+    paymentId?: string;
     amountCents: number;
+    amount?: number;
+    amountLabel?: string;
+    currency?: string;
     status: string;
   } | null;
   feedback: Feedback[];
@@ -66,6 +70,7 @@ function Detail({ id }: { id: string }) {
 
   useEffect(() => {
     void load().catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per submission id
   }, [id]);
 
   if (error) {
@@ -181,6 +186,7 @@ function Detail({ id }: { id: string }) {
           manuscriptId={sub.manuscriptId}
           apcPaymentStatus={sub.apcPaymentStatus}
           amountCents={sub.payment?.amountCents}
+          amountLabel={sub.payment?.amountLabel}
           onPaid={() => void load()}
         />
       )}

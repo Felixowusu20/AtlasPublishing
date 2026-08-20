@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
@@ -27,7 +28,11 @@ type ApiSubmission = {
   journal: { title: string };
   authorsJson?: { name: string }[] | null;
   feedback?: { message: string; createdAt: string }[];
-  payment?: { amountCents: number; status: string } | null;
+  payment?: {
+    amountCents: number;
+    amountLabel?: string;
+    status: string;
+  } | null;
   publishedArticle?: {
     id: string;
     slug: string;
@@ -100,10 +105,12 @@ export default function DashboardPage() {
 
 function DashboardInner() {
   const { user } = useAuth();
+  const router = useRouter();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
   const [notifications, setNotifications] = useState<ApiNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paidJustNow, setPaidJustNow] = useState(false);
 
   async function refresh() {
     const [subsRes, notifRes] = await Promise.all([
@@ -122,6 +129,13 @@ function DashboardInner() {
       setLoading(false);
     })();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("paid") !== "1") return;
+    setPaidJustNow(true);
+    router.replace("/dashboard", { scroll: false });
+  }, [router]);
 
   const drafts = submissions.filter((s) => s.status === "DRAFT");
   const active = submissions.filter(
@@ -185,6 +199,17 @@ function DashboardInner() {
       </section>
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        {paidJustNow && (
+          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
+              Payment successful
+            </p>
+            <p className="mt-1 text-sm text-emerald-950">
+              Your article processing charge has been received. Thank you — your
+              manuscript can now proceed in production.
+            </p>
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Needs action" value={needsAction.length} hint="Deadlines and revisions" tone="amber" />
           <StatCard label="In progress" value={drafts.length + active.length} hint="Drafts and active reviews" tone="teal" />
@@ -403,7 +428,9 @@ function DashboardInner() {
                                     href={`/submissions/${sub.id}`}
                                     className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
                                   >
-                                    Pay APC
+                                    {sub.payment?.amountLabel
+                                      ? `Pay ${sub.payment.amountLabel}`
+                                      : "Pay APC"}
                                   </Link>
                                 )}
                               {showResubmit && (

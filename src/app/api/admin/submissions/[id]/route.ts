@@ -9,9 +9,11 @@ import {
   sendEmail,
 } from "@/lib/mail";
 import { ensureApcCheckout } from "@/lib/apc-checkout";
+import { apcPayPageUrl } from "@/lib/payment-link";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { paystackConfigured } from "@/lib/paystack";
 import type { SubmissionStatus } from "@/generated/prisma/client";
+import { withAdminPayment } from "@/lib/payment-dto";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -40,7 +42,7 @@ export async function GET(_request: Request, { params }: Params) {
 
   if (!submission) return jsonError("Not found", 404);
   if (submission.deletedAt) return jsonError("Not found", 404);
-  return jsonOk({ submission });
+  return jsonOk({ submission: withAdminPayment(submission) });
 }
 
 const reviewSchema = z.object({
@@ -200,7 +202,7 @@ export async function POST(request: Request, { params }: Params) {
             data: {
               apcPaymentStatus: "PENDING",
               actionRequired:
-                "Your manuscript was accepted. Open this page and click Pay now to complete the APC.",
+                "Your manuscript was accepted. Open this page and complete the USD payment request.",
             },
           });
         } catch (pendingErr) {
@@ -246,12 +248,12 @@ export async function POST(request: Request, { params }: Params) {
             manuscriptId: submission.manuscriptId,
             journalTitle: submission.journal.title,
             amountLabel: apcAmountLabel ?? "APC",
-            checkoutUrl: `${base}/submissions/${id}`,
+            checkoutUrl: await apcPayPageUrl(id),
             submissionUrl: `${base}/submissions/${id}`,
           }),
           text: [
             `Your manuscript ${submission.manuscriptId} was accepted.`,
-            `Please open your submission and click Pay now to complete the APC:`,
+            `Please open your submission and complete the USD payment request:`,
             `${base}/submissions/${id}`,
           ].join("\n"),
         });
@@ -315,7 +317,7 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     return jsonOk({
-      submission: latestSubmission,
+      submission: withAdminPayment(latestSubmission),
       feedback: updated.feedback,
       emailSent,
       checkoutUrl,

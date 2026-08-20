@@ -2,21 +2,28 @@
 
 import {
   useCallback,
+  useEffect,
   useId,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
   type DragEvent,
+  type MouseEvent,
   type ReactNode,
-  type RefObject,
 } from "react";
 import {
   WordTableEditor,
-  parseMarkdownTable,
+  htmlToTableModel,
   type WordTableModel,
 } from "@/components/word-table-editor";
+import { ManuscriptImportPanel } from "@/components/manuscript-import";
 import { uploadFileDirect } from "@/lib/client-upload";
+import {
+  ensureManuscriptHtml,
+  htmlToPlainText,
+  sanitizeManuscriptHtml,
+} from "@/lib/import-manuscript";
 
 export type ManuscriptFigure = {
   id: string;
@@ -34,6 +41,9 @@ type Props = {
   label?: string;
   hint?: string;
   onError?: (message: string) => void;
+  showImport?: boolean;
+  /** Journal heading color. Headings use this until you pick another. */
+  journalPrimary?: string;
 };
 
 type ToolBtnProps = {
@@ -80,159 +90,29 @@ function ToolGroup({
 }
 
 function Divider() {
-  return <span className="mx-1 hidden h-5 w-px self-center bg-[var(--line)] sm:block" />;
+  return (
+    <span className="mx-1 hidden h-5 w-px self-center bg-[var(--line)] sm:block" />
+  );
 }
 
-function wrapSelection(
-  textarea: HTMLTextAreaElement,
-  before: string,
-  after = "",
-  placeholder = "",
-) {
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const value = textarea.value;
-  const selected = value.slice(start, end) || placeholder;
-  const next = value.slice(0, start) + before + selected + after + value.slice(end);
-  const cursorStart = start + before.length;
-  const cursorEnd = cursorStart + selected.length;
-  return { next, cursorStart, cursorEnd };
-}
+const TEXT_COLORS = [
+  { value: "#0b1f33", label: "Ink" },
+  { value: "#5b6b7c", label: "Muted" },
+  { value: "#b42318", label: "Red" },
+  { value: "#c2410c", label: "Orange" },
+  { value: "#a16207", label: "Gold" },
+  { value: "#1a5f4a", label: "Green" },
+  { value: "#1d4e89", label: "Blue" },
+  { value: "#6b2d5b", label: "Plum" },
+];
 
-function insertAtCursor(textarea: HTMLTextAreaElement, text: string) {
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const value = textarea.value;
-  const next = value.slice(0, start) + text + value.slice(end);
-  const cursor = start + text.length;
-  return { next, cursorStart: cursor, cursorEnd: cursor };
-}
-
-/** Transform selected lines (or current line) with a mapper. */
-function mapSelectedLines(
-  textarea: HTMLTextAreaElement,
-  mapper: (line: string, index: number) => string,
-) {
-  const value = textarea.value;
-  let start = textarea.selectionStart;
-  let end = textarea.selectionEnd;
-  if (start === end) {
-    const lineStart = value.lastIndexOf("\n", start - 1) + 1;
-    const lineEnd = value.indexOf("\n", start);
-    start = lineStart;
-    end = lineEnd === -1 ? value.length : lineEnd;
-  } else {
-    start = value.lastIndexOf("\n", start - 1) + 1;
-    const after = value.indexOf("\n", end);
-    end = after === -1 ? value.length : after;
-  }
-  const block = value.slice(start, end);
-  const lines = block.split("\n");
-  const nextBlock = lines.map(mapper).join("\n");
-  const next = value.slice(0, start) + nextBlock + value.slice(end);
-  return {
-    next,
-    cursorStart: start,
-    cursorEnd: start + nextBlock.length,
-  };
-}
-
-function wrapAlignBlock(
-  textarea: HTMLTextAreaElement,
-  align: "left" | "center" | "right" | "justify",
-) {
-  const value = textarea.value;
-  let start = textarea.selectionStart;
-  let end = textarea.selectionEnd;
-  if (start === end) {
-    // Expand to the whole paragraph (blank-line bounded), not just one line
-    let lineStart = value.lastIndexOf("\n", start - 1) + 1;
-    let lineEnd = value.indexOf("\n", start);
-    if (lineEnd === -1) lineEnd = value.length;
-
-    while (lineStart > 0) {
-      const prevBreak = value.lastIndexOf("\n", lineStart - 2);
-      const prevStart = prevBreak + 1;
-      const prevLine = value.slice(prevStart, lineStart - 1);
-      if (!prevLine.trim()) break;
-      lineStart = prevStart;
-    }
-    while (lineEnd < value.length) {
-      const nextBreak = value.indexOf("\n", lineEnd + 1);
-      const nextEnd = nextBreak === -1 ? value.length : nextBreak;
-      const nextLine = value.slice(lineEnd + 1, nextEnd);
-      if (!nextLine.trim()) break;
-      lineEnd = nextEnd;
-    }
-    start = lineStart;
-    end = lineEnd;
-  } else {
-    start = value.lastIndexOf("\n", start - 1) + 1;
-    const after = value.indexOf("\n", end);
-    end = after === -1 ? value.length : after;
-  }
-
-  let selected = value.slice(start, end).trim();
-  if (!selected) {
-    selected =
-      align === "justify"
-        ? "This paragraph is justified. Add enough words so the lines wrap across the column and the spacing between words will even out."
-        : "Aligned text";
-  }
-  selected = selected
-    .replace(/^:::(left|center|right|justify)\s*\n?/i, "")
-    .replace(/\n?:::\s*$/i, "")
-    .trim();
-
-  const block = `:::${align}\n${selected}\n:::\n\n`;
-  const next = value.slice(0, start) + block + value.slice(end);
-  return {
-    next,
-    cursorStart: start + `:::${align}\n`.length,
-    cursorEnd: start + `:::${align}\n`.length + selected.length,
-  };
-}
-
-function clearInlineFormatting(text: string) {
-  return text
-    .replace(/\{\{(?:size|font):[^}]+\}\}/g, "")
-    .replace(/\{\{\/(?:size|font)\}\}/g, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/\+\+([^+]+)\+\+/g, "$1")
-    .replace(/~~([^~]+)~~/g, "$1")
-    .replace(/==([^=]+)==/g, "$1")
-    .replace(/\^([^^]+)\^/g, "$1")
-    .replace(/~([^~]+)~/g, "$1")
-    .replace(/`([^`]+)`/g, "$1");
-}
-
-function toggleListLines(
-  textarea: HTMLTextAreaElement,
-  kind: "ul" | "ol",
-) {
-  return mapSelectedLines(textarea, (line, index) => {
-    const indent = line.match(/^(\s*)/)?.[1] ?? "";
-    const body = line
-      .replace(/^\s+/, "")
-      .replace(/^[-*\u2022]\s+/, "")
-      .replace(/^\d+\.\s+/, "");
-    if (!body.trim()) return line;
-    if (kind === "ul") {
-      if (/^\s*[-*\u2022]\s+/.test(line)) return `${indent}${body}`;
-      return `${indent}- ${body}`;
-    }
-    if (/^\s*\d+\.\s+/.test(line)) return `${indent}${body}`;
-    return `${indent}${index + 1}. ${body}`;
-  });
-}
-
-function indentLines(textarea: HTMLTextAreaElement, dir: 1 | -1) {
-  return mapSelectedLines(textarea, (line) => {
-    if (dir > 0) return `  ${line}`;
-    return line.replace(/^ {1,2}/, "");
-  });
-}
+const HIGHLIGHT_COLORS = [
+  { value: "#fef3c7", label: "Yellow" },
+  { value: "#fecaca", label: "Red" },
+  { value: "#bbf7d0", label: "Green" },
+  { value: "#bfdbfe", label: "Blue" },
+  { value: "#e9d5ff", label: "Purple" },
+];
 
 const FONT_OPTIONS = [
   { value: "", label: "Font" },
@@ -241,8 +121,6 @@ const FONT_OPTIONS = [
   { value: "Arial", label: "Arial" },
   { value: "Helvetica", label: "Helvetica" },
   { value: "Calibri", label: "Calibri" },
-  { value: "Courier New", label: "Courier New" },
-  { value: "Palatino", label: "Palatino" },
 ];
 
 const SIZE_OPTIONS = [
@@ -253,144 +131,11 @@ const SIZE_OPTIONS = [
   { value: "14", label: "14" },
   { value: "16", label: "16" },
   { value: "18", label: "18" },
-  { value: "20", label: "20" },
   { value: "24", label: "24" },
-  { value: "28", label: "28" },
-  { value: "36", label: "36" },
 ];
 
 const selectClass =
   "h-7 max-w-[9.5rem] rounded-md border border-[var(--line)] bg-white px-1.5 text-[11px] font-semibold text-[var(--ink)] outline-none hover:border-[var(--accent)]/40 focus:border-[var(--accent)]";
-
-
-function applyEdit(
-  ref: RefObject<HTMLTextAreaElement | null>,
-  onChange: (v: string) => void,
-  edit: {
-    next: string;
-    cursorStart: number;
-    cursorEnd: number;
-  },
-) {
-  onChange(edit.next);
-  requestAnimationFrame(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.focus();
-    el.setSelectionRange(edit.cursorStart, edit.cursorEnd);
-  });
-}
-
-function figureSnippet(caption: string, url: string, fullWidth: boolean) {
-  const flag = fullWidth ? "|full" : "|col";
-  return `\n![${caption}${flag}](${url})\n\n`;
-}
-
-/** Find last markdown pipe table; return range and parsed model. */
-function findLastPipeTable(value: string): {
-  start: number;
-  end: number;
-  model: WordTableModel;
-} | null {
-  const lines = value.split("\n");
-  let last: {
-    startLine: number;
-    endLine: number;
-  } | null = null;
-
-  for (let i = 0; i < lines.length - 1; i += 1) {
-    if (!/^\|.+\|$/.test(lines[i].trim())) continue;
-    if (!/^\|[\s:|-]+\|$/.test(lines[i + 1]?.trim() ?? "")) continue;
-    let j = i + 2;
-    while (j < lines.length && /^\|.+\|$/.test(lines[j].trim())) j += 1;
-    last = { startLine: i, endLine: j - 1 };
-    i = j - 1;
-  }
-  if (!last) return null;
-
-  let startLine = last.startLine;
-  if (startLine > 0) {
-    const prev = lines[startLine - 1]?.trim() ?? "";
-    if (/^\*\*Table\.?\*\*/i.test(prev) || /^Table\./i.test(prev)) {
-      startLine -= 1;
-    }
-  }
-
-  let start = 0;
-  for (let i = 0; i < startLine; i += 1) start += lines[i].length + 1;
-  let end = start;
-  for (let i = startLine; i <= last.endLine; i += 1) {
-    end += lines[i].length + (i < last.endLine ? 1 : 0);
-  }
-  if (value[end] === "\n") end += 1;
-
-  const block = value.slice(start, end);
-  const model = parseMarkdownTable(block);
-  if (!model) return null;
-  return { start, end, model };
-}
-
-const SECTION_TEMPLATES: { label: string; short: string; body: string }[] = [
-  {
-    label: "IMRaD skeleton",
-    short: "IMRaD",
-    body: `# Introduction
-
-State the research problem, background, and objectives.
-
-## Methods
-
-Describe study design, materials, procedures, and analysis.
-
-## Results
-
-Report key findings with tables and figures as needed.
-
-## Discussion
-
-Interpret results, limitations, and implications.
-
-## Conclusion
-
-Summarize the main contribution.
-
-## References
-
-1. Author A. Title. Journal. Year;vol(issue):pages.
-`,
-  },
-  {
-    label: "Methods block",
-    short: "Methods",
-    body: `## Methods
-
-### Study design
-
-### Participants / materials
-
-### Procedure
-
-### Statistical analysis
-
-`,
-  },
-  {
-    label: "Results + table",
-    short: "Results",
-    body: `## Results
-
-Describe the primary outcome.
-
-**Table 1.** Summary statistics
-
-| Variable | Group A | Group B | p |
-| --- | --- | --- | --- |
-| Age (years) |  |  |  |
-| Outcome |  |  |  |
-
-`,
-  },
-];
 
 const IMAGE_TYPES = [
   "image/png",
@@ -400,9 +145,138 @@ const IMAGE_TYPES = [
   "image/svg+xml",
 ];
 
+function figureHtml(caption: string, url: string, fullWidth: boolean) {
+  const cls = fullWidth ? "figure-full" : "";
+  return `<figure class="${cls}"><img src="${url}" alt="${caption}" /><figcaption>${caption}</figcaption></figure>`;
+}
+
+function isPlaceholderTable(figure: Element | null): figure is HTMLElement {
+  if (!(figure instanceof HTMLElement) || figure.tagName !== "FIGURE") {
+    return false;
+  }
+  if (figure.querySelector("img, table, .nahda-table-wrap")) return false;
+  if (figure.classList.contains("table-full")) return true;
+  const cap = figure.querySelector("figcaption")?.textContent ?? "";
+  return /^\s*table\b/i.test(cap);
+}
+
+function isEditableFigure(figure: Element | null): figure is HTMLElement {
+  if (!(figure instanceof HTMLElement) || figure.tagName !== "FIGURE") {
+    return false;
+  }
+  if (figure.querySelector("table, .nahda-table-wrap") || isPlaceholderTable(figure)) {
+    return false;
+  }
+  return true;
+}
+
+function closestTableTarget(
+  node: Node | null,
+  root: HTMLElement,
+): HTMLElement | null {
+  const el = node instanceof HTMLElement ? node : node?.parentElement;
+  if (!el || !root.contains(el)) return null;
+  const fig = el.closest("figure");
+  if (
+    fig &&
+    root.contains(fig) &&
+    (fig.querySelector("table, .nahda-table-wrap") || isPlaceholderTable(fig))
+  ) {
+    return fig;
+  }
+  const wrap = el.closest(".nahda-table-wrap");
+  if (wrap && root.contains(wrap)) return wrap as HTMLElement;
+  const table = el.closest("table");
+  if (table && root.contains(table)) return table;
+  return null;
+}
+
+function replaceTableTarget(target: HTMLElement, html: string): boolean {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  const next = tmp.firstElementChild;
+  if (!next) return false;
+  const figure =
+    target.tagName === "FIGURE" ? target : target.closest("figure");
+  if (figure) {
+    figure.replaceWith(next);
+    return true;
+  }
+  const wrap = target.classList.contains("nahda-table-wrap")
+    ? target
+    : ((target.closest(".nahda-table-wrap") as HTMLElement | null) ?? target);
+  const prev = wrap.previousElementSibling;
+  if (
+    prev &&
+    /^table(?:\s+\d+)?(?:[.:]|\s|$)/i.test(prev.textContent?.trim() ?? "")
+  ) {
+    prev.remove();
+  }
+  wrap.replaceWith(next);
+  return true;
+}
+
+function closestFigure(node: Node | null, root: HTMLElement): HTMLElement | null {
+  const el = node instanceof HTMLElement ? node : node?.parentElement;
+  if (!el || !root.contains(el)) return null;
+  return el.closest("figure");
+}
+
+function insertFragmentAtRange(html: string, range: Range) {
+  range.deleteContents();
+  const frag = range.createContextualFragment(html);
+  const last = frag.lastChild;
+  range.insertNode(frag);
+  if (!last) return;
+  const after = document.createRange();
+  after.setStartAfter(last);
+  after.collapse(true);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(after);
+}
+
+function applyImagesToFigure(
+  figure: HTMLElement,
+  images: Array<{ url: string; caption: string }>,
+  fullWidth: boolean,
+) {
+  const first = images[0];
+  if (!first) return;
+
+  figure.querySelectorAll(":scope > img").forEach((img) => img.remove());
+
+  const existingCap = figure.querySelector("figcaption");
+  const captionText =
+    existingCap?.textContent?.trim() || first.caption || "Figure";
+  const useFull = fullWidth || figure.classList.contains("figure-full");
+
+  const img = document.createElement("img");
+  img.src = first.url;
+  img.alt = captionText;
+  if (existingCap) figure.insertBefore(img, existingCap);
+  else {
+    figure.appendChild(img);
+    const cap = document.createElement("figcaption");
+    cap.textContent = captionText;
+    figure.appendChild(cap);
+  }
+  figure.classList.toggle("figure-full", useFull);
+
+  let last: Element = figure;
+  for (const extra of images.slice(1)) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = figureHtml(extra.caption, extra.url, useFull);
+    const next = tmp.firstElementChild;
+    if (!next) continue;
+    last.after(next);
+    last = next;
+  }
+}
+
 /**
- * Rich academic manuscript editor — Word-like formatting, tables, and
- * drag-and-drop figures for the Typst publication pipeline.
+ * Word-like body editor for imported Google Docs / .docx.
+ * The journal template still owns title, authors, abstract, and keywords.
  */
 export function ManuscriptEditor({
   value,
@@ -410,109 +284,249 @@ export function ManuscriptEditor({
   figures,
   onFiguresChange,
   rows = 16,
-  label = "Full manuscript body",
-  hint = "Word-style toolbar: font, size, align, bullets, tables. Drag images onto the editor.",
+  label = "Paper body (Introduction to References)",
+  hint = "Import a Word or Google Doc, then bold, color, and tidy the text here. Header fields stay on the journal template.",
   onError,
+  showImport = true,
+  journalPrimary,
 }: Props) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+  const targetFigureRef = useRef<HTMLElement | null>(null);
+  const targetTableRef = useRef<HTMLElement | null>(null);
+  const lastEmitted = useRef(value);
+  const seeded = useRef(false);
   const fileId = useId();
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
-  const [tableEditRange, setTableEditRange] = useState<{
-    start: number;
-    end: number;
-  } | null>(null);
   const [tableSeed, setTableSeed] = useState<WordTableModel | null>(null);
+  const [tableUpdateMode, setTableUpdateMode] = useState(false);
+  const [tableEditorKey, setTableEditorKey] = useState(0);
   const [figureFullWidth, setFigureFullWidth] = useState(true);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("https://");
   const [linkLabel, setLinkLabel] = useState("");
   const dragDepth = useRef(0);
 
-  const lastTable = useMemo(() => findLastPipeTable(value), [value]);
+  const emit = useCallback(() => {
+    const html = editorRef.current?.innerHTML ?? "";
+    lastEmitted.current = html;
+    onChange(html);
+  }, [onChange]);
 
-  const run = useCallback(
-    (fn: (el: HTMLTextAreaElement) => ReturnType<typeof wrapSelection>) => {
-      const el = ref.current;
-      if (!el) return;
-      applyEdit(ref, onChange, fn(el));
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    if (!seeded.current) {
+      const html = ensureManuscriptHtml(value);
+      el.innerHTML = html;
+      lastEmitted.current = html;
+      seeded.current = true;
+      if (html !== value) onChange(html);
+      return;
+    }
+    if (value === lastEmitted.current) return;
+    const html = ensureManuscriptHtml(value);
+    el.innerHTML = html;
+    lastEmitted.current = html;
+  }, [value, onChange]);
+
+  const captureInsertPoint = useCallback(
+    (e?: { target?: EventTarget | null }) => {
+      const root = editorRef.current;
+      if (!root) return;
+
+      const fromEvent =
+        e?.target instanceof Node ? closestFigure(e.target, root) : null;
+      if (isEditableFigure(fromEvent)) {
+        targetFigureRef.current = fromEvent;
+      }
+
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      if (!root.contains(range.commonAncestorContainer)) return;
+      savedRangeRef.current = range.cloneRange();
+      if (!isEditableFigure(fromEvent)) {
+        const fig = closestFigure(range.commonAncestorContainer, root);
+        targetFigureRef.current = isEditableFigure(fig) ? fig : null;
+      }
     },
-    [onChange],
+    [],
   );
 
-  const openNewTable = () => {
-    setTableEditRange(null);
-    setTableSeed({
-      headers: ["Column 1", "Column 2", "Column 3"],
-      rows: [
-        ["", "", ""],
-        ["", "", ""],
-        ["", "", ""],
-      ],
-      caption: "",
-      fullWidth: false,
-    });
-    setTableOpen(true);
-    setLinkOpen(false);
-  };
+  const restoreInsertPoint = useCallback(() => {
+    const root = editorRef.current;
+    const range = savedRangeRef.current;
+    if (!root || !range) return false;
+    root.focus();
+    const sel = window.getSelection();
+    if (!sel) return false;
+    try {
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
 
-  const openEditLastTable = () => {
-    if (!lastTable) {
-      openNewTable();
+  const run = useCallback(
+    (command: string, commandValue?: string) => {
+      const el = editorRef.current;
+      if (!el) return;
+      el.focus();
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand(command, false, commandValue);
+      emit();
+    },
+    [emit],
+  );
+
+  const insertHtml = useCallback(
+    (html: string) => {
+      const root = editorRef.current;
+      if (!root) return;
+
+      const sel = window.getSelection();
+      const liveInEditor =
+        Boolean(sel?.rangeCount) && root.contains(sel?.anchorNode ?? null);
+      if (!liveInEditor) restoreInsertPoint();
+
+      const nextSel = window.getSelection();
+      const range =
+        nextSel &&
+        nextSel.rangeCount > 0 &&
+        root.contains(nextSel.anchorNode)
+          ? nextSel.getRangeAt(0)
+          : savedRangeRef.current;
+
+      if (range) {
+        try {
+          insertFragmentAtRange(html, range);
+          emit();
+          return;
+        } catch {
+          /* fall through */
+        }
+      }
+
+      root.focus();
+      document.execCommand("insertHTML", false, html);
+      emit();
+    },
+    [emit, restoreInsertPoint],
+  );
+
+  function applyFont(font: string) {
+    const heading = colorTargetFromSelection();
+    const root = editorRef.current;
+    if (heading && root?.contains(heading)) {
+      heading.style.fontFamily = font;
+      emit();
       return;
     }
-    setTableEditRange({ start: lastTable.start, end: lastTable.end });
-    setTableSeed(lastTable.model);
-    setTableOpen(true);
-    setLinkOpen(false);
-  };
+    run("fontName", font);
+  }
 
-  const toggleTable = () => {
-    if (tableOpen) {
-      setTableOpen(false);
-      setTableEditRange(null);
+  function applySize(size: string) {
+    const heading = colorTargetFromSelection();
+    const root = editorRef.current;
+    if (heading && root?.contains(heading)) {
+      heading.style.fontSize = `${size}pt`;
+      heading.style.letterSpacing = "normal";
+      emit();
       return;
     }
-    // Prefer editing last table if one exists (Word-like reopen)
-    if (lastTable) openEditLastTable();
-    else openNewTable();
-  };
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand("fontSize", false, "7");
+    el.querySelectorAll('font[size="7"], span[style*="xxx-large"]').forEach(
+      (node) => {
+        const span = document.createElement("span");
+        span.style.fontSize = `${size}pt`;
+        span.innerHTML = (node as HTMLElement).innerHTML;
+        node.replaceWith(span);
+      },
+    );
+    emit();
+  }
 
-  const applyTableMarkdown = (markdown: string) => {
-    if (tableEditRange) {
-      const next =
-        value.slice(0, tableEditRange.start) +
-        markdown.trimEnd() +
-        "\n" +
-        value.slice(tableEditRange.end);
-      onChange(next);
+  function colorTargetFromSelection(): HTMLElement | null {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    const node = sel.anchorNode;
+    const el = node instanceof HTMLElement ? node : node?.parentElement;
+    if (!el) return null;
+    return el.closest("h1, h2, h3, h4, th") as HTMLElement | null;
+  }
+
+  function applyColor(color: string, kind: "fore" | "back") {
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    document.execCommand("styleWithCSS", false, "true");
+
+    const heading = kind === "fore" ? colorTargetFromSelection() : null;
+    if (heading && el.contains(heading)) {
+      if (!color) {
+        heading.style.removeProperty("color");
+        heading.removeAttribute("data-custom-color");
+      } else {
+        heading.style.color = color;
+        heading.setAttribute("data-custom-color", "true");
+      }
+      heading.querySelectorAll("span[style]").forEach((span) => {
+        (span as HTMLElement).style.removeProperty("color");
+        if (!(span as HTMLElement).getAttribute("style")?.trim()) {
+          span.replaceWith(...Array.from(span.childNodes));
+        }
+      });
+      emit();
+      return;
+    }
+
+    if (kind === "fore") {
+      if (!color) {
+        document.execCommand("foreColor", false, "#0b1f33");
+      } else {
+        document.execCommand("foreColor", false, color);
+      }
+      const sel = window.getSelection();
+      const node = sel?.anchorNode;
+      const painted =
+        (node instanceof HTMLElement ? node : node?.parentElement)?.closest(
+          "span, font",
+        ) ?? null;
+      if (painted instanceof HTMLElement && el.contains(painted)) {
+        if (color && color.toLowerCase() !== "#0b1f33") {
+          painted.setAttribute("data-custom-color", "true");
+        } else {
+          painted.removeAttribute("data-custom-color");
+          painted.style.removeProperty("color");
+        }
+      }
     } else {
-      const el = ref.current;
-      if (el) applyEdit(ref, onChange, insertAtCursor(el, markdown));
-      else onChange(value + markdown);
+      const ok = document.execCommand("hiliteColor", false, color);
+      if (!ok) document.execCommand("backColor", false, color);
     }
-    setTableOpen(false);
-    setTableEditRange(null);
-  };
+    emit();
+  }
 
-  const heading = (level: 1 | 2 | 3) => {
-    const prefix = "#".repeat(level) + " ";
-    run((el) => {
-      const start = el.selectionStart;
-      const lineStart = el.value.lastIndexOf("\n", start - 1) + 1;
-      const lineEnd = el.value.indexOf("\n", start);
-      const end = lineEnd === -1 ? el.value.length : lineEnd;
-      const line = el.value.slice(lineStart, end).replace(/^#{1,3}\s+/, "");
-      const next =
-        el.value.slice(0, lineStart) + prefix + line + el.value.slice(end);
-      return {
-        next,
-        cursorStart: lineStart + prefix.length,
-        cursorEnd: lineStart + prefix.length + line.length,
-      };
-    });
-  };
+  function insertLink() {
+    const label = linkLabel.trim() || "link";
+    const url = linkUrl.trim() || "https://";
+    insertHtml(
+      `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`,
+    );
+    setLinkOpen(false);
+    setLinkLabel("");
+    setLinkUrl("https://");
+  }
 
   async function uploadImageFiles(files: File[]) {
     const images = files.filter(
@@ -535,23 +549,32 @@ export function ManuscriptEditor({
           folder: "atlas/article-figures",
           resourceType: "image",
         });
-
-        const url = data.url;
         const ext = (file.name.split(".").pop() || "png").toLowerCase();
         const id = `fig-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
         const filename = `${id}.${ext}`;
         const caption = file.name.replace(/\.[^.]+$/, "") || "Figure";
-
-        added.push({ id, url, filename, caption });
-        insertText += figureSnippet(caption, url, figureFullWidth);
+        added.push({ id, url: data.url, filename, caption });
+        insertText += figureHtml(caption, data.url, figureFullWidth);
       }
 
       onFiguresChange([...figures, ...added]);
-      const el = ref.current;
-      if (el) {
-        applyEdit(ref, onChange, insertAtCursor(el, insertText));
+
+      const placeholder = targetFigureRef.current;
+      const root = editorRef.current;
+      if (
+        placeholder &&
+        root?.contains(placeholder) &&
+        isEditableFigure(placeholder)
+      ) {
+        applyImagesToFigure(
+          placeholder,
+          added.map((a) => ({ url: a.url, caption: a.caption })),
+          figureFullWidth,
+        );
+        targetFigureRef.current = null;
+        emit();
       } else {
-        onChange(value + insertText);
+        insertHtml(insertText);
       }
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Figure upload failed");
@@ -594,63 +617,111 @@ export function ManuscriptEditor({
     e.stopPropagation();
     dragDepth.current = 0;
     setDragOver(false);
+    const root = editorRef.current;
+    const over =
+      root && e.target instanceof Node ? closestFigure(e.target, root) : null;
+    if (isEditableFigure(over)) {
+      targetFigureRef.current = over;
+    } else {
+      captureInsertPoint();
+    }
     const files = Array.from(e.dataTransfer.files ?? []);
     if (files.length) await uploadImageFiles(files);
+  }
+
+  function applyTableHtml(html: string) {
+    const root = editorRef.current;
+    const target = targetTableRef.current;
+    if (target && root?.contains(target) && replaceTableTarget(target, html)) {
+      targetTableRef.current = null;
+      emit();
+      setTableOpen(false);
+      return;
+    }
+    insertHtml(html);
+    setTableOpen(false);
+  }
+
+  function openTableEditor(el: HTMLElement) {
+    const root = editorRef.current;
+    if (!root) return;
+    if (tableOpen && targetTableRef.current === el) return;
+    targetTableRef.current = el;
+    const siblingCaption =
+      el.previousElementSibling &&
+      /^table(?:\s+\d+)?(?:[.:]|\s|$)/i.test(
+        el.previousElementSibling.textContent?.trim() ?? "",
+      )
+        ? el.previousElementSibling.textContent?.trim() ?? ""
+        : "";
+    setTableSeed(htmlToTableModel(el, siblingCaption));
+    setTableUpdateMode(true);
+    setTableEditorKey((k) => k + 1);
+    setTableOpen(true);
+    setLinkOpen(false);
+  }
+
+  function onEditorClick(e: MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    const root = editorRef.current;
+    if (!root) return;
+
+    const tableTarget = closestTableTarget(target, root);
+    if (tableTarget) {
+      e.preventDefault();
+      openTableEditor(tableTarget);
+      return;
+    }
+
+    if (target.closest("figcaption")) return;
+    const fig = target.closest("figure");
+    if (!isEditableFigure(fig) || !root.contains(fig)) return;
+    e.preventDefault();
+    targetFigureRef.current = fig;
+    fileInputRef.current?.click();
   }
 
   function removeFigure(id: string) {
     const fig = figures.find((f) => f.id === id);
     onFiguresChange(figures.filter((f) => f.id !== id));
-    if (fig) {
-      const patterns = [
-        `![${fig.caption}|full](${fig.url})`,
-        `![${fig.caption}|col](${fig.url})`,
-        `![${fig.caption}](${fig.url})`,
-        fig.url,
-      ];
-      let next = value;
-      for (const p of patterns) next = next.replaceAll(p, "");
-      onChange(next.replace(/\n{3,}/g, "\n\n"));
-    }
+    const el = editorRef.current;
+    if (!el || !fig) return;
+    el.querySelectorAll("img").forEach((img) => {
+      if (img.getAttribute("src") !== fig.url) return;
+      const wrap = img.closest("figure") ?? img;
+      wrap.remove();
+    });
+    emit();
   }
 
   function updateCaption(id: string, caption: string) {
     const fig = figures.find((f) => f.id === id);
     if (!fig) return;
-    const nextFigures = figures.map((f) =>
-      f.id === id ? { ...f, caption } : f,
+    onFiguresChange(
+      figures.map((f) => (f.id === id ? { ...f, caption } : f)),
     );
-    onFiguresChange(nextFigures);
-    let next = value;
-    for (const flag of ["|full", "|col", ""] as const) {
-      const from = `![${fig.caption}${flag}](${fig.url})`;
-      const to = `![${caption}${flag || "|full"}](${fig.url})`;
-      next = next.replaceAll(from, to);
-    }
-    onChange(next);
+    const el = editorRef.current;
+    if (!el) return;
+    el.querySelectorAll("img").forEach((img) => {
+      if (img.getAttribute("src") !== fig.url) return;
+      img.setAttribute("alt", caption);
+      const cap = img.closest("figure")?.querySelector("figcaption");
+      if (cap) cap.textContent = caption;
+    });
+    emit();
   }
 
   function toggleFigureWidth(id: string) {
     const fig = figures.find((f) => f.id === id);
-    if (!fig) return;
-    let next = value;
-    if (next.includes(`![${fig.caption}|full](${fig.url})`)) {
-      next = next.replaceAll(
-        `![${fig.caption}|full](${fig.url})`,
-        `![${fig.caption}|col](${fig.url})`,
-      );
-    } else if (next.includes(`![${fig.caption}|col](${fig.url})`)) {
-      next = next.replaceAll(
-        `![${fig.caption}|col](${fig.url})`,
-        `![${fig.caption}|full](${fig.url})`,
-      );
-    } else {
-      next = next.replaceAll(
-        `![${fig.caption}](${fig.url})`,
-        `![${fig.caption}|full](${fig.url})`,
-      );
-    }
-    onChange(next);
+    const el = editorRef.current;
+    if (!el || !fig) return;
+    el.querySelectorAll("img").forEach((img) => {
+      if (img.getAttribute("src") !== fig.url) return;
+      const wrap = img.closest("figure");
+      if (!wrap) return;
+      wrap.classList.toggle("figure-full");
+    });
+    emit();
   }
 
   function moveFigure(id: string, dir: -1 | 1) {
@@ -663,16 +734,8 @@ export function ManuscriptEditor({
     onFiguresChange(next);
   }
 
-  function insertLink() {
-    const label = linkLabel.trim() || "link text";
-    const url = linkUrl.trim() || "https://";
-    run((el) => wrapSelection(el, "[", `](${url})`, label));
-    setLinkOpen(false);
-    setLinkLabel("");
-    setLinkUrl("https://");
-  }
-
-  const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
+  const wordCount = htmlToPlainText(value).split(/\s+/).filter(Boolean).length;
+  const minHeight = Math.max(12, rows) * 22;
 
   return (
     <div className="space-y-3">
@@ -680,11 +743,25 @@ export function ManuscriptEditor({
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-sm font-medium text-[var(--ink)]">{label}</span>
           <span className="text-[10px] text-[var(--muted)]">
-            {wordCount.toLocaleString()} words · {value.length.toLocaleString()}{" "}
-            chars · {figures.length} figure
+            {wordCount.toLocaleString()} words · {figures.length} figure
             {figures.length === 1 ? "" : "s"}
           </span>
         </div>
+      ) : null}
+
+      {hint ? (
+        <p className="text-[11px] leading-relaxed text-[var(--muted)]">{hint}</p>
+      ) : null}
+
+      {showImport ? (
+        <ManuscriptImportPanel
+          hasExistingBody={Boolean(htmlToPlainText(value))}
+          onError={onError}
+          onImported={(result) => {
+            onChange(result.body);
+            onFiguresChange(result.figures);
+          }}
+        />
       ) : null}
 
       <div
@@ -693,6 +770,11 @@ export function ManuscriptEditor({
             ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30"
             : "border-[var(--line)]"
         }`}
+        style={
+          journalPrimary
+            ? ({ "--j-primary": journalPrimary } as CSSProperties)
+            : undefined
+        }
         onDragEnter={onDragEnter}
         onDragLeave={onDragLeave}
         onDragOver={onDragOver}
@@ -704,18 +786,19 @@ export function ManuscriptEditor({
               <p className="text-sm font-semibold text-[var(--accent)]">
                 Drop images to insert figures
               </p>
-              <p className="mt-1 text-[11px] text-[var(--muted)]">
-                {figureFullWidth
-                  ? "Will span both columns (full width)"
-                  : "Will sit in one column"}
-              </p>
             </div>
           </div>
         )}
 
-        {/* Word-style formatting ribbon */}
         <div className="space-y-1.5 border-b border-[var(--line)] bg-gradient-to-b from-[#f7f9fb] to-[var(--surface)] px-2 py-2">
-          <div className="-mx-1 flex flex-nowrap items-center gap-y-1.5 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          <div
+            className="-mx-1 flex flex-nowrap items-center gap-y-1.5 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+            onMouseDownCapture={(e) => {
+              const t = e.target as HTMLElement;
+              if (t.closest("input, textarea")) return;
+              captureInsertPoint();
+            }}
+          >
             <ToolGroup label="Font">
               <select
                 className={selectClass}
@@ -725,15 +808,7 @@ export function ManuscriptEditor({
                 onChange={(e) => {
                   const font = e.target.value;
                   e.target.value = "";
-                  if (!font) return;
-                  run((el) =>
-                    wrapSelection(
-                      el,
-                      `{{font:${font}}}`,
-                      "{{/font}}",
-                      "text",
-                    ),
-                  );
+                  if (font) applyFont(font);
                 }}
               >
                 {FONT_OPTIONS.map((o) => (
@@ -750,15 +825,7 @@ export function ManuscriptEditor({
                 onChange={(e) => {
                   const size = e.target.value;
                   e.target.value = "";
-                  if (!size) return;
-                  run((el) =>
-                    wrapSelection(
-                      el,
-                      `{{size:${size}}}`,
-                      "{{/size}}",
-                      "text",
-                    ),
-                  );
+                  if (size) applySize(size);
                 }}
               >
                 {SIZE_OPTIONS.map((o) => (
@@ -770,192 +837,151 @@ export function ManuscriptEditor({
             </ToolGroup>
             <Divider />
             <ToolGroup label="Style">
-              <ToolBtn
-                title="Bold (Ctrl/Cmd+B)"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "**", "**", "bold"))
-                }
-              >
+              <ToolBtn title="Bold (Ctrl/Cmd+B)" onClick={() => run("bold")}>
                 <span className="font-extrabold">B</span>
               </ToolBtn>
-              <ToolBtn
-                title="Italic"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "*", "*", "italic"))
-                }
-              >
+              <ToolBtn title="Italic" onClick={() => run("italic")}>
                 <span className="italic">I</span>
               </ToolBtn>
-              <ToolBtn
-                title="Underline"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "++", "++", "underline"))
-                }
-              >
+              <ToolBtn title="Underline" onClick={() => run("underline")}>
                 <span className="underline">U</span>
               </ToolBtn>
               <ToolBtn
                 title="Strikethrough"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "~~", "~~", "strike"))
-                }
+                onClick={() => run("strikeThrough")}
               >
                 <span className="line-through">S</span>
               </ToolBtn>
               <ToolBtn
-                title="Highlight"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "==", "==", "highlight"))
-                }
-              >
-                <span className="rounded-sm bg-amber-200 px-0.5">H</span>
-              </ToolBtn>
-              <ToolBtn
                 title="Superscript"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "^", "^", "sup"))
-                }
+                onClick={() => run("superscript")}
               >
                 X²
               </ToolBtn>
-              <ToolBtn
-                title="Subscript"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "~", "~", "sub"))
-                }
-              >
+              <ToolBtn title="Subscript" onClick={() => run("subscript")}>
                 X₂
               </ToolBtn>
               <ToolBtn
-                title="Clear formatting from selection"
-                onClick={() =>
-                  run((el) => {
-                    const start = el.selectionStart;
-                    const end = el.selectionEnd;
-                    if (start === end) {
-                      return {
-                        next: el.value,
-                        cursorStart: start,
-                        cursorEnd: end,
-                      };
-                    }
-                    const selected = el.value.slice(start, end);
-                    const cleaned = clearInlineFormatting(selected);
-                    return {
-                      next:
-                        el.value.slice(0, start) +
-                        cleaned +
-                        el.value.slice(end),
-                      cursorStart: start,
-                      cursorEnd: start + cleaned.length,
-                    };
-                  })
-                }
+                title="Clear formatting"
+                onClick={() => run("removeFormat")}
               >
                 Clear
               </ToolBtn>
             </ToolGroup>
             <Divider />
-            <ToolGroup label="Align">
-              <ToolBtn
-                title="Align left"
-                onClick={() => run((el) => wrapAlignBlock(el, "left"))}
+            <ToolGroup label="Color">
+              <button
+                type="button"
+                title="Journal heading color"
+                className="h-5 w-5 rounded-sm border border-black/15 ring-1 ring-black/5"
+                style={{
+                  background: journalPrimary || "var(--j-primary, var(--accent))",
+                }}
+                onClick={() => applyColor("", "fore")}
+              />
+              {TEXT_COLORS.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  title={`Text ${c.label}`}
+                  className="h-5 w-5 rounded-sm border border-black/10"
+                  style={{ background: c.value }}
+                  onClick={() => applyColor(c.value, "fore")}
+                />
+              ))}
+              <label
+                className="ml-1 flex h-6 w-6 cursor-pointer items-center overflow-hidden rounded-sm border border-[var(--line)]"
+                title="Custom text color"
               >
+                <input
+                  type="color"
+                  defaultValue="#0b1f33"
+                  className="h-8 w-8 -translate-x-1 -translate-y-1 cursor-pointer"
+                  onChange={(e) => applyColor(e.target.value, "fore")}
+                />
+              </label>
+              <span className="mx-1 text-[10px] text-[var(--muted)]">Hi</span>
+              {HIGHLIGHT_COLORS.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  title={`Highlight ${c.label}`}
+                  className="h-5 w-5 rounded-sm border border-black/10"
+                  style={{ background: c.value }}
+                  onClick={() => applyColor(c.value, "back")}
+                />
+              ))}
+            </ToolGroup>
+            <Divider />
+            <ToolGroup label="Align">
+              <ToolBtn title="Align left" onClick={() => run("justifyLeft")}>
                 Left
               </ToolBtn>
               <ToolBtn
                 title="Align center"
-                onClick={() => run((el) => wrapAlignBlock(el, "center"))}
+                onClick={() => run("justifyCenter")}
               >
                 Center
               </ToolBtn>
-              <ToolBtn
-                title="Align right"
-                onClick={() => run((el) => wrapAlignBlock(el, "right"))}
-              >
+              <ToolBtn title="Align right" onClick={() => run("justifyRight")}>
                 Right
               </ToolBtn>
-              <ToolBtn
-                title="Justify"
-                onClick={() => run((el) => wrapAlignBlock(el, "justify"))}
-              >
+              <ToolBtn title="Justify" onClick={() => run("justifyFull")}>
                 Justify
               </ToolBtn>
             </ToolGroup>
             <Divider />
             <ToolGroup label="Lists">
               <ToolBtn
-                title="Bulleted list — toggle on selected lines"
-                onClick={() => run((el) => toggleListLines(el, "ul"))}
+                title="Bulleted list"
+                onClick={() => run("insertUnorderedList")}
               >
                 • List
               </ToolBtn>
               <ToolBtn
-                title="Numbered list — toggle on selected lines"
-                onClick={() => run((el) => toggleListLines(el, "ol"))}
+                title="Numbered list"
+                onClick={() => run("insertOrderedList")}
               >
                 1. List
               </ToolBtn>
               <ToolBtn
                 title="Increase indent"
-                onClick={() => run((el) => indentLines(el, 1))}
+                onClick={() => run("indent")}
               >
                 → Indent
               </ToolBtn>
               <ToolBtn
                 title="Decrease indent"
-                onClick={() => run((el) => indentLines(el, -1))}
+                onClick={() => run("outdent")}
               >
                 ← Outdent
-              </ToolBtn>
-              <ToolBtn
-                title="Checklist"
-                onClick={() =>
-                  run((el) =>
-                    insertAtCursor(
-                      el,
-                      "\n- [ ] Task one\n- [ ] Task two\n- [x] Done\n",
-                    ),
-                  )
-                }
-              >
-                ☐ Tasks
               </ToolBtn>
             </ToolGroup>
             <Divider />
             <ToolGroup label="Para">
-              <ToolBtn title="Heading 1 — section" onClick={() => heading(1)}>
+              <ToolBtn
+                title="Heading 1 — section"
+                onClick={() => run("formatBlock", "<h1>")}
+              >
                 H1
               </ToolBtn>
-              <ToolBtn title="Heading 2 — subsection" onClick={() => heading(2)}>
+              <ToolBtn
+                title="Heading 2 — subsection"
+                onClick={() => run("formatBlock", "<h2>")}
+              >
                 H2
               </ToolBtn>
-              <ToolBtn title="Heading 3" onClick={() => heading(3)}>
+              <ToolBtn
+                title="Heading 3"
+                onClick={() => run("formatBlock", "<h3>")}
+              >
                 H3
               </ToolBtn>
               <ToolBtn
                 title="Block quote"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "\n> ", "\n", "Quoted text"))
-                }
+                onClick={() => run("formatBlock", "<blockquote>")}
               >
                 Quote
-              </ToolBtn>
-              <ToolBtn
-                title="Horizontal rule"
-                onClick={() =>
-                  run((el) => insertAtCursor(el, "\n\n---\n\n"))
-                }
-              >
-                ― Rule
-              </ToolBtn>
-              <ToolBtn
-                title="Inline code"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "`", "`", "code"))
-                }
-              >
-                {"</>"}
               </ToolBtn>
               <ToolBtn
                 title="Insert / edit hyperlink"
@@ -971,25 +997,46 @@ export function ManuscriptEditor({
             <Divider />
             <ToolGroup label="Insert">
               <ToolBtn
-                title="Insert or edit table (Word-style grid)"
+                title="Insert or edit table"
                 active={tableOpen}
-                onClick={toggleTable}
+                onClick={() => {
+                  const root = editorRef.current;
+                  const sel = window.getSelection();
+                  const fromSel =
+                    root && sel?.anchorNode
+                      ? closestTableTarget(sel.anchorNode, root)
+                      : null;
+                  if (fromSel) {
+                    openTableEditor(fromSel);
+                    return;
+                  }
+                  if (
+                    targetFigureRef.current &&
+                    isPlaceholderTable(targetFigureRef.current) &&
+                    root?.contains(targetFigureRef.current)
+                  ) {
+                    openTableEditor(targetFigureRef.current);
+                    return;
+                  }
+                  targetTableRef.current = null;
+                  setTableUpdateMode(false);
+                  setTableSeed({
+                    headers: ["Column 1", "Column 2", "Column 3"],
+                    rows: [
+                      ["", "", ""],
+                      ["", "", ""],
+                      ["", "", ""],
+                    ],
+                    caption: "",
+                    fullWidth: true,
+                  });
+                  setTableEditorKey((k) => k + 1);
+                  setTableOpen((o) => !o);
+                  setLinkOpen(false);
+                }}
               >
                 Table
               </ToolBtn>
-              {lastTable && !tableOpen ? (
-                <ToolBtn
-                  title="Edit last table in manuscript"
-                  onClick={openEditLastTable}
-                >
-                  Edit table
-                </ToolBtn>
-              ) : null}
-              {tableOpen ? (
-                <ToolBtn title="New blank table" onClick={openNewTable}>
-                  New table
-                </ToolBtn>
-              ) : null}
               <label
                 htmlFor={fileId}
                 className="cursor-pointer rounded-md px-2 py-1.5 text-[11px] font-semibold text-[var(--ink)] transition hover:bg-white"
@@ -999,6 +1046,7 @@ export function ManuscriptEditor({
               </label>
               <input
                 id={fileId}
+                ref={fileInputRef}
                 type="file"
                 accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
                 className="hidden"
@@ -1009,7 +1057,7 @@ export function ManuscriptEditor({
               <ToolBtn
                 title={
                   figureFullWidth
-                    ? "Figures: full width (both columns) — click to use one column"
+                    ? "Figures: full width — click to use one column"
                     : "Figures: one column — click for full width"
                 }
                 active={figureFullWidth}
@@ -1017,60 +1065,11 @@ export function ManuscriptEditor({
               >
                 {figureFullWidth ? "Fig: Full" : "Fig: Col"}
               </ToolBtn>
-              <ToolBtn
-                title="Inline equation"
-                onClick={() =>
-                  run((el) => wrapSelection(el, "$", "$", "x^2"))
-                }
-              >
-                $ math
-              </ToolBtn>
-              <ToolBtn
-                title="Display equation"
-                onClick={() =>
-                  run((el) =>
-                    wrapSelection(el, "\n$$\n", "\n$$\n", "E = m c^2"),
-                  )
-                }
-              >
-                $$ eq
-              </ToolBtn>
-              <ToolBtn
-                title="Page break"
-                onClick={() =>
-                  run((el) => insertAtCursor(el, "\n\n:::pagebreak\n\n"))
-                }
-              >
-                Break
-              </ToolBtn>
-            </ToolGroup>
-            <Divider />
-            <ToolGroup label="Templates">
-              {SECTION_TEMPLATES.map((t) => (
-                <ToolBtn
-                  key={t.label}
-                  title={t.label}
-                  onClick={() => {
-                    if (!value.trim()) {
-                      onChange(t.body);
-                      return;
-                    }
-                    const replace = window.confirm(
-                      `Replace current body with “${t.label}”? Cancel inserts at cursor.`,
-                    );
-                    if (replace) onChange(t.body);
-                    else run((el) => insertAtCursor(el, "\n" + t.body));
-                  }}
-                >
-                  {t.short}
-                </ToolBtn>
-              ))}
             </ToolGroup>
           </div>
           <p className="px-1 text-[10px] text-[var(--muted)]">
-            Select a paragraph, then Align (Left / Center / Right / Justify).
-            Justify needs enough text to wrap in the column — then regenerate
-            the PDF to see it.
+            Select text, then Bold / color / highlight. Edits stay in this
+            journal&apos;s article layout.
           </p>
         </div>
 
@@ -1107,46 +1106,50 @@ export function ManuscriptEditor({
         {tableOpen && (
           <div className="border-b border-[var(--line)] bg-[var(--surface)]/30 px-3 py-3">
             <WordTableEditor
-              key={
-                tableEditRange
-                  ? `edit-${tableEditRange.start}`
-                  : `new-${tableSeed?.headers.join("-") ?? "blank"}`
-              }
+              key={tableEditorKey}
               initial={tableSeed}
-              updateMode={Boolean(tableEditRange)}
+              updateMode={tableUpdateMode}
               onCancel={() => {
                 setTableOpen(false);
-                setTableEditRange(null);
+                targetTableRef.current = null;
               }}
-              onInsert={applyTableMarkdown}
+              onInsert={applyTableHtml}
             />
           </div>
         )}
 
-        <textarea
-          ref={ref}
-          rows={rows}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          spellCheck
-          className="block w-full resize-y border-0 bg-white px-4 py-4 text-[15px] leading-[1.7] text-[var(--ink)] outline-none focus:ring-0"
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
+          aria-multiline="true"
+          data-placeholder="Import a Word or Google Doc, or start typing from Introduction…"
+          className="manuscript-wysiwyg nahda-article-body block w-full resize-y overflow-auto bg-white px-4 py-4 text-[15px] leading-[1.7] text-[var(--ink)] outline-none"
           style={{
-            fontFamily:
-              "Georgia, 'Times New Roman', 'Liberation Serif', serif",
+            minHeight,
+            fontFamily: "Georgia, 'Times New Roman', 'Liberation Serif', serif",
           }}
-          placeholder={
-            "# Introduction\n\nWrite your article here.\n\nDrag & drop images · Insert tables from the toolbar…"
-          }
+          onInput={emit}
+          onMouseUp={captureInsertPoint}
+          onKeyUp={captureInsertPoint}
+          onClick={onEditorClick}
+          onPaste={(e) => {
+            const html = e.clipboardData.getData("text/html");
+            if (!html) return;
+            e.preventDefault();
+            insertHtml(sanitizeManuscriptHtml(html));
+          }}
         />
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-[var(--line)] bg-[var(--surface)]/50 px-3 py-2 text-[11px] text-[var(--muted)]">
           <span>
             {uploading
               ? "Uploading image…"
-              : "Drag & drop images anywhere on this editor"}
+              : "Click a figure to replace its image · drag images onto a figure or into the text"}
           </span>
           <span className="font-medium text-[var(--ink)]/70">
-            Word-style tables · Drag images · Bold · Links · Math
+            Word / Google Docs import · in-place editing
           </span>
         </div>
       </div>
@@ -1156,73 +1159,62 @@ export function ManuscriptEditor({
           <p className="text-xs font-semibold text-[var(--ink)]">
             Figures in manuscript
           </p>
-          {figures.map((fig, index) => {
-            const isFull =
-              value.includes(`![${fig.caption}|full](${fig.url})`) ||
-              (!value.includes(`![${fig.caption}|col](${fig.url})`) &&
-                value.includes(`![${fig.caption}](${fig.url})`));
-            return (
-              <figure
-                key={fig.id}
-                className="overflow-hidden rounded-xl border border-[var(--line)] bg-white shadow-sm"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={fig.url}
-                  alt={fig.caption}
-                  className="block h-auto w-full max-h-[420px] object-contain bg-[#f5f7fa]"
+          {figures.map((fig, index) => (
+            <figure
+              key={fig.id}
+              className="overflow-hidden rounded-xl border border-[var(--line)] bg-white shadow-sm"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={fig.url}
+                alt={fig.caption}
+                className="block h-auto w-full max-h-[420px] bg-[#f5f7fa] object-contain"
+              />
+              <figcaption className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                <span className="text-[10px] font-semibold text-[var(--muted)]">
+                  Fig. {index + 1}
+                </span>
+                <input
+                  value={fig.caption}
+                  onChange={(e) => updateCaption(fig.id, e.target.value)}
+                  className="min-w-0 flex-1 rounded border border-[var(--line)] px-2 py-1.5 text-xs"
+                  placeholder="Caption"
                 />
-                <figcaption className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-                  <span className="text-[10px] font-semibold text-[var(--muted)]">
-                    Fig. {index + 1}
-                  </span>
-                  <input
-                    value={fig.caption}
-                    onChange={(e) => updateCaption(fig.id, e.target.value)}
-                    className="min-w-0 flex-1 rounded border border-[var(--line)] px-2 py-1.5 text-xs"
-                    placeholder="Caption"
-                  />
-                  <button
-                    type="button"
-                    className="rounded-md border border-[var(--line)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)]"
-                    onClick={() => toggleFigureWidth(fig.id)}
-                    title="Toggle column vs full width"
-                  >
-                    {isFull ? "Full width" : "1 column"}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-[11px] font-semibold text-[var(--muted)]"
-                    disabled={index === 0}
-                    onClick={() => moveFigure(fig.id, -1)}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="text-[11px] font-semibold text-[var(--muted)]"
-                    disabled={index === figures.length - 1}
-                    onClick={() => moveFigure(fig.id, 1)}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    className="text-[11px] font-semibold text-rose-700"
-                    onClick={() => removeFigure(fig.id)}
-                  >
-                    Remove
-                  </button>
-                </figcaption>
-              </figure>
-            );
-          })}
+                <button
+                  type="button"
+                  className="rounded-md border border-[var(--line)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)]"
+                  onClick={() => toggleFigureWidth(fig.id)}
+                >
+                  Width
+                </button>
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-[var(--muted)]"
+                  disabled={index === 0}
+                  onClick={() => moveFigure(fig.id, -1)}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-[var(--muted)]"
+                  disabled={index === figures.length - 1}
+                  onClick={() => moveFigure(fig.id, 1)}
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-rose-700"
+                  onClick={() => removeFigure(fig.id)}
+                >
+                  Remove
+                </button>
+              </figcaption>
+            </figure>
+          ))}
         </div>
       )}
-
-      {hint ? (
-        <p className="text-[11px] text-[var(--muted)]">{hint}</p>
-      ) : null}
     </div>
   );
 }

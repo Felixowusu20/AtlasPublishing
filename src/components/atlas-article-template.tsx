@@ -1,8 +1,9 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { AuthorOrcidLine } from "@/components/orcid-id";
 import { journalArticlePalette } from "@/lib/journal-colors";
+import { ensureManuscriptHtml } from "@/lib/import-manuscript";
 
 type Props = {
   journalTitle: string;
@@ -25,192 +26,74 @@ type Props = {
   receivedAt?: string;
   acceptedAt?: string;
   body?: string;
+  funding?: string | null;
+  conflictOfInterest?: string | null;
   journalSlug?: string;
   coverColor?: string;
   articleUrl?: string;
   journalUrl?: string;
 };
 
-function parseWidthFlag(raw: string): { text: string; fullWidth: boolean } {
-  const fullWidth = /\|\s*full\s*$/i.test(raw);
-  const text = raw.replace(/\|\s*(full|col|column)\s*$/i, "").trim();
-  return { text, fullWidth };
+function ArticleBodyHtml({ body }: { body?: string }) {
+  if (!body?.trim()) return null;
+  const html = ensureManuscriptHtml(body);
+  if (!html) return null;
+  return (
+    <div
+      className="nahda-article-body"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 }
 
-function renderBodyPreview(body?: string) {
-  if (!body?.trim()) return null;
-  const lines = body.replace(/\r\n/g, "\n").split("\n");
-  const nodes: ReactNode[] = [];
-  let i = 0;
-  let key = 0;
-
-  while (i < lines.length) {
-    const trimmed = lines[i]?.trim() ?? "";
-
-    if (!trimmed) {
-      i += 1;
-      continue;
-    }
-
-    if (/^#{1,3}\s+/.test(trimmed)) {
-      const level = (trimmed.match(/^#+/)?.[0].length ?? 1) as 1 | 2 | 3;
-      const text = trimmed.replace(/^#{1,3}\s+/, "");
-      const Tag = level === 1 ? "h2" : level === 2 ? "h3" : "h4";
-      const sizes = {
-        1: "col-span-full mt-5 text-[13px] font-bold uppercase tracking-[0.08em]",
-        2: "mt-4 text-[14px] font-bold text-[#0b1f33]",
-        3: "mt-3 text-[13px] font-semibold italic text-[#5b6b7c]",
-      } as const;
-      nodes.push(
-        <Tag
-          key={key++}
-          className={sizes[level]}
-          style={level === 1 ? { color: "var(--j-primary)" } : undefined}
-        >
-          {text}
-        </Tag>,
-      );
-      i += 1;
-      continue;
-    }
-
-    if (/^\|.+\|$/.test(trimmed) && i + 1 < lines.length) {
-      const start = i;
-      const rows: string[][] = [];
-      while (i < lines.length && /^\|.+\|$/.test(lines[i].trim())) {
-        const row = lines[i].trim();
-        if (!/^\|[\s:|-]+\|$/.test(row)) {
-          rows.push(
-            row
-              .replace(/^\|/, "")
-              .replace(/\|$/, "")
-              .split("|")
-              .map((c) => c.trim()),
-          );
-        }
-        i += 1;
-      }
-      if (rows.length === 0) {
-        i = start + 1;
-        continue;
-      }
-      const [header, ...bodyRows] = rows;
-      nodes.push(
-        <div key={key++} className="col-span-full my-3 overflow-x-auto">
-          <table className="w-full border-collapse text-left text-[11px]">
-            <thead>
-              <tr className="border-y border-[#0b1f33]">
-                {header.map((cell, ci) => (
-                  <th
-                    key={ci}
-                    className="px-2 py-1.5 font-semibold text-[#0b1f33]"
-                  >
-                    {cell}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {bodyRows.map((row, ri) => (
-                <tr
-                  key={ri}
-                  className={
-                    ri === bodyRows.length - 1
-                      ? "border-b border-[#0b1f33]"
-                      : "border-b border-[#e8edf2]"
-                  }
-                >
-                  {row.map((cell, ci) => (
-                    <td key={ci} className="px-2 py-1.5 text-[#0b1f33]">
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>,
-      );
-      continue;
-    }
-
-    const img = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (img) {
-      const { text: caption, fullWidth } = parseWidthFlag(img[1]);
-      nodes.push(
-        <figure
-          key={key++}
-          className={fullWidth ? "col-span-full my-4" : "my-3"}
-        >
+function RunningFooter({
+  year,
+  doiHref,
+  doiLabel,
+  journalTitle,
+  journalShortTitle,
+  citeBits,
+}: {
+  year: string;
+  doiHref: string;
+  doiLabel: string;
+  journalTitle: string;
+  journalShortTitle: string;
+  citeBits: string[];
+}) {
+  return (
+    <footer className="nahda-running-footer">
+      <div className="flex flex-row items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={img[2]}
-            alt={caption}
-            className="mx-auto h-auto w-full max-w-full object-contain"
-          />
-          {caption ? (
-            <figcaption className="mt-1.5 text-left text-[10px] leading-snug text-[#5b6b7c]">
-              {caption}
-            </figcaption>
-          ) : null}
-        </figure>,
-      );
-      i += 1;
-      continue;
-    }
-
-    if (trimmed === "$$") {
-      const math: string[] = [];
-      i += 1;
-      while (i < lines.length && lines[i].trim() !== "$$") {
-        math.push(lines[i]);
-        i += 1;
-      }
-      i += 1;
-      nodes.push(
-        <pre
-          key={key++}
-          className="col-span-full my-3 overflow-x-auto bg-[#f3f6f7] px-3 py-2 text-center font-mono text-[11px] text-[#0b1f33]"
-        >
-          {math.join("\n")}
-        </pre>,
-      );
-      continue;
-    }
-
-    const para: string[] = [trimmed];
-    i += 1;
-    while (
-      i < lines.length &&
-      lines[i].trim() &&
-      !/^#{1,3}\s+/.test(lines[i].trim()) &&
-      !/^\|.+\|$/.test(lines[i].trim()) &&
-      !/^!\[[^\]]*]\([^)]+\)$/.test(lines[i].trim()) &&
-      lines[i].trim() !== "$$"
-    ) {
-      para.push(lines[i].trim());
-      i += 1;
-    }
-    nodes.push(
-      <p
-        key={key++}
-        className="text-[14px] leading-[1.7] text-[#0b1f33] [text-indent:1.1em]"
-      >
-        {para
-          .join(" ")
-          .replace(/\*\*([^*]+)\*\*/g, "$1")
-          .replace(/\*([^*]+)\*/g, "$1")
-          .replace(/^>\s?/gm, "")}
-      </p>,
-    );
-  }
-
-  return nodes;
+          <img src="/brand/logo-nahda.png" alt="Nahda Publications" />
+          <p className="text-[10px] leading-snug text-[#5b6b7c]">
+            © {year} The Authors. Published by Nahda Publications
+          </p>
+        </div>
+        <div className="min-w-0 text-left sm:max-w-[55%] sm:text-right">
+          <a
+            href={doiHref}
+            target="_blank"
+            rel="noreferrer"
+            className="break-all text-[11px] font-medium hover:underline"
+            style={{ color: "var(--j-link)" }}
+          >
+            {doiLabel}
+          </a>
+          <p className="mt-0.5 text-[10px] text-[#0b1f33]">
+            <em>{journalShortTitle || journalTitle || "Journal"}</em>
+            {citeBits.length > 0 ? ` ${citeBits.join(", ")}` : ` ${year}`}
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
 }
 
 /**
- * HTML preview aligned with the ACS-level Typst publication engine.
- * Colors follow the journal cover/brand palette.
+ * Journal-bound article preview. Header, authors, abstract, and keywords
+ * come from this journal's template; the body is imported HTML.
  */
 export function NahdaArticleTemplate({
   journalTitle,
@@ -233,6 +116,8 @@ export function NahdaArticleTemplate({
   receivedAt,
   acceptedAt,
   body,
+  funding,
+  conflictOfInterest,
   journalSlug,
   coverColor,
   articleUrl,
@@ -254,7 +139,9 @@ export function NahdaArticleTemplate({
     (articleType || "Article").replace(/\s+Article$/i, "") || "Article";
 
   const year = new Date().getFullYear().toString();
-  const citeBits = [year, volume || null, pages || null].filter(Boolean);
+  const citeBits = [year, volume || null, pages || null].filter(
+    (b): b is string => Boolean(b),
+  );
   const citeLine = `${journalShortTitle || "Journal"} ${citeBits.join(", ")}`;
 
   const doiHref = doi
@@ -314,6 +201,10 @@ export function NahdaArticleTemplate({
         } as CSSProperties
       }
     >
+      <table className="nahda-print-frame">
+        <tbody>
+          <tr>
+            <td>
       <header className="px-8 pt-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -377,7 +268,8 @@ export function NahdaArticleTemplate({
         />
       </header>
 
-      <div className="px-8 pb-8 pt-5">
+      <div className="nahda-article-inner px-8 pb-8 pt-5">
+        <div className="nahda-article-front">
         <h1
           className="text-[1.45rem] font-bold leading-snug tracking-tight text-[#0b1f33] sm:text-[1.65rem]"
           style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
@@ -405,7 +297,7 @@ export function NahdaArticleTemplate({
           </ul>
         )}
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-[1.45fr_1fr]">
+        <div className="mt-5 grid gap-4 sm:grid-cols-[1.45fr_1fr] print:block print:gap-2">
           <div>
             <div className="flex items-center gap-2">
               <span
@@ -504,7 +396,7 @@ export function NahdaArticleTemplate({
           <span className="text-[#5b6b7c]">{manuscriptId}</span>
         </p>
 
-        <section className="mt-6">
+        <section className="nahda-article-abstract">
           <h2
             className="text-[11px] font-bold uppercase tracking-[0.14em]"
             style={{
@@ -514,18 +406,15 @@ export function NahdaArticleTemplate({
           >
             Abstract
           </h2>
-          <p className="mt-2 text-[14px] leading-[1.7] text-justify text-[#0b1f33]">
+          <p className="mt-2.5 whitespace-pre-wrap break-words text-[14px] leading-[1.75] text-justify text-[#0b1f33]">
             {abstract || "Abstract will appear here."}
           </p>
         </section>
 
         {keywords.length > 0 && (
           <section
-            className="mt-5 border-l-[2.5px] px-3.5 py-2.5"
-            style={{
-              background: "var(--j-soft)",
-              borderColor: "var(--j-primary)",
-            }}
+            className="nahda-keywords"
+            style={{ background: "var(--j-soft)" }}
           >
             <span
               className="text-[10px] font-bold uppercase tracking-[0.12em]"
@@ -541,61 +430,67 @@ export function NahdaArticleTemplate({
             </span>
           </section>
         )}
+        </div>
 
-        {body?.trim() ? (
-          <section
-            className="mt-7 border-t-[1.5px] pt-5"
-            style={{ borderColor: "var(--j-primary)" }}
-          >
-            <div className="columns-1 gap-x-5 sm:columns-2 [column-fill:_balance]">
-              {renderBodyPreview(body)}
-            </div>
+        <div className="nahda-article-flow">
+        {body?.trim() ? <ArticleBodyHtml body={body} /> : null}
+
+        {funding?.trim() || conflictOfInterest?.trim() ? (
+          <section className="nahda-end-matter nahda-span-all">
+            {funding?.trim() ? (
+              <div>
+                <h2
+                  className="text-[11px] font-bold uppercase tracking-[0.14em]"
+                  style={{
+                    color: "var(--j-primary)",
+                    fontFamily: "Helvetica, Arial, sans-serif",
+                  }}
+                >
+                  Funding
+                </h2>
+                <p className="mt-2 text-[13px] leading-[1.7] text-justify text-[#0b1f33]">
+                  {funding.trim()}
+                </p>
+              </div>
+            ) : null}
+            {conflictOfInterest?.trim() ? (
+              <div>
+                <h2
+                  className="text-[11px] font-bold uppercase tracking-[0.14em]"
+                  style={{
+                    color: "var(--j-primary)",
+                    fontFamily: "Helvetica, Arial, sans-serif",
+                  }}
+                >
+                  Conflicts of Interest
+                </h2>
+                <p className="mt-2 text-[13px] leading-[1.7] text-justify text-[#0b1f33]">
+                  {conflictOfInterest.trim()}
+                </p>
+              </div>
+            ) : null}
           </section>
         ) : null}
-
-        <footer className="mt-8 border-t border-[#d7dee7] px-1 pt-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <div className="flex min-w-0 items-center gap-2.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/logo-nahda.png"
-                alt="Nahda Publications"
-                className="h-7 w-auto max-w-[140px] object-contain object-left"
-              />
-              <p className="text-[10px] leading-snug text-[#5b6b7c]">
-                © {year} The Authors. Published by Nahda Publications
-              </p>
-            </div>
-            <div className="min-w-0 text-left sm:max-w-[55%] sm:text-right">
-              <a
-                href={doiHref}
-                target="_blank"
-                rel="noreferrer"
-                className="break-all text-[11px] font-medium hover:underline"
-                style={{ color: "var(--j-link)" }}
-              >
-                {doiLabel}
-              </a>
-              <p className="mt-0.5 text-[10px] text-[#0b1f33]">
-                <em>{journalShortTitle || journalTitle || "Journal"}</em>
-                {citeBits.length > 0 ? ` ${citeBits.join(", ")}` : ` ${year}`}
-              </p>
-            </div>
-          </div>
-          <p className="mt-3 text-[10px] leading-relaxed text-[#5b6b7c]">
-            Licensed under{" "}
-            <a
-              href={licenseHref}
-              className="hover:underline"
-              style={{ color: "var(--j-link)" }}
-            >
-              {license}
-            </a>
-            {" · "}
-            {journalTitle}
-          </p>
-        </footer>
+        </div>
       </div>
+            </td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>
+      <RunningFooter
+        year={year}
+        doiHref={doiHref}
+        doiLabel={doiLabel}
+        journalTitle={journalTitle}
+        journalShortTitle={journalShortTitle}
+        citeBits={citeBits}
+      />
+            </td>
+          </tr>
+        </tfoot>
+      </table>
     </article>
   );
 }

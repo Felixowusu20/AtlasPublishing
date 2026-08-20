@@ -36,11 +36,23 @@ type PaymentAnalytics = {
   totals: {
     amountCents: number;
     amountLabel: string;
+    internalAmount?: number | null;
+    internalAmountLabel?: string | null;
     payments: number;
     pending: number;
     waived: number;
   };
   byJournal: JournalPaymentSlice[];
+  recent?: Array<{
+    id: string;
+    manuscriptId: string;
+    title: string;
+    amountLabel: string;
+    internalAmountLabel: string | null;
+    exchangeRate: number | null;
+    paystackReference: string | null;
+    paidAt: string | null;
+  }>;
 };
 
 const PRESETS: { id: RangePreset; label: string }[] = [
@@ -111,16 +123,20 @@ function PaymentPieChart({ slices }: { slices: JournalPaymentSlice[] }) {
   }
 
   const total = slices.reduce((s, x) => s + x.amountCents, 0);
-  let angle = 0;
   const wedges = slices.map((s, i) => {
+    const start = slices.slice(0, i).reduce((angle, prev) => {
+      const prevSweep =
+        total > 0 ? (prev.amountCents / total) * 360 : 360 / slices.length;
+      return angle + Math.max(prevSweep, prev.amountCents > 0 ? 0.35 : 0);
+    }, 0);
     const sweep =
       total > 0 ? (s.amountCents / total) * 360 : 360 / slices.length;
-    const start = angle;
-    const end = angle + Math.max(sweep, s.amountCents > 0 ? 0.35 : 0);
-    angle = end;
+    const end = start + Math.max(sweep, s.amountCents > 0 ? 0.35 : 0);
     return {
       ...s,
       color: PALETTE[i % PALETTE.length]!,
+      start,
+      end,
       d: piePath(cx, cy, r, start, end),
     };
   });
@@ -324,12 +340,18 @@ export function PaymentAnalyticsPanel() {
             </p>
           ) : data ? (
             <>
-              <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <MiniStat
                   label="Total collected"
                   value={data.totals.amountLabel}
-                  hint="Paid APC (USD)"
+                  hint="Customer price (USD)"
                   tone="teal"
+                />
+                <MiniStat
+                  label="Internal Paystack"
+                  value={data.totals.internalAmountLabel ?? "—"}
+                  hint="GHS processed"
+                  tone="sky"
                 />
                 <MiniStat
                   label="Payments"
@@ -360,6 +382,42 @@ export function PaymentAnalyticsPanel() {
                 ) : null}
               </div>
               <PaymentPieChart slices={data.byJournal} />
+
+              {data.recent && data.recent.length > 0 ? (
+                <div className="mt-6 overflow-x-auto">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                    Recent payments
+                  </p>
+                  <table className="w-full min-w-[36rem] text-left text-sm">
+                    <thead className="text-[11px] uppercase tracking-wider text-[var(--muted)]">
+                      <tr>
+                        <th className="py-2 pr-3 font-semibold">Manuscript</th>
+                        <th className="py-2 pr-3 font-semibold">Customer</th>
+                        <th className="py-2 pr-3 font-semibold">Internal</th>
+                        <th className="py-2 font-semibold">Reference</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--line)]">
+                      {data.recent.map((p) => (
+                        <tr key={p.id}>
+                          <td className="py-2 pr-3 font-medium">
+                            {p.manuscriptId}
+                          </td>
+                          <td className="py-2 pr-3 tabular-nums">
+                            {p.amountLabel}
+                          </td>
+                          <td className="py-2 pr-3 tabular-nums">
+                            {p.internalAmountLabel ?? "—"}
+                          </td>
+                          <td className="py-2 font-mono text-xs">
+                            {p.paystackReference ?? "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
             </>
           ) : null}
         </div>

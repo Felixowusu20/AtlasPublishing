@@ -23,7 +23,7 @@ export function sanitizeCardholderMessage(
   message: string | null | undefined,
 ): string | null {
   if (!message?.trim()) return null;
-  let cleaned = message
+  const cleaned = message
     .replace(EQUIVALENT_PHRASE, "")
     .replace(LOCAL_AMOUNT, "")
     .replace(/\(\s*\)/g, "")

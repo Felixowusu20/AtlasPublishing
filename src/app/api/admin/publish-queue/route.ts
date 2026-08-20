@@ -2,7 +2,6 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma, prismaFailureMessage } from "@/lib/db";
 import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
-import { uploadToCloudinary } from "@/lib/cloudinary";
 import { articlePublishedEmailHtml, sendEmail } from "@/lib/mail";
 import { requireAdmin } from "@/lib/session";
 import {
@@ -10,7 +9,6 @@ import {
   slugify,
   articleDownloadPath,
 } from "@/lib/submission-utils";
-import { compileAtlasTypstPdf } from "@/lib/typst-atlas";
 import {
   allocateNextAtlasDoi,
   atlasDoiPath,
@@ -200,55 +198,7 @@ export async function POST(request: Request) {
       return jsonError(`DOI already in use: ${doi}`, 400);
     }
 
-    // Prefer client-provided PDF URL, otherwise generate Nahda Typst PDF now
-    let publishedPdfUrl = body.pdfUrl || null;
-    if (!publishedPdfUrl) {
-      try {
-        const pdf = await compileAtlasTypstPdf({
-          journalTitle: submission.journal.title,
-          journalShortTitle: submission.journal.shortTitle,
-          journalSlug: submission.journal.slug,
-          coverColor: submission.journal.coverColor,
-          articleSlug: slug,
-          siteBaseUrl: process.env.NEXT_PUBLIC_APP_URL
-            ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
-            : getAppBaseUrl(),
-          manuscriptId: submission.manuscriptId,
-          title: body.title,
-          authors: body.authors,
-          affiliations: body.affiliations ?? [],
-          abstract: body.abstract,
-          keywords: body.keywords ?? submission.keywords,
-          articleType: body.articleType,
-          doi,
-          volume: body.volume,
-          issue: body.issue,
-          pages: body.pages,
-          license: body.license,
-          openAccess: body.openAccess,
-          body: body.body,
-          figures: body.figures,
-          logoUrl: body.coverImageUrl || submission.journal.coverImageUrl || undefined,
-          receivedAt: receivedAt.toISOString(),
-          acceptedAt: acceptedAt.toISOString(),
-          publishedAt: new Date().toISOString(),
-        });
-        const uploaded = await uploadToCloudinary(pdf, {
-          folder: "atlas/published-pdfs",
-          resourceType: "raw",
-          filename: `${submission.manuscriptId}.pdf`,
-        });
-        publishedPdfUrl = uploaded.url;
-      } catch (err) {
-        console.error("[publish typst-pdf]", err);
-        return jsonError(
-          err instanceof Error
-            ? `PDF generation failed: ${err.message}`
-            : "PDF generation failed",
-          500,
-        );
-      }
-    }
+    const publishedPdfUrl = body.pdfUrl || null;
 
     const articleData = {
       title: body.title,

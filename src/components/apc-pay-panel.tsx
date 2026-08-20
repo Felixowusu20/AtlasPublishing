@@ -1,80 +1,52 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { formatCustomerUsd } from "@/lib/format-usd";
 import { NahdaCheckoutModal } from "@/components/nahda-checkout-modal";
-import { looksLikeLocalCurrencyCopy } from "@/lib/payment-display";
 
 type Props = {
   submissionId: string;
   manuscriptId: string;
   apcPaymentStatus?: string | null;
   amountCents?: number | null;
+  amountLabel?: string | null;
   onPaid?: () => void;
 };
-
-function formatCents(cents: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(cents / 100);
-}
 
 export function ApcPayPanel({
   submissionId,
   manuscriptId,
   apcPaymentStatus,
   amountCents,
+  amountLabel: amountLabelProp,
   onPaid,
 }: Props) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [paidLabel, setPaidLabel] = useState("");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [amountLabel, setAmountLabel] = useState(
-    amountCents != null && amountCents > 0 ? formatCents(amountCents) : "",
-  );
 
-  useEffect(() => {
-    if (amountCents != null && amountCents > 0) {
-      setAmountLabel(formatCents(amountCents));
-    }
-  }, [amountCents]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("payment") === "success") {
-      void confirmPaid();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount for return URL
-  }, []);
-
-  async function confirmPaid(reference?: string | null) {
-    setBusy(true);
-    setError("");
-    try {
-      const res = await fetch("/api/payments/checkout", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId,
-          ...(reference ? { reference } : {}),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not confirm payment");
-      setInfo(
-        "Payment confirmed. Your manuscript is now in production — check your email for the Nahda Publications receipt.",
-      );
-      onPaid?.();
-      const url = new URL(window.location.href);
-      url.searchParams.delete("payment");
-      window.history.replaceState({}, "", url.pathname + url.search);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not confirm payment");
-    } finally {
-      setBusy(false);
-    }
+  function goToDashboard() {
+    router.replace("/dashboard?paid=1");
   }
+  const [amountLabel, setAmountLabel] = useState(() => {
+    if (amountLabelProp) return amountLabelProp;
+    if (amountCents != null && amountCents > 0) {
+      return formatCustomerUsd(amountCents);
+    }
+    return "";
+  });
+
+  useEffect(() => {
+    if (amountLabelProp) {
+      setAmountLabel(amountLabelProp);
+    } else if (amountCents != null && amountCents > 0) {
+      setAmountLabel(formatCustomerUsd(amountCents));
+    }
+  }, [amountCents, amountLabelProp]);
 
   async function openCheckout() {
     setBusy(true);
@@ -91,14 +63,11 @@ export function ApcPayPanel({
       if (data.alreadyCleared) {
         setInfo("This manuscript’s APC is already cleared.");
         onPaid?.();
+        goToDashboard();
         return;
       }
 
-      if (
-        typeof data.amountLabel === "string" &&
-        data.amountLabel &&
-        !looksLikeLocalCurrencyCopy(data.amountLabel)
-      ) {
+      if (typeof data.amountLabel === "string" && data.amountLabel) {
         setAmountLabel(data.amountLabel);
       }
       setCheckoutOpen(true);
@@ -117,7 +86,7 @@ export function ApcPayPanel({
     return (
       <section className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
-          APC status
+          {apcPaymentStatus === "PAID" ? "Payment successful" : "APC status"}
         </p>
         <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
           {apcPaymentStatus === "PAID"
@@ -127,7 +96,9 @@ export function ApcPayPanel({
               : "No APC required"}
         </h2>
         <p className="mt-2 text-sm text-emerald-900/80">
-          Your manuscript can proceed in production.
+          {apcPaymentStatus === "PAID"
+            ? `Your payment of ${amountLabel || paidLabel || "the article processing charge"} has been received. Thank you for your payment.`
+            : "Your manuscript can proceed in production."}
         </p>
       </section>
     );
@@ -140,32 +111,31 @@ export function ApcPayPanel({
         onClose={() => setCheckoutOpen(false)}
         submissionId={submissionId}
         manuscriptId={manuscriptId}
-        amountLabel={amountLabel || "USD"}
+        amountLabel={amountLabel}
         onPaid={() => {
+          setPaidLabel(amountLabel);
           setInfo(
-            "Payment confirmed. Your manuscript is now in production — check your email for the Nahda Publications receipt.",
+            `PAYMENT SUCCESSFUL. Your payment of ${amountLabel} has been received. Thank you for your payment.`,
           );
           setCheckoutOpen(false);
           onPaid?.();
+          goToDashboard();
         }}
       />
 
       <section className="mt-6 rounded-2xl border-2 border-[var(--accent)]/30 bg-gradient-to-br from-[var(--accent-soft)] to-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
-          Payment required
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+          Payment request
         </p>
         <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
-          Article processing charge
-          {amountCents != null && amountCents > 0
-            ? `: ${formatCents(amountCents)} USD`
-            : amountLabel
-              ? `: ${amountLabel} USD`
-              : ""}
+          Amount due
         </h2>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          Amount due is shown in US dollars (USD). International cards are
-          charged the original USD amount — not converted to GHS. You will
-          receive an official Nahda Publications receipt by email.
+        <p className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-[var(--ink)]">
+          {amountLabel || "USD"}
+        </p>
+        <p className="mt-3 text-sm text-[var(--muted)]">
+          Thank you for your order ({manuscriptId}). Please complete your secure
+          payment using the button below.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
@@ -174,17 +144,16 @@ export function ApcPayPanel({
             onClick={() => void openCheckout()}
             className="btn-primary !px-4 !py-2.5 text-sm disabled:opacity-60"
           >
-            {busy ? "Opening…" : "Pay now"}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void confirmPaid()}
-            className="btn-secondary !px-4 !py-2.5 text-sm disabled:opacity-60"
-          >
-            I’ve paid
+            {busy
+              ? "Opening…"
+              : amountLabel
+                ? `Pay ${amountLabel}`
+                : "Pay now"}
           </button>
         </div>
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          Secure payment • Visa • Mastercard
+        </p>
         {info && (
           <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
             {info}

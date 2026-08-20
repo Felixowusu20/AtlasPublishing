@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
-import { formatApcAmount } from "@/lib/apc";
+import {
+  formatCustomerUsd,
+  formatInternalGhs,
+} from "@/lib/payment-currency";
 
 type RangePreset = "daily" | "weekly" | "monthly" | "annual" | "custom";
 
@@ -95,6 +98,10 @@ export async function GET(request: Request) {
           amountCents: true,
           currency: true,
           paidAt: true,
+          internalAmount: true,
+          internalCurrency: true,
+          exchangeRate: true,
+          paystackReference: true,
           submission: {
             select: {
               manuscriptId: true,
@@ -150,11 +157,15 @@ export async function GET(request: Request) {
     }
 
     const totalCents = paid.reduce((s, p) => s + p.amountCents, 0);
+    const totalInternal = paid.reduce(
+      (s, p) => s + (p.internalAmount ?? 0),
+      0,
+    );
     const byJournal = [...byJournalMap.values()]
       .sort((a, b) => b.amountCents - a.amountCents)
       .map((j) => ({
         ...j,
-        amountLabel: formatApcAmount(j.amountCents, "usd"),
+        amountLabel: formatCustomerUsd(j.amountCents),
         pct:
           totalCents > 0
             ? Math.round((j.amountCents / totalCents) * 1000) / 10
@@ -170,12 +181,27 @@ export async function GET(request: Request) {
       },
       totals: {
         amountCents: totalCents,
-        amountLabel: formatApcAmount(totalCents, "usd"),
+        amountLabel: formatCustomerUsd(totalCents),
+        internalAmount: totalInternal,
+        internalAmountLabel:
+          totalInternal > 0 ? formatInternalGhs(totalInternal) : null,
         payments: paid.length,
         pending: pendingCount,
         waived: waivedCount,
       },
       byJournal,
+      recent: paid.slice(0, 12).map((p) => ({
+        id: p.id,
+        manuscriptId: p.submission.manuscriptId,
+        title: p.submission.title,
+        amountLabel: formatCustomerUsd(p.amountCents),
+        internalAmountLabel: p.internalAmount
+          ? formatInternalGhs(p.internalAmount)
+          : null,
+        exchangeRate: p.exchangeRate,
+        paystackReference: p.paystackReference,
+        paidAt: p.paidAt,
+      })),
     });
   } catch (err) {
     console.error("[admin payment analytics]", err);

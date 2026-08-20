@@ -42,8 +42,14 @@ type Submission = {
   journal: { title: string; apc?: string | null };
   payment?: {
     amountCents: number;
+    amountLabel?: string;
     status: string;
     paidAt?: string | null;
+    internalAmount?: number | null;
+    internalCurrency?: string | null;
+    internalAmountLabel?: string | null;
+    exchangeRate?: number | null;
+    paystackReference?: string | null;
   } | null;
   feedback: Feedback[];
 };
@@ -81,6 +87,7 @@ export default function AdminSubmissionDetailPage({
 
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per submission id
   }, [id]);
 
   async function waiveApc() {
@@ -192,6 +199,57 @@ export default function AdminSubmissionDetailPage({
               Keywords: {submission.keywords.join(", ")}
             </p>
           </section>
+
+          {submission.payment && (
+            <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-5 text-sm">
+              <h2 className="text-sm font-semibold">APC payment (admin)</h2>
+              <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
+                    Customer price
+                  </dt>
+                  <dd className="mt-0.5 font-medium">
+                    {submission.payment.amountLabel ??
+                      `$${(submission.payment.amountCents / 100).toLocaleString("en-US")} USD`}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
+                    Payment status
+                  </dt>
+                  <dd className="mt-0.5 font-medium">
+                    {submission.payment.status}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
+                    Internal Paystack amount
+                  </dt>
+                  <dd className="mt-0.5 font-medium">
+                    {submission.payment.internalAmountLabel ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
+                    Exchange rate
+                  </dt>
+                  <dd className="mt-0.5 font-medium">
+                    {submission.payment.exchangeRate != null
+                      ? `${submission.payment.exchangeRate} GHS / USD`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
+                    Paystack reference
+                  </dt>
+                  <dd className="mt-0.5 font-mono text-xs">
+                    {submission.payment.paystackReference ?? "—"}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          )}
 
           {submission.manuscriptUrl && (
             <section className="mt-6">
