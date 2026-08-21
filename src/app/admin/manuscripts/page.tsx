@@ -20,6 +20,7 @@ import { ManuscriptImportPanel } from "@/components/manuscript-import";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { formatAuthorWithOrcid, parseAuthorOrcid } from "@/lib/orcid";
 import { htmlToPlainText } from "@/lib/import-manuscript";
+import { formatArticleDate } from "@/lib/article-dates";
 import { journalArticlePalette } from "@/lib/journal-colors";
 
 type QueueItem = {
@@ -429,7 +430,7 @@ function ManuscriptsPageInner() {
                     .map((k) => k.trim())
                     .filter(Boolean)}
                   articleType={selected.articleType}
-                  receivedAt={selected.submittedAt}
+                  receivedAt={formatArticleDate(selected.submittedAt) || undefined}
                   funding={selected.funding}
                   conflictOfInterest={selected.conflictOfInterest}
                 />
@@ -455,6 +456,7 @@ function ManuscriptsPageInner() {
                   <span>Abstract</span>
                   <textarea
                     rows={5}
+                    className="text-justify"
                     value={abstractText}
                     onChange={(e) => {
                       setAbstractText(e.target.value);

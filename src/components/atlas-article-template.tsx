@@ -46,6 +46,15 @@ function ArticleBodyHtml({ body }: { body?: string }) {
   );
 }
 
+/** Collapse textarea/Word line breaks so the abstract can justify as one block. */
+function reflowArticleText(value: string): string {
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/\n+/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
 function RunningFooter({
   year,
   doiHref,
@@ -127,18 +136,17 @@ export function NahdaArticleTemplate({
     coverColor,
     journalSlug || journalShortTitle || "nahda",
   );
-  const dateLabel =
-    publishedAt ||
-    new Date().toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
   const typeLabel =
     (articleType || "Article").replace(/\s+Article$/i, "") || "Article";
 
-  const year = new Date().getFullYear().toString();
+  const yearMatch = publishedAt?.match(/\b(19|20)\d{2}\b/);
+  const parsedPublish = publishedAt ? new Date(publishedAt) : null;
+  const year = (
+    yearMatch?.[0] ||
+    (parsedPublish && !Number.isNaN(parsedPublish.getTime())
+      ? String(parsedPublish.getFullYear())
+      : String(new Date().getFullYear()))
+  );
   const citeBits = [year, volume || null, pages || null].filter(
     (b): b is string => Boolean(b),
   );
@@ -187,6 +195,7 @@ export function NahdaArticleTemplate({
   return (
     <article
       id="nahda-article-template"
+      lang="en"
       className="nahda-article mx-auto max-w-[820px] bg-white text-[#0b1f33] shadow-sm"
       style={
         {
@@ -380,9 +389,9 @@ export function NahdaArticleTemplate({
         </div>
 
         <p className="mt-3 text-[10px] text-[#5b6b7c]">
-          Received {receivedAt || dateLabel}
-          {" · "}Accepted {acceptedAt || dateLabel}
-          {" · "}Published {dateLabel}
+          Received {receivedAt || "—"}
+          {" · "}Accepted {acceptedAt || "—"}
+          {" · "}Published {publishedAt || "—"}
           {" · "}
           <a
             href={doiHref}
@@ -406,8 +415,8 @@ export function NahdaArticleTemplate({
           >
             Abstract
           </h2>
-          <p className="mt-2.5 whitespace-pre-wrap break-words text-[14px] leading-[1.75] text-justify text-[#0b1f33]">
-            {abstract || "Abstract will appear here."}
+          <p>
+            {reflowArticleText(abstract) || "Abstract will appear here."}
           </p>
         </section>
 
@@ -448,8 +457,8 @@ export function NahdaArticleTemplate({
                 >
                   Funding
                 </h2>
-                <p className="mt-2 text-[13px] leading-[1.7] text-justify text-[#0b1f33]">
-                  {funding.trim()}
+                <p>
+                  {reflowArticleText(funding.trim())}
                 </p>
               </div>
             ) : null}
@@ -464,8 +473,8 @@ export function NahdaArticleTemplate({
                 >
                   Conflicts of Interest
                 </h2>
-                <p className="mt-2 text-[13px] leading-[1.7] text-justify text-[#0b1f33]">
-                  {conflictOfInterest.trim()}
+                <p>
+                  {reflowArticleText(conflictOfInterest.trim())}
                 </p>
               </div>
             ) : null}

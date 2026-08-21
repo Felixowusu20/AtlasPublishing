@@ -12,6 +12,7 @@ import {
 import { CiteActions } from "@/components/cite-actions";
 import { JsonLd } from "@/components/json-ld";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import { formatArticleDate } from "@/lib/article-dates";
 import { authorDisplayName } from "@/lib/orcid";
 import {
   ArticleMasthead,
@@ -42,13 +43,7 @@ export async function generateMetadata({
 }
 
 function formatDate(value: Date | string | null | undefined) {
-  if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return formatArticleDate(value) || "—";
 }
 
 function doiLinks(doi: string) {
@@ -288,7 +283,7 @@ function ArticleView({
           />
 
           <div className="grid gap-0 border-t border-[var(--line)] lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="min-w-0 px-4 py-6 sm:px-8 sm:py-10" id="article-content">
+            <div className="min-w-0 px-4 py-6 sm:px-8 sm:py-10" id="article-content" lang="en">
               {/* On-page outline for HTML bodies */}
               {hasSections ? (
                 <nav
@@ -331,7 +326,7 @@ function ArticleView({
                   </h2>
                   <div className="h-px flex-1 bg-[var(--line)]" />
                 </div>
-                <p className="mt-4 text-[15px] leading-[1.75] text-[var(--ink)] sm:text-[16px] sm:leading-[1.8] first-letter:mr-2 first-letter:font-[family-name:var(--font-display)] first-letter:text-[2rem] first-letter:font-semibold first-letter:leading-[0.85] first-letter:text-[var(--accent)] max-sm:first-letter:float-none sm:first-letter:float-left sm:first-letter:text-[2.75rem]">
+                <p className="mt-4 text-justify text-[15px] leading-[1.75] text-[var(--ink)] [text-align-last:left] hyphens-auto sm:text-[16px] sm:leading-[1.8] first-letter:mr-2 first-letter:font-[family-name:var(--font-display)] first-letter:text-[2rem] first-letter:font-semibold first-letter:leading-[0.85] first-letter:text-[var(--accent)] max-sm:first-letter:float-none sm:first-letter:float-left sm:first-letter:text-[2.75rem]">
                   {article.abstract}
                 </p>
               </section>
@@ -365,7 +360,7 @@ function ArticleView({
                         <h2 className="font-[family-name:var(--font-display)] text-[1.35rem] font-semibold tracking-tight text-[var(--ink)] sm:text-[1.5rem]">
                           {section.heading}
                         </h2>
-                        <p className="mt-3 text-[15px] leading-[1.85] text-[var(--ink)]/85">
+                        <p className="mt-3 text-justify text-[15px] leading-[1.85] text-[var(--ink)]/85 [text-align-last:left] hyphens-auto">
                           {section.body}
                         </p>
                       </section>

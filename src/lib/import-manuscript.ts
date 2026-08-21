@@ -454,11 +454,17 @@ function cleanManuscriptArtifacts(html: string): string {
 }
 
 function finishManuscriptHtml(html: string): string {
+  const justified = html.replace(
+    /<(p|li)(\b[^>]*\bstyle="[^"]*)text-align:\s*(?:left|start)\b/gi,
+    '<$1$2text-align: justify',
+  );
   return beautifyReferences(
     wrapReferencesSection(
       stripUncustomizedTextColors(
         normalizeHeadingColors(
-          demoteOversizedHeadings(promoteSectionHeadings(cleanManuscriptArtifacts(html))),
+          demoteOversizedHeadings(
+            promoteSectionHeadings(cleanManuscriptArtifacts(justified)),
+          ),
         ),
       ),
     ),

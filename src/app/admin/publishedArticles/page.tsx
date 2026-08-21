@@ -21,6 +21,7 @@ import {
 } from "@/lib/orcid";
 import { htmlToPlainText } from "@/lib/import-manuscript";
 import { journalArticlePalette } from "@/lib/journal-colors";
+import { formatArticleDate, toDateInputValue } from "@/lib/article-dates";
 
 type AuthorEntry = {
   name: string;
@@ -89,6 +90,9 @@ type TemplateForm = {
   volume: string;
   issue: string;
   pages: string;
+  receivedAt: string;
+  acceptedAt: string;
+  publishedAt: string;
   license: string;
   openAccess: boolean;
   isFeatured: boolean;
@@ -152,6 +156,9 @@ function emptyForm(): TemplateForm {
     volume: "",
     issue: "Early View",
     pages: "",
+    receivedAt: "",
+    acceptedAt: "",
+    publishedAt: "",
     license: "CC BY 4.0",
     openAccess: true,
     isFeatured: true,
@@ -220,6 +227,14 @@ export default function PublishedArticlesPage() {
   const previewKeywords = useMemo(
     () => splitList(form.keywords, ","),
     [form.keywords],
+  );
+  const previewDates = useMemo(
+    () => ({
+      receivedAt: formatArticleDate(form.receivedAt) || undefined,
+      acceptedAt: formatArticleDate(form.acceptedAt) || undefined,
+      publishedAt: formatArticleDate(form.publishedAt) || undefined,
+    }),
+    [form.receivedAt, form.acceptedAt, form.publishedAt],
   );
 
   const skipDirty = useRef(false);
@@ -317,6 +332,9 @@ export default function PublishedArticlesPage() {
       volume: "",
       issue: "Early View",
       pages: "",
+      receivedAt: toDateInputValue(sub.submittedAt),
+      acceptedAt: "",
+      publishedAt: toDateInputValue(new Date()),
       license: "CC BY 4.0",
       openAccess: true,
       isFeatured: true,
@@ -503,6 +521,9 @@ export default function PublishedArticlesPage() {
         volume: form.volume || undefined,
         issue: form.issue || undefined,
         pages: form.pages || undefined,
+        receivedAt: form.receivedAt || undefined,
+        acceptedAt: form.acceptedAt || undefined,
+        publishedAt: form.publishedAt || undefined,
         license: form.license || undefined,
         openAccess: form.openAccess,
         isFeatured: form.isFeatured,
@@ -1064,6 +1085,7 @@ export default function PublishedArticlesPage() {
                     <textarea
                       required
                       rows={5}
+                      className="text-justify"
                       value={form.abstract}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, abstract: e.target.value }))
@@ -1104,6 +1126,9 @@ export default function PublishedArticlesPage() {
                       volume={form.volume}
                       issue={form.issue}
                       pages={form.pages}
+                      receivedAt={previewDates.receivedAt}
+                      acceptedAt={previewDates.acceptedAt}
+                      publishedAt={previewDates.publishedAt}
                       license={form.license}
                       openAccess={form.openAccess}
                       logoUrl={
@@ -1253,6 +1278,47 @@ export default function PublishedArticlesPage() {
                         to view or download the PDF.
                       </p>
                     </label>
+                    <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
+                      <label className="field">
+                        <span>Received</span>
+                        <input
+                          type="date"
+                          value={form.receivedAt}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              receivedAt: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Accepted</span>
+                        <input
+                          type="date"
+                          value={form.acceptedAt}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              acceptedAt: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Published</span>
+                        <input
+                          type="date"
+                          value={form.publishedAt}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              publishedAt: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
                     <label className="field">
                       <span>Volume</span>
                       <input
@@ -1387,6 +1453,9 @@ export default function PublishedArticlesPage() {
                       volume={form.volume}
                       issue={form.issue}
                       pages={form.pages}
+                      receivedAt={previewDates.receivedAt}
+                      acceptedAt={previewDates.acceptedAt}
+                      publishedAt={previewDates.publishedAt}
                       license={form.license}
                       openAccess={form.openAccess}
                       logoUrl={

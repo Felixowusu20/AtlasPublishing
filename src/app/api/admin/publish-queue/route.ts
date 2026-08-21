@@ -17,6 +17,7 @@ import {
 } from "@/lib/doi";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { validateScholarReadiness, issueKey } from "@/lib/seo/article-seo";
+import { articleDateYear, parseArticleDate } from "@/lib/article-dates";
 
 /** Accepted manuscripts waiting to be published into the journal template. */
 export async function GET() {
@@ -93,8 +94,9 @@ const publishSchema = z.object({
     )
     .optional(),
   pdfUrl: z.string().url().optional(),
-  acceptedAt: z.string().optional(),
   receivedAt: z.string().optional(),
+  acceptedAt: z.string().optional(),
+  publishedAt: z.string().optional(),
 });
 
 /**
@@ -172,12 +174,10 @@ export async function POST(request: Request) {
       }
     }
 
-    const acceptedAt = body.acceptedAt ? new Date(body.acceptedAt) : new Date();
-    const receivedAt = body.receivedAt
-      ? new Date(body.receivedAt)
-      : submission.submittedAt;
-
-    const publishYear = acceptedAt.getFullYear();
+    const receivedAt = parseArticleDate(body.receivedAt);
+    const acceptedAt = parseArticleDate(body.acceptedAt);
+    const publishedAt = parseArticleDate(body.publishedAt) ?? new Date();
+    const publishYear = articleDateYear(body.publishedAt);
     let doi = body.doi?.trim()
       ? normalizeDoi(body.doi)
       : previous?.doi
@@ -208,9 +208,9 @@ export async function POST(request: Request) {
       affiliations: body.affiliations ?? [],
       journalId: submission.journalId,
       submissionId: submission.id,
-      publishedAt: new Date(),
-      receivedAt,
-      acceptedAt,
+      publishedAt,
+      receivedAt: receivedAt ?? null,
+      acceptedAt: acceptedAt ?? null,
       volume: body.volume || undefined,
       issue: body.issue || "Early View",
       pages: body.pages || undefined,

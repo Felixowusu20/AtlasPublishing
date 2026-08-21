@@ -332,8 +332,18 @@ body {
   text-align: justify;
   text-align-last: left;
   hyphens: auto;
+  -webkit-hyphens: auto;
   overflow-wrap: break-word;
   color: #0b1f33;
+}
+
+.nahda-article-body p[style*="text-align: left"],
+.nahda-article-body p[style*="text-align:left"],
+.nahda-article-body p[style*="text-align: start"],
+.nahda-article-body p[style*="text-align:start"],
+.nahda-article-body li[style*="text-align: left"],
+.nahda-article-body li[style*="text-align:left"] {
+  text-align: justify !important;
 }
 
 .nahda-article-body p *:not(a):not([data-custom-color]),
@@ -352,6 +362,8 @@ body {
   margin: 0.15em 0;
   text-align: justify;
   text-align-last: left;
+  hyphens: auto;
+  -webkit-hyphens: auto;
   overflow-wrap: break-word;
   color: #0b1f33;
 }
@@ -554,10 +566,19 @@ body {
 
 .nahda-article-abstract p {
   display: block;
+  width: 100%;
   max-width: 100%;
-  overflow: visible;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  margin: 0.55em 0 0;
+  font-size: 14px;
+  line-height: 1.75;
+  text-align: justify;
+  text-align-last: left;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  overflow-wrap: break-word;
+  word-break: normal;
+  white-space: normal;
+  color: #0b1f33;
 }
 
 .nahda-article-front {
@@ -611,6 +632,17 @@ body {
 .nahda-end-matter {
   margin: 0.7em 0 0;
   padding-top: 0.45em;
+}
+
+.nahda-end-matter p {
+  margin: 0.5em 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: justify;
+  text-align-last: left;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  color: #0b1f33;
 }
 
 .nahda-article-body-wrap {
