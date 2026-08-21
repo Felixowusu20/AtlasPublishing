@@ -83,3 +83,8 @@ export function canAuthorResubmit(
 export function articleDownloadPath(slug: string) {
   return `/api/articles/${encodeURIComponent(slug)}/download`;
 }
+
+/** Logged-in author checkout (no manuscript viewer). */
+export function authorApcPayPath(submissionId: string) {
+  return `/pay/s/${encodeURIComponent(submissionId)}`;
+}

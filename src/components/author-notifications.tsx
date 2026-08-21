@@ -14,6 +14,14 @@ function authorHref(n: AppNotification) {
   if (isPublished && published?.slug) {
     return `/articles/${published.slug}`;
   }
+  if (
+    n.submissionId &&
+    (n.title.toLowerCase().includes("accepted") ||
+      n.body.toLowerCase().includes("article processing charge") ||
+      n.body.toLowerCase().includes("pay the"))
+  ) {
+    return `/pay/s/${n.submissionId}`;
+  }
   if (n.submissionId) return `/submissions/${n.submissionId}`;
   return "/notifications";
 }

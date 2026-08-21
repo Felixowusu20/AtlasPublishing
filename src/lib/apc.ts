@@ -1,7 +1,7 @@
 import type { ApcPaymentStatus } from "@/generated/prisma/client";
 
 const EXPLICIT_FREE =
-  /\b(free|waived|n\/?a|none|no\s*charge|included|\$?\s*0(?:\.0+)?)\b/i;
+  /^(free|waived|n\/?a|none|no\s*charge|included|\$?\s*0(?:\.0+)?)$/i;
 const SUBSCRIPTION = /\bsubscription\b/i;
 
 /**

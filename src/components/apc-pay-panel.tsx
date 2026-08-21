@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCustomerUsd } from "@/lib/format-usd";
 import { NahdaCheckoutModal } from "@/components/nahda-checkout-modal";
@@ -12,6 +12,7 @@ type Props = {
   amountCents?: number | null;
   amountLabel?: string | null;
   onPaid?: () => void;
+  autoOpen?: boolean;
 };
 
 export function ApcPayPanel({
@@ -21,6 +22,7 @@ export function ApcPayPanel({
   amountCents,
   amountLabel: amountLabelProp,
   onPaid,
+  autoOpen = false,
 }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -47,6 +49,16 @@ export function ApcPayPanel({
       setAmountLabel(formatCustomerUsd(amountCents));
     }
   }, [amountCents, amountLabelProp]);
+
+  const didAutoOpen = useRef(false);
+  useEffect(() => {
+    if (!autoOpen || didAutoOpen.current) return;
+    if (apcPaymentStatus !== "PENDING") return;
+    didAutoOpen.current = true;
+    void openCheckout();
+    // openCheckout is stable for this mount; we only auto-open once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen, apcPaymentStatus]);
 
   async function openCheckout() {
     setBusy(true);
@@ -81,7 +93,8 @@ export function ApcPayPanel({
   if (
     apcPaymentStatus === "PAID" ||
     apcPaymentStatus === "WAIVED" ||
-    apcPaymentStatus === "NOT_REQUIRED"
+    (apcPaymentStatus === "NOT_REQUIRED" &&
+      !(amountCents != null && amountCents > 0))
   ) {
     return (
       <section className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5">

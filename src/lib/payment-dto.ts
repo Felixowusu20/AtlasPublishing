@@ -1,3 +1,4 @@
+import { parseApcAmountCents } from "@/lib/apc";
 import { z } from "zod";
 import {
   CUSTOMER_CURRENCY,
@@ -47,17 +48,53 @@ type PaymentLike = {
   waivedAt?: Date | string | null;
 };
 
+type JournalApcLike = {
+  apc?: string | null;
+  openAccess?: boolean;
+};
+
+/** Pending/unpaid APC follows the current journal fee, not a stale stored amount. */
+export function livePendingApcCents(
+  journal: JournalApcLike | null | undefined,
+  payment: PaymentLike | null | undefined,
+  apcPaymentStatus?: string | null,
+): number | null {
+  if (
+    apcPaymentStatus === "PAID" ||
+    apcPaymentStatus === "WAIVED" ||
+    payment?.status === "PAID" ||
+    payment?.status === "WAIVED"
+  ) {
+    return payment?.amountCents ?? null;
+  }
+  if (!journal) return payment?.amountCents ?? null;
+  if (
+    apcPaymentStatus === "PENDING" ||
+    apcPaymentStatus === "NOT_REQUIRED" ||
+    payment?.status === "PENDING" ||
+    payment?.status === "NOT_REQUIRED"
+  ) {
+    return parseApcAmountCents(journal.apc, { openAccess: journal.openAccess });
+  }
+  return payment?.amountCents ?? null;
+}
+
 export function toCustomerPayment(
   payment: PaymentLike | null | undefined,
+  liveAmountCents?: number | null,
 ): CustomerPaymentResponse | null {
-  if (!payment) return null;
+  if (!payment && (liveAmountCents == null || liveAmountCents <= 0)) return null;
+  const amountCents =
+    liveAmountCents != null && liveAmountCents > 0
+      ? liveAmountCents
+      : payment?.amountCents ?? 0;
   return {
-    paymentId: payment.id,
-    amount: customerUsdMajor(payment.amountCents),
-    amountCents: payment.amountCents,
+    paymentId: payment?.id ?? "pending",
+    amount: customerUsdMajor(amountCents),
+    amountCents,
     currency: CUSTOMER_CURRENCY,
-    amountLabel: formatCustomerUsd(payment.amountCents),
-    status: payment.status,
+    amountLabel: formatCustomerUsd(amountCents),
+    status: payment?.status ?? "PENDING",
   };
 }
 
@@ -96,22 +133,53 @@ export function toAdminPayment(
   };
 }
 
-export function withCustomerPayment<T extends { payment?: PaymentLike | null }>(
+export function withCustomerPayment<
+  T extends {
+    payment?: PaymentLike | null;
+    apcPaymentStatus?: string | null;
+    journal?: JournalApcLike | null;
+  },
+>(
   record: T,
 ): Omit<T, "payment"> & { payment: CustomerPaymentResponse | null } {
   const { payment, ...rest } = record;
+  const live = livePendingApcCents(
+    record.journal,
+    payment,
+    record.apcPaymentStatus,
+  );
   return {
     ...(rest as Omit<T, "payment">),
-    payment: toCustomerPayment(payment),
+    payment: toCustomerPayment(payment, live),
   };
 }
 
-export function withAdminPayment<T extends { payment?: PaymentLike | null }>(
+export function withAdminPayment<
+  T extends {
+    payment?: PaymentLike | null;
+    apcPaymentStatus?: string | null;
+    journal?: JournalApcLike | null;
+  },
+>(
   record: T,
 ): Omit<T, "payment"> & { payment: AdminPaymentResponse | null } {
   const { payment, ...rest } = record;
+  const live = livePendingApcCents(
+    record.journal,
+    payment,
+    record.apcPaymentStatus,
+  );
+  const customer = toCustomerPayment(payment, live);
+  const admin = toAdminPayment(
+    payment
+      ? {
+          ...payment,
+          amountCents: live ?? payment.amountCents,
+        }
+      : payment,
+  );
   return {
     ...(rest as Omit<T, "payment">),
-    payment: toAdminPayment(payment),
+    payment: admin ?? (customer ? { ...customer, internalAmount: null, internalCurrency: null, internalAmountLabel: null, exchangeRate: null, paystackReference: null, paidAt: null, waivedAt: null } : null),
   };
 }

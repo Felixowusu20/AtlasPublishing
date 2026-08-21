@@ -34,6 +34,81 @@ export type PreparedApcPayment = {
 };
 
 /**
+ * When an admin changes a journal APC, update every unpaid payment for that
+ * journal so checkout, receipts, and emails use the new USD amount.
+ */
+export async function syncPendingApcFromJournal(journal: Journal): Promise<void> {
+  const usdCents = parseApcAmountCents(journal.apc, {
+    openAccess: journal.openAccess,
+  });
+  const charge = resolvePaystackCharge(usdCents, INTERNAL_PAYSTACK_CURRENCY);
+  const amountLabel = formatCustomerUsd(usdCents);
+
+  if (usdCents <= 0) {
+    await prisma.$transaction([
+      prisma.payment.updateMany({
+        where: {
+          status: "PENDING",
+          submission: { journalId: journal.id },
+        },
+        data: {
+          amountCents: 0,
+          currency: "usd",
+          status: "NOT_REQUIRED",
+          paidAt: null,
+          internalAmount: 0,
+          internalCurrency: charge.currency,
+          exchangeRate: charge.exchangeRate,
+        },
+      }),
+      prisma.submission.updateMany({
+        where: {
+          journalId: journal.id,
+          apcPaymentStatus: "PENDING",
+        },
+        data: {
+          apcPaymentStatus: "NOT_REQUIRED",
+          actionRequired: null,
+        },
+      }),
+    ]);
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.payment.updateMany({
+      where: {
+        status: { in: ["PENDING", "NOT_REQUIRED"] },
+        submission: { journalId: journal.id },
+      },
+      data: {
+        amountCents: usdCents,
+        currency: "usd",
+        status: "PENDING",
+        paidAt: null,
+        waivedAt: null,
+        internalAmount: charge.amount,
+        internalCurrency: charge.currency,
+        exchangeRate: charge.exchangeRate,
+      },
+    }),
+    prisma.submission.updateMany({
+      where: {
+        journalId: journal.id,
+        apcPaymentStatus: { in: ["PENDING", "NOT_REQUIRED"] },
+        status: { in: ["ACCEPTED", "IN_PRODUCTION"] },
+      },
+      data: {
+        apcPaymentStatus: "PENDING",
+        status: "ACCEPTED",
+        progress: progressForStatus("ACCEPTED"),
+        actionRequired: `Please pay the article processing charge (${amountLabel}) to continue to production.`,
+      },
+    }),
+  ]);
+}
+
+/**
  * Create/update the Payment row from the trusted journal APC (USD).
  * Computes and stores the internal GHS amount. Does not return GHS to callers
  * that serialize customer responses — use toCustomerPayment for that.
@@ -41,6 +116,24 @@ export type PreparedApcPayment = {
 export async function prepareApcPayment(
   submission: SubmissionWithJournal,
 ): Promise<PreparedApcPayment> {
+  if (
+    submission.payment?.status === "PAID" ||
+    submission.payment?.status === "WAIVED" ||
+    submission.apcPaymentStatus === "PAID" ||
+    submission.apcPaymentStatus === "WAIVED"
+  ) {
+    const cents = submission.payment?.amountCents ?? 0;
+    return {
+      amountCents: cents,
+      amountLabel: formatCustomerUsd(cents),
+      status: submission.payment?.status ?? submission.apcPaymentStatus ?? "PAID",
+      paymentId: submission.payment?.id ?? null,
+      reference: submission.payment?.paystackReference ?? null,
+      authorEmail: submission.author?.email ?? null,
+      payment: submission.payment ?? null,
+    };
+  }
+
   const usdCents = parseApcAmountCents(submission.journal.apc, {
     openAccess: submission.journal.openAccess,
   });
@@ -207,6 +300,10 @@ export async function ensureApcCheckout(
   };
 }
 
+export function nahdaReceiptNumber(manuscriptId: string, paidAt: Date) {
+  return `NPR-${manuscriptId.replace(/[^A-Za-z0-9]/g, "").slice(0, 12)}-${paidAt.getTime().toString(36).toUpperCase()}`;
+}
+
 /** Inbox for Paystack’s own notices (authors get Nahda receipt instead). */
 export function paystackNotifyEmail(authorEmail: string): string {
   return (
@@ -314,7 +411,7 @@ export async function markApcPaid(opts: {
 
   const base = appBaseUrl();
   const paidAt = updated.payment?.paidAt ?? new Date();
-  const receiptNumber = `NPR-${updated.manuscriptId.replace(/[^A-Za-z0-9]/g, "").slice(0, 12)}-${paidAt.getTime().toString(36).toUpperCase()}`;
+  const receiptNumber = nahdaReceiptNumber(updated.manuscriptId, paidAt);
 
   try {
     const mail = await sendEmail({

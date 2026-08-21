@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
 import { labelStatus, progressForStatus } from "@/lib/submission-utils";
+import { parseApcAmountCents } from "@/lib/apc";
 import {
   apcPaymentEmailHtml,
   reviewFeedbackEmailHtml,
@@ -11,6 +12,7 @@ import {
 import { ensureApcCheckout } from "@/lib/apc-checkout";
 import { apcPayPageUrl } from "@/lib/payment-link";
 import { getAppBaseUrl } from "@/lib/app-url";
+import { formatCustomerUsd } from "@/lib/payment-currency";
 import { paystackConfigured } from "@/lib/paystack";
 import type { SubmissionStatus } from "@/generated/prisma/client";
 import { withAdminPayment } from "@/lib/payment-dto";
@@ -202,7 +204,7 @@ export async function POST(request: Request, { params }: Params) {
             data: {
               apcPaymentStatus: "PENDING",
               actionRequired:
-                "Your manuscript was accepted. Open this page and complete the USD payment request.",
+                "Please pay the article processing charge using the payment link in your email.",
             },
           });
         } catch (pendingErr) {
@@ -223,14 +225,11 @@ export async function POST(request: Request, { params }: Params) {
             journalTitle: submission.journal.title,
             amountLabel: apcAmountLabel,
             checkoutUrl,
-            submissionUrl: `${base}/submissions/${id}`,
           }),
           text: [
             `Your manuscript ${submission.manuscriptId} was accepted.`,
-            `Please pay the APC (${apcAmountLabel}) to move into production:`,
+            `Please pay the APC (${apcAmountLabel}) using this payment link:`,
             checkoutUrl,
-            "",
-            `Or open: ${base}/submissions/${id}`,
           ].join("\n"),
         });
         emailSent = mail.ok;
@@ -238,7 +237,14 @@ export async function POST(request: Request, { params }: Params) {
         status === "ACCEPTED" &&
         latestSubmission.apcPaymentStatus === "PENDING"
       ) {
-        // Accepted but checkout URL missing (e.g. temporary Paystack error) — still notify author
+        const payUrl = checkoutUrl || (await apcPayPageUrl(id));
+        const amount =
+          apcAmountLabel ??
+          formatCustomerUsd(
+            parseApcAmountCents(submission.journal.apc, {
+              openAccess: submission.journal.openAccess,
+            }),
+          );
         const mail = await sendEmail({
           to: submission.author.email,
           subject: `Accepted: pay APC for ${submission.manuscriptId}`,
@@ -247,14 +253,13 @@ export async function POST(request: Request, { params }: Params) {
             title: submission.title,
             manuscriptId: submission.manuscriptId,
             journalTitle: submission.journal.title,
-            amountLabel: apcAmountLabel ?? "APC",
-            checkoutUrl: await apcPayPageUrl(id),
-            submissionUrl: `${base}/submissions/${id}`,
+            amountLabel: amount,
+            checkoutUrl: payUrl,
           }),
           text: [
             `Your manuscript ${submission.manuscriptId} was accepted.`,
-            `Please open your submission and complete the USD payment request:`,
-            `${base}/submissions/${id}`,
+            `Please pay the APC (${amount}) using this payment link:`,
+            payUrl,
           ].join("\n"),
         });
         emailSent = mail.ok;

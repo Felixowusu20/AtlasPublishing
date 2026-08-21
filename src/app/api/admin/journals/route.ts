@@ -4,6 +4,7 @@ import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
 import { nextJournalCoverColor } from "@/lib/journal-colors";
 import { slugify } from "@/lib/submission-utils";
+import { syncPendingApcFromJournal } from "@/lib/apc-checkout";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -117,6 +118,9 @@ export async function PATCH(request: Request) {
           : {}),
       },
     });
+    if (data.apc !== undefined || data.openAccess !== undefined) {
+      await syncPendingApcFromJournal(journal);
+    }
     return jsonOk({ journal });
   } catch (err) {
     if (err instanceof z.ZodError) {

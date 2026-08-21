@@ -175,7 +175,11 @@ export default function JournalsCmsPage() {
     }
 
     const savedId = (data.journal?.id as string | undefined) ?? editingId;
-    setSuccess(editingId ? "Journal updated." : "Journal created.");
+    setSuccess(
+      editingId
+        ? "Journal updated. Unpaid APCs and new receipts now use this amount."
+        : "Journal created.",
+    );
     if (editingId) {
       await load(savedId);
     } else {
@@ -418,12 +422,16 @@ export default function JournalsCmsPage() {
           </select>
         </label>
         <label className="field">
-          <span>APC</span>
+          <span>APC (USD)</span>
           <input
             value={form.apc}
-            placeholder="$1,200"
+            placeholder="$50"
             onChange={(e) => setForm((p) => ({ ...p, apc: e.target.value }))}
           />
+          <span className="mt-1 block text-[11px] text-[var(--muted)]">
+            Use a dollar amount such as $50. Do not enter Free, N/A, or $0 if
+            authors should pay. Saving this updates unpaid manuscripts.
+          </span>
         </label>
 
         <div>

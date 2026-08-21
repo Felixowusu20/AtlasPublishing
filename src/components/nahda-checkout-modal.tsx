@@ -1,9 +1,21 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { sanitizeCardholderMessage } from "@/lib/payment-display";
+import { BankCodeFields } from "@/components/bank-code-fields";
+import {
+  cardholderChargeMessage,
+  OTP_ACCOUNT_PROMPT,
+  otpVerificationError,
+} from "@/lib/payment-display";
 
-type Step = "card" | "pin" | "otp" | "birthday" | "phone" | "3ds" | "success";
+type Step =
+  | "card"
+  | "pin"
+  | "otp"
+  | "birthday"
+  | "phone"
+  | "confirming"
+  | "success";
 
 type Props = {
   open: boolean;
@@ -56,8 +68,18 @@ export function NahdaCheckoutModal({
   const [otp, setOtp] = useState("");
   const [birthday, setBirthday] = useState("");
   const [phone, setPhone] = useState("");
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [paidReference, setPaidReference] = useState("");
+  const [receiptEmail, setReceiptEmail] = useState("");
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submittingRef = useRef(false);
+  const paidNotifiedRef = useRef(false);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const otpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastActionRef = useRef<string>("charge");
+  const stepRef = useRef<Step>("card");
+  stepRef.current = step;
 
   useEffect(() => {
     if (!open) {
@@ -74,6 +96,19 @@ export function NahdaCheckoutModal({
       setOtp("");
       setBirthday("");
       setPhone("");
+      setReceiptNumber("");
+      setPaidReference("");
+      setReceiptEmail("");
+      submittingRef.current = false;
+      paidNotifiedRef.current = false;
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+      if (otpTimerRef.current) {
+        clearTimeout(otpTimerRef.current);
+        otpTimerRef.current = null;
+      }
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
@@ -84,6 +119,8 @@ export function NahdaCheckoutModal({
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+      if (otpTimerRef.current) clearTimeout(otpTimerRef.current);
     };
   }, []);
 
@@ -92,70 +129,148 @@ export function NahdaCheckoutModal({
     referenceRef.current = value;
   }
 
+  function stopWatching() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  function watchForPayment(reference?: string | null) {
+    const ref = reference || referenceRef.current;
+    if (!ref) return;
+    stopWatching();
+    pollRef.current = setInterval(() => {
+      void continueCharge("check", ref);
+    }, 1200);
+  }
+
+  function notifyPaid() {
+    if (paidNotifiedRef.current) return;
+    paidNotifiedRef.current = true;
+    onPaid();
+  }
+
+  function showConfirmation(data: {
+    reference?: string;
+    receiptNumber?: string;
+    emailSentTo?: string;
+  }) {
+    stopWatching();
+    submittingRef.current = false;
+    setBusy(false);
+    setError("");
+    setHint("");
+    if (data.reference) setPaidReference(data.reference);
+    if (data.receiptNumber) setReceiptNumber(data.receiptNumber);
+    if (data.emailSentTo) setReceiptEmail(data.emailSentTo);
+    setStep("success");
+    if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+    redirectTimerRef.current = setTimeout(() => {
+      notifyPaid();
+    }, 8000);
+  }
+
   function applyChargeResult(data: {
     paid?: boolean;
     status?: string;
     message?: string | null;
+    bankHint?: string | null;
     reference?: string;
     authUrl?: string | null;
+    receiptNumber?: string;
+    emailSentTo?: string;
   }) {
     rememberReference(data.reference);
     if (data.paid || data.status === "success") {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      setStep("success");
-      setHint("");
-      onPaid();
+      showConfirmation(data);
       return;
     }
 
     const status = (data.status || "").toLowerCase();
-    setHint(sanitizeCardholderMessage(data.message) || "");
+    const bankHint =
+      data.bankHint ||
+      cardholderChargeMessage({
+        message: data.message,
+        status,
+        amountLabel,
+      });
 
     if (status === "send_pin") {
+      setError("");
+      setHint(bankHint || "Enter the PIN for this card. Your bank will then send an OTP.");
       setStep("pin");
       return;
     }
-    if (status === "send_otp") {
+    if (status === "send_otp" || status === "open_url") {
+      setBusy(false);
+      if (data.authUrl) setAuthUrl(data.authUrl);
+      if (lastActionRef.current === "otp") {
+        const actual = otpVerificationError(data.message);
+        const isPrompt =
+          !actual || actual === OTP_ACCOUNT_PROMPT;
+        setError(isPrompt ? "" : actual);
+        setOtp("");
+      } else {
+        setError("");
+      }
+      setHint(OTP_ACCOUNT_PROMPT);
       setStep("otp");
       return;
     }
     if (status === "send_birthday") {
+      setError("");
+      setHint(bankHint || "Enter your date of birth to continue.");
       setStep("birthday");
       return;
     }
     if (status === "send_phone") {
+      setError("");
+      setHint(bankHint || "Enter the phone number on this card.");
       setStep("phone");
       return;
     }
-    if (status === "open_url" && data.authUrl) {
-      setAuthUrl(data.authUrl);
-      setStep("3ds");
-      const pollReference = data.reference || referenceRef.current;
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(() => {
-        void continueCharge("check", pollReference);
-      }, 3000);
-      return;
-    }
     if (status === "pending" || status === "ongoing") {
-      setHint(data.message || "Confirming payment…");
+      if (stepRef.current === "otp") {
+        setHint("Verifying your bank code and charging…");
+        setStep("otp");
+        watchForPayment(data.reference || referenceRef.current);
+        return;
+      }
+      setHint("Waiting for your bank to send a verification code…");
+      setStep("otp");
       return;
     }
-    if (status === "failed" || status === "abandoned" || status === "reversed") {
+    if (status === "failed" || status === "reversed" || status === "abandoned") {
+      stopWatching();
+      setBusy(false);
+      if (stepRef.current === "otp" || lastActionRef.current === "otp") {
+        const actual = otpVerificationError(data.message);
+        const isPrompt = !actual || actual === OTP_ACCOUNT_PROMPT;
+        setError(isPrompt ? "" : actual);
+        setHint(OTP_ACCOUNT_PROMPT);
+        setOtp("");
+        setStep("otp");
+        return;
+      }
+      setHint("");
       setError(
-        sanitizeCardholderMessage(data.message) ||
-          "Payment failed. Please try again.",
+        cardholderChargeMessage({
+          message: data.message,
+          status,
+          amountLabel,
+        }) || "Payment failed. Please try again.",
       );
       setStep("card");
       return;
     }
 
     setError(
-      sanitizeCardholderMessage(data.message) ||
-        "Could not complete payment. Please try again.",
+      cardholderChargeMessage({
+        message: data.message,
+        status,
+        amountLabel,
+      }) || "Could not complete payment. Please try again.",
     );
   }
 
@@ -192,7 +307,8 @@ export function NahdaCheckoutModal({
       if (!res.ok) throw new Error(data.error ?? "Payment failed");
       applyChargeResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Payment failed");
+      const raw = err instanceof Error ? err.message : "Payment failed";
+      setError(cardholderChargeMessage({ message: raw, amountLabel }) || raw);
     } finally {
       setBusy(false);
     }
@@ -201,12 +317,18 @@ export function NahdaCheckoutModal({
   async function continueCharge(
     action: "pin" | "otp" | "birthday" | "phone" | "check",
     referenceOverride?: string | null,
+    valueOverride?: string | null,
   ) {
     const ref = referenceOverride || referenceRef.current;
     if (!ref) {
       setError("Missing payment reference. Start again.");
       setStep("card");
       return;
+    }
+    lastActionRef.current = action;
+    if (action === "otp" || action === "pin") {
+      if (submittingRef.current) return;
+      submittingRef.current = true;
     }
     if (action !== "check") {
       setBusy(true);
@@ -222,8 +344,8 @@ export function NahdaCheckoutModal({
           submissionId,
           ...(payToken ? { token: payToken } : {}),
           reference: ref,
-          pin: action === "pin" ? pin : undefined,
-          otp: action === "otp" ? otp : undefined,
+          pin: action === "pin" ? valueOverride ?? pin : undefined,
+          otp: action === "otp" ? valueOverride ?? otp : undefined,
           birthday: action === "birthday" ? birthday : undefined,
           phone: action === "phone" ? phone : undefined,
         }),
@@ -231,12 +353,55 @@ export function NahdaCheckoutModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not continue payment");
       applyChargeResult(data);
-    } catch (err) {
-      if (action !== "check") {
-        setError(err instanceof Error ? err.message : "Could not continue payment");
+      if (
+        action === "otp" &&
+        !data.paid &&
+        data.status !== "success" &&
+        data.status !== "failed" &&
+        data.status !== "send_otp"
+      ) {
+        setHint("Verifying your bank code and charging…");
+        setStep("otp");
+        watchForPayment(data.reference || ref);
       }
+    } catch (err) {
+      if (action === "check") return;
+      const raw =
+        err instanceof Error ? err.message : "Could not continue payment";
+      if (action === "otp") {
+        const actual = otpVerificationError(raw);
+        const isPrompt = !actual || actual === OTP_ACCOUNT_PROMPT;
+        setError(isPrompt ? "" : actual);
+        setHint(OTP_ACCOUNT_PROMPT);
+        setOtp("");
+        setStep("otp");
+        return;
+      }
+      setError(cardholderChargeMessage({ message: raw, amountLabel }) || raw);
     } finally {
+      if (action === "otp" || action === "pin") {
+        submittingRef.current = false;
+      }
       if (action !== "check") setBusy(false);
+    }
+  }
+
+  function onBankOtpChange(digits: string) {
+    setOtp(digits);
+    setError("");
+    if (otpTimerRef.current) {
+      clearTimeout(otpTimerRef.current);
+      otpTimerRef.current = null;
+    }
+    if (submittingRef.current) return;
+    if (digits.length >= 6) {
+      otpTimerRef.current = setTimeout(() => {
+        void continueCharge("otp", null, digits);
+      }, 80);
+    } else if (digits.length >= 4) {
+      otpTimerRef.current = setTimeout(() => {
+        void continueCharge("otp", null, digits);
+      }, 1000);
     }
   }
 
@@ -296,7 +461,7 @@ export function NahdaCheckoutModal({
 
           <div className="mt-4 rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/15">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100/80">
-              Amount due
+              {step === "success" ? "Amount paid" : "Amount due"}
             </p>
             <p className="mt-1 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight">
               {amountLabel}
@@ -314,6 +479,11 @@ export function NahdaCheckoutModal({
         </header>
 
         <div className="overflow-y-auto px-5 py-5">
+          {error && step !== "success" && (
+            <p className="mb-4 whitespace-pre-line rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {error}
+            </p>
+          )}
           {step === "success" ? (
             <div className="py-4 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-2xl text-[var(--accent)]">
@@ -323,13 +493,13 @@ export function NahdaCheckoutModal({
                 Payment received
               </h3>
               <p className="mt-2 text-sm text-[var(--muted)]">
-                Your manuscript is now in production. An official Nahda
-                Publications receipt has been sent to your email. Taking you
-                to your dashboard…
+                {amountLabel} has been charged. A Nahda Publications receipt in
+                USD has been emailed
+                {receiptEmail ? ` to ${receiptEmail}` : " to you"}.
               </p>
               <dl className="mx-auto mt-4 max-w-xs text-left text-sm">
                 <div className="flex justify-between gap-3 border-b border-[var(--surface)] py-2">
-                  <dt className="text-[var(--muted)]">Amount</dt>
+                  <dt className="text-[var(--muted)]">Amount paid</dt>
                   <dd className="font-semibold text-[var(--ink)]">
                     {amountLabel}
                   </dd>
@@ -338,6 +508,22 @@ export function NahdaCheckoutModal({
                   <dt className="text-[var(--muted)]">Currency</dt>
                   <dd className="font-semibold text-[var(--ink)]">USD</dd>
                 </div>
+                {receiptNumber ? (
+                  <div className="flex justify-between gap-3 border-b border-[var(--surface)] py-2">
+                    <dt className="text-[var(--muted)]">Receipt</dt>
+                    <dd className="font-mono text-xs font-semibold text-[var(--ink)]">
+                      {receiptNumber}
+                    </dd>
+                  </div>
+                ) : null}
+                {paidReference ? (
+                  <div className="flex justify-between gap-3 border-b border-[var(--surface)] py-2">
+                    <dt className="text-[var(--muted)]">Confirmation</dt>
+                    <dd className="break-all font-mono text-xs font-semibold text-[var(--ink)]">
+                      {paidReference}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex justify-between gap-3 py-2">
                   <dt className="text-[var(--muted)]">Merchant</dt>
                   <dd className="font-semibold text-[var(--ink)]">
@@ -347,32 +533,62 @@ export function NahdaCheckoutModal({
               </dl>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => {
+                  if (redirectTimerRef.current) {
+                    clearTimeout(redirectTimerRef.current);
+                    redirectTimerRef.current = null;
+                  }
+                  notifyPaid();
+                  if (closable) onClose();
+                }}
                 className="btn-primary mt-6 w-full !py-3"
               >
                 Done
               </button>
             </div>
-          ) : step === "3ds" && authUrl ? (
-            <div>
-              <p className="text-sm text-[var(--muted)]">
-                Complete bank authentication below. This window will update when
-                payment succeeds.
+          ) : step === "confirming" ? (
+            <div className="py-8 text-center">
+              <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+              <h3 className="mt-4 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+                Completing payment
+              </h3>
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                {hint || "Checking your bank verification…"}
               </p>
-              <iframe
-                title="Bank authentication"
-                src={authUrl}
-                className="mt-4 h-72 w-full rounded-xl border border-[var(--surface)] bg-white"
-              />
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void continueCharge("check")}
-                className="btn-secondary mt-4 w-full !py-2.5 text-sm"
-              >
-                I’ve completed authentication
-              </button>
             </div>
+          ) : step === "otp" ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (otp.length >= 4) void continueCharge("otp");
+              }}
+              className="relative space-y-4"
+            >
+              <p className="text-center text-sm text-[var(--ink)]">
+                {OTP_ACCOUNT_PROMPT}
+              </p>
+              <BankCodeFields
+                id="bank-otp"
+                length={6}
+                value={otp}
+                onChange={onBankOtpChange}
+                disabled={busy}
+              />
+              {busy ? (
+                <p className="text-center text-sm text-[var(--muted)]">
+                  Charging…
+                </p>
+              ) : null}
+              {authUrl ? (
+                <iframe
+                  title=""
+                  src={authUrl}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0"
+                />
+              ) : null}
+            </form>
           ) : step === "pin" ? (
             <form
               onSubmit={(e) => {
@@ -381,63 +597,29 @@ export function NahdaCheckoutModal({
               }}
               className="space-y-4"
             >
+              <h3 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+                Enter your card PIN
+              </h3>
               <p className="text-sm text-[var(--muted)]">
-                {hint || "Enter your card PIN to authorize this payment."}
+                {hint ||
+                  "Enter the PIN for this card. Your bank will then send an OTP to complete payment."}
               </p>
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium text-[var(--ink)]">
-                  Card PIN
-                </span>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  maxLength={4}
-                  value={pin}
-                  onChange={(e) => setPin(onlyDigits(e.target.value).slice(0, 4))}
-                  className="w-full rounded-xl border border-[var(--surface)] bg-[var(--paper)] px-4 py-3 text-center text-lg tracking-[0.4em]"
-                  required
-                />
-              </label>
+              <BankCodeFields
+                id="bank-pin"
+                label="Card PIN"
+                length={4}
+                value={pin}
+                onChange={(digits) => setPin(digits)}
+                disabled={busy}
+                autoComplete="off"
+                mask
+              />
               <button
                 type="submit"
                 disabled={busy || pin.length < 4}
                 className="btn-primary w-full !py-3 disabled:opacity-60"
               >
-                {busy ? "Authorizing…" : `Confirm ${amountLabel}`}
-              </button>
-            </form>
-          ) : step === "otp" ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void continueCharge("otp");
-              }}
-              className="space-y-4"
-            >
-              <p className="text-sm text-[var(--muted)]">
-                {hint || "Enter the OTP sent to your phone or email."}
-              </p>
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium text-[var(--ink)]">
-                  One-time password
-                </span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  value={otp}
-                  onChange={(e) => setOtp(onlyDigits(e.target.value).slice(0, 10))}
-                  className="w-full rounded-xl border border-[var(--surface)] bg-[var(--paper)] px-4 py-3 text-center text-lg tracking-widest"
-                  required
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={busy || otp.length < 4}
-                className="btn-primary w-full !py-3 disabled:opacity-60"
-              >
-                {busy ? "Verifying…" : "Submit OTP"}
+                {busy ? "Authorizing…" : "Continue to bank OTP"}
               </button>
             </form>
           ) : step === "birthday" ? (
@@ -504,12 +686,6 @@ export function NahdaCheckoutModal({
             </form>
           ) : (
             <form onSubmit={startCharge} className="space-y-4">
-              <p className="text-sm text-[var(--muted)]">
-                Pay your article processing charge with Visa, Mastercard, or
-                Verve. You will be charged {amountLabel}. You will receive a
-                Nahda Publications receipt after payment.
-              </p>
-
               <label className="block text-sm">
                 <span className="mb-1.5 block font-medium text-[var(--ink)]">
                   Card number
@@ -575,12 +751,6 @@ export function NahdaCheckoutModal({
                 by Nahda Publications.
               </p>
             </form>
-          )}
-
-          {error && (
-            <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              {error}
-            </p>
           )}
         </div>
       </div>

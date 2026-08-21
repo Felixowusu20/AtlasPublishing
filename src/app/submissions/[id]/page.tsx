@@ -188,6 +188,7 @@ function Detail({ id }: { id: string }) {
           amountCents={sub.payment?.amountCents}
           amountLabel={sub.payment?.amountLabel}
           onPaid={() => void load()}
+          autoOpen={sub.apcPaymentStatus === "PENDING"}
         />
       )}
 

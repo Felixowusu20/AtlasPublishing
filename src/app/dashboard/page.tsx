@@ -9,7 +9,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ResubmitPanel } from "@/components/resubmit-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { initials } from "@/lib/auth";
-import { canAuthorResubmit, uiStatus, articleDownloadPath } from "@/lib/submission-utils";
+import { canAuthorResubmit, uiStatus, articleDownloadPath, authorApcPayPath } from "@/lib/submission-utils";
 import type { SubmissionStatus as UiSubmissionStatus } from "@/lib/types";
 
 type FilterKey = "all" | "action" | "active" | "draft" | "published";
@@ -73,7 +73,12 @@ function canResubmit(sub: ApiSubmission) {
 
 function needsAuthorAction(sub: ApiSubmission) {
   if (sub.status === "PUBLISHED" || sub.status === "REJECTED") return false;
-  if (sub.status === "ACCEPTED" && sub.apcPaymentStatus === "PENDING") {
+  if (
+    (sub.status === "ACCEPTED" || sub.status === "IN_PRODUCTION") &&
+    (sub.apcPaymentStatus === "PENDING" ||
+      (sub.apcPaymentStatus === "NOT_REQUIRED" &&
+        (sub.payment?.amountCents ?? 0) > 0))
+  ) {
     return true;
   }
   return (
@@ -262,11 +267,17 @@ function DashboardInner() {
                             href={
                               sub.status === "DRAFT"
                                 ? "/submissions/new"
-                                : `/submissions/${sub.id}`
+                                : sub.status === "ACCEPTED" &&
+                                    sub.apcPaymentStatus === "PENDING"
+                                  ? authorApcPayPath(sub.id)
+                                  : `/submissions/${sub.id}`
                             }
                             className="btn-primary shrink-0 !px-4 !py-2 text-sm"
                           >
-                            Continue
+                            {sub.status === "ACCEPTED" &&
+                            sub.apcPaymentStatus === "PENDING"
+                              ? "Pay now"
+                              : "Continue"}
                           </Link>
                         )}
                         <Link
@@ -422,10 +433,13 @@ function DashboardInner() {
                             </>
                           ) : (
                             <>
-                              {sub.status === "ACCEPTED" &&
-                                sub.apcPaymentStatus === "PENDING" && (
+                              {(sub.status === "ACCEPTED" ||
+                                sub.status === "IN_PRODUCTION") &&
+                                (sub.apcPaymentStatus === "PENDING" ||
+                                  (sub.apcPaymentStatus === "NOT_REQUIRED" &&
+                                    (sub.payment?.amountCents ?? 0) > 0)) && (
                                   <Link
-                                    href={`/submissions/${sub.id}`}
+                                    href={authorApcPayPath(sub.id)}
                                     className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
                                   >
                                     {sub.payment?.amountLabel

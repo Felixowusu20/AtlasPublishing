@@ -57,14 +57,10 @@ export async function POST(request: Request) {
 
     if (!submission) return jsonError("Submission not found", 404);
 
-    if (submission.status !== "ACCEPTED") {
-      return jsonError(
-        "APC payment is only available after your manuscript is accepted.",
-        400,
-      );
-    }
-
-    if (!needsApcPayment(submission.apcPaymentStatus)) {
+    if (
+      submission.apcPaymentStatus === "PAID" ||
+      submission.apcPaymentStatus === "WAIVED"
+    ) {
       const customer = toCustomerPayment(submission.payment);
       return jsonOk({
         alreadyCleared: true,
@@ -80,7 +76,33 @@ export async function POST(request: Request) {
       });
     }
 
+    if (
+      submission.status !== "ACCEPTED" &&
+      submission.status !== "IN_PRODUCTION"
+    ) {
+      return jsonError(
+        "APC payment is only available after your manuscript is accepted.",
+        400,
+      );
+    }
+
     const prepared = await prepareApcPayment(submission);
+    if (
+      prepared.status === "PAID" ||
+      prepared.status === "WAIVED" ||
+      prepared.status === "NOT_REQUIRED" ||
+      prepared.amountCents <= 0
+    ) {
+      const customer = toCustomerPayment(prepared.payment, prepared.amountCents);
+      return jsonOk({
+        alreadyCleared: true,
+        status: prepared.status,
+        currency: CUSTOMER_CURRENCY,
+        amount: customer?.amount ?? 0,
+        amountLabel: prepared.amountLabel,
+        paymentId: customer?.paymentId ?? null,
+      });
+    }
     const payment = prepared.payment ?? {
       id: prepared.paymentId ?? "none",
       amountCents: prepared.amountCents,

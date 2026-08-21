@@ -52,7 +52,7 @@ function emailDocument(opts: {
   const logoSrc = "cid:nahda-logo";
   const cta = opts.cta
     ? `<p style="margin:28px 0 8px">
-        <a href="${opts.cta.href}"
+        <a href="${escapeHtml(opts.cta.href)}"
            style="background:${BRAND.green};color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:15px">
           ${opts.cta.label}
         </a>
@@ -446,7 +446,7 @@ export function apcPaymentEmailHtml(opts: {
   journalTitle: string;
   amountLabel: string;
   checkoutUrl: string;
-  submissionUrl: string;
+  submissionUrl?: string;
 }) {
   return emailDocument({
     title: "Payment request",
@@ -470,12 +470,10 @@ export function apcPaymentEmailHtml(opts: {
       <p style="margin:0 0 14px;font-size:13px;color:${BRAND.muted}">
         Secure payment • Visa • Mastercard
       </p>
-      <p style="margin:0 0 14px;font-size:14px;color:${BRAND.muted}">
-        You may also open your manuscript page:
-        <a href="${opts.submissionUrl}" style="color:${BRAND.green}">${escapeHtml(opts.submissionUrl)}</a>
-      </p>
     `,
     cta: { href: opts.checkoutUrl, label: `Pay ${opts.amountLabel}` },
+    footerNote:
+      "This link opens the payment page for your accepted manuscript. After payment you will be taken to your author dashboard.",
   });
 }
 

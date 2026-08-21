@@ -120,10 +120,16 @@ function NotificationsInner() {
                     )}
                     {!isPublished && n.submissionId && (
                       <Link
-                        href={`/submissions/${n.submissionId}`}
+                        href={
+                          n.title.toLowerCase().includes("accepted")
+                            ? `/pay/s/${n.submissionId}`
+                            : `/submissions/${n.submissionId}`
+                        }
                         className="text-xs font-semibold text-[var(--accent)]"
                       >
-                        Open manuscript →
+                        {n.title.toLowerCase().includes("accepted")
+                          ? "Pay APC →"
+                          : "Open manuscript →"}
                       </Link>
                     )}
                   </div>

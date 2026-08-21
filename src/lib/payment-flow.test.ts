@@ -7,8 +7,10 @@ import {
   customerPayloadHasInternalLeak,
   usdToGhsRate,
 } from "@/lib/payment-currency";
+import { cardholderChargeMessage, otpVerificationFailedMessage } from "@/lib/payment-display";
 import {
   customerCheckoutRequestSchema,
+  livePendingApcCents,
   toAdminPayment,
   toCustomerPayment,
 } from "@/lib/payment-dto";
@@ -16,7 +18,11 @@ import {
   internalChargeMatches,
   isApcAlreadyCleared,
 } from "@/lib/payment-verify";
-import { usdToPaystackAmount } from "@/lib/paystack";
+import { gatewayCurrencyAttempts, usdToPaystackAmount } from "@/lib/paystack";
+import {
+  isPaystackChargePaid,
+  mapPaystackAuthStatus,
+} from "@/lib/paystack-charge-status";
 
 test("$50 USD product displays as \"$50 USD\"", () => {
   assert.equal(formatCustomerUsd(5000), "$50 USD");
@@ -67,6 +73,21 @@ test("customer API response does not contain exchange rate", () => {
   assert.equal(customerPayloadHasInternalLeak(customer), false);
 });
 
+test("pending APC follows the current journal fee", () => {
+  const live = livePendingApcCents(
+    { apc: "$75", openAccess: true },
+    { id: "p", amountCents: 5000, status: "PENDING" },
+    "PENDING",
+  );
+  assert.equal(live, 7500);
+  const paid = livePendingApcCents(
+    { apc: "$75", openAccess: true },
+    { id: "p", amountCents: 5000, status: "PAID" },
+    "PAID",
+  );
+  assert.equal(paid, 5000);
+});
+
 test("frontend cannot manipulate the internal Paystack amount", () => {
   const parsed = customerCheckoutRequestSchema.parse({
     submissionId: "sub_trusted",
@@ -76,6 +97,17 @@ test("frontend cannot manipulate the internal Paystack amount", () => {
   });
   assert.deepEqual(parsed, { submissionId: "sub_trusted" });
   assert.equal(parseApcAmountCents("$50"), 5000);
+  assert.equal(parseApcAmountCents("N/A"), 0);
+  assert.equal(parseApcAmountCents("Free"), 0);
+});
+
+test("NOT_REQUIRED manuscripts pick up a journal fee", () => {
+  const live = livePendingApcCents(
+    { apc: "$50", openAccess: true },
+    { id: "p", amountCents: 0, status: "NOT_REQUIRED" },
+    "NOT_REQUIRED",
+  );
+  assert.equal(live, 5000);
 });
 
 test("backend calculates the internal GHS amount", () => {
@@ -99,6 +131,12 @@ test("Paystack receives the correct internal amount", () => {
       storedInternalCurrency: "GHS",
     }),
   );
+});
+
+test("GHS merchants are charged in GHS only", () => {
+  process.env.USD_TO_GHS_RATE = "15.5";
+  const attempts = gatewayCurrencyAttempts(5000, ["GHS"]);
+  assert.deepEqual(attempts, [{ currency: "GHS", amount: 77500 }]);
 });
 
 test("successful Paystack payment matches stored internals", () => {
@@ -158,12 +196,16 @@ test("customer payment message shows \"$50 USD\"", () => {
     manuscriptId: "N-1",
     journalTitle: "Nahda Journal",
     amountLabel: formatCustomerUsd(5000),
-    checkoutUrl: "https://example.com/submissions/1",
-    submissionUrl: "https://example.com/submissions/1",
+    checkoutUrl: "https://example.com/pay/pay_1",
   });
   assert.match(html, /Payment request/i);
   assert.match(html, /\$50 USD/);
   assert.match(html, /Pay \$50 USD/);
+  assert.match(html, /https:\/\/example.com\/pay\/pay_1/);
+  assert.doesNotMatch(html, /opens Nahda checkout/i);
+  assert.doesNotMatch(html, /not your manuscript file/i);
+  assert.doesNotMatch(html, /\/submissions\//);
+  assert.doesNotMatch(html, /Open manuscript/i);
   assert.doesNotMatch(html, /\bGHS\b/);
   assert.doesNotMatch(html, /₵/);
   assert.doesNotMatch(html, /Cedis/i);
@@ -186,6 +228,74 @@ test("admin can still see the internal GHS transaction information", () => {
   assert.equal(admin.internalAmountLabel, "GHS 775.00");
   assert.equal(admin.exchangeRate, 15.5);
   assert.equal(admin.paystackReference, "nahda_ref");
+});
+
+test("abandoned authorization is not shown as a customer error", () => {
+  const msg = cardholderChargeMessage({
+    message: "Authorization was abandoned. Please try again.",
+    amountLabel: "$50 USD",
+  });
+  assert.equal(msg, null);
+});
+
+test("bank OTP is not invented from an abandoned charge", () => {
+  assert.equal(isPaystackChargePaid({ status: "success" }), true);
+  assert.deepEqual(mapPaystackAuthStatus({ status: "send_otp" }, "start"), {
+    status: "send_otp",
+    paid: false,
+  });
+  assert.deepEqual(mapPaystackAuthStatus({ status: "abandoned" }, "start"), {
+    status: "abandoned",
+    paid: false,
+  });
+  assert.deepEqual(
+    mapPaystackAuthStatus({ status: "success", paid_at: "2026-08-20" }, "auth"),
+    { status: "success", paid: true },
+  );
+});
+
+test("bank 3DS uses Nahda OTP fields instead of a bank page", () => {
+  assert.deepEqual(
+    mapPaystackAuthStatus(
+      { status: "open_url", url: "https://acs.example" },
+      "start",
+    ),
+    { status: "send_otp", paid: false },
+  );
+  assert.deepEqual(
+    mapPaystackAuthStatus(
+      { status: "abandoned", url: "https://acs.example" },
+      "start",
+    ),
+    { status: "send_otp", paid: false },
+  );
+});
+
+test("other Paystack errors are shown to the customer", () => {
+  const msg = cardholderChargeMessage({
+    message: "Do not honor",
+    amountLabel: "$50 USD",
+  });
+  assert.equal(msg, "Do not honor");
+});
+
+test("OTP verification shows the actual bank error", () => {
+  assert.equal(
+    otpVerificationFailedMessage("Insufficient funds"),
+    "Insufficient funds",
+  );
+  assert.equal(
+    otpVerificationFailedMessage("Authorization was abandoned. Please try again."),
+    "Enter the OTP sent to your account.",
+  );
+  assert.equal(
+    otpVerificationFailedMessage("Invalid OTP"),
+    "Invalid OTP",
+  );
+  assert.equal(
+    otpVerificationFailedMessage(null),
+    "Enter the OTP sent to your account.",
+  );
 });
 
 test("GHS remains available internally for Paystack processing", () => {

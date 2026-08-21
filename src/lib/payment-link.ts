@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
+import { prisma } from "@/lib/db";
 import { getAuthSecret } from "@/lib/session";
 import { getAppBaseUrl } from "@/lib/app-url";
 
@@ -25,7 +26,38 @@ export async function verifyApcPayToken(
   }
 }
 
+/**
+ * Resolve an email/pay-page token: JWT, Payment.id, or Paystack reference.
+ * Payment.id is preferred in emails so clients do not break a long JWT.
+ */
+export async function resolveApcPayLink(
+  token: string,
+): Promise<{ submissionId: string } | null> {
+  const trimmed = token.trim();
+  if (!trimmed) return null;
+
+  const fromJwt = await verifyApcPayToken(trimmed);
+  if (fromJwt) return fromJwt;
+
+  const byId = await prisma.payment.findUnique({
+    where: { id: trimmed },
+    select: { submissionId: true },
+  });
+  if (byId) return { submissionId: byId.submissionId };
+
+  const byRef = await prisma.payment.findUnique({
+    where: { paystackReference: trimmed },
+    select: { submissionId: true },
+  });
+  return byRef ? { submissionId: byRef.submissionId } : null;
+}
+
+/** Public checkout URL for the acceptance email — not the manuscript viewer. */
 export async function apcPayPageUrl(submissionId: string): Promise<string> {
-  const token = await createApcPayToken(submissionId);
+  const payment = await prisma.payment.findUnique({
+    where: { submissionId },
+    select: { id: true },
+  });
+  const token = payment?.id ?? (await createApcPayToken(submissionId));
   return `${getAppBaseUrl()}/pay/${encodeURIComponent(token)}`;
 }

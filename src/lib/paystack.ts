@@ -156,13 +156,17 @@ export function isCurrencyUnsupported(err: unknown): boolean {
 }
 
 /**
- * Internal Paystack currencies only. GHS first for Ghana settlement.
- * USD is not attempted — we do not create a USD Paystack transaction.
+ * Internal Paystack currencies only. Charge only what this merchant actually
+ * supports (GHS for Ghana). Never fall back to NGN/KES/etc.
  */
-function gatewayCurrencyAttempts(
+export function gatewayCurrencyAttempts(
   usdCents: number,
   merchantCurrencies: string[],
 ): Array<{ currency: string; amount: number }> {
+  const merchant = merchantCurrencies
+    .map((c) => c.toUpperCase())
+    .filter((code) => code && code !== "USD");
+
   const ordered: string[] = [];
   const push = (c: string) => {
     const code = c.toUpperCase();
@@ -170,17 +174,21 @@ function gatewayCurrencyAttempts(
     if (!ordered.includes(code)) ordered.push(code);
   };
 
-  push(INTERNAL_PAYSTACK_CURRENCY);
-  push(paystackCurrency());
-  for (const c of merchantCurrencies) push(c);
-  for (const c of ["GHS", "NGN", "KES", "ZAR", "XOF"]) push(c);
+  if (merchant.length > 0) {
+    if (merchant.includes("GHS")) push("GHS");
+    for (const code of merchant) push(code);
+  } else {
+    push(INTERNAL_PAYSTACK_CURRENCY);
+    push("GHS");
+  }
 
   const seen = new Set<string>();
   const attempts: Array<{ currency: string; amount: number }> = [];
   for (const currency of ordered) {
-    const amount = usdToPaystackAmount(usdCents, currency);
+    const converted = usdToPaystackAmount(usdCents, currency);
+    const amount = Math.max(100, converted);
     const key = `${currency}:${amount}`;
-    if (seen.has(key) || amount < 100) continue;
+    if (seen.has(key)) continue;
     seen.add(key);
     attempts.push({ currency, amount });
   }
@@ -294,6 +302,16 @@ export async function verifyPaystackTransaction(
   );
 }
 
+export async function verifyPaystackTransactionSafe(
+  reference: string,
+): Promise<PaystackVerifyData | null> {
+  try {
+    return await verifyPaystackTransaction(reference);
+  } catch {
+    return null;
+  }
+}
+
 export function makePaystackReference(paymentId: string): string {
   const stamp = Date.now().toString(36);
   const rand = Math.random().toString(36).slice(2, 8);
@@ -362,10 +380,8 @@ export async function chargePaystackCard(
 }
 
 /**
- * Charge a card, trying USD first then the merchant’s enabled currencies.
- * Used because many Ghana Paystack businesses have not enabled USD yet —
- * charging USD-only would fail with "Currency not supported by merchant".
- * Nahda checkout/receipts still show the original USD APC.
+ * Charge a card in the merchant’s enabled currency (GHS for Ghana).
+ * Customer checkout/receipts still show the original USD APC.
  */
 export async function chargePaystackInSupportedCurrency(opts: {
   email: string;
@@ -485,6 +501,21 @@ export async function submitPaystackPhone(opts: {
 export async function checkPaystackCharge(
   reference: string,
 ): Promise<PaystackChargeData> {
+  const verified = await verifyPaystackTransactionSafe(reference);
+  if (verified) {
+    return {
+      reference: verified.reference || reference,
+      status: verified.status,
+      gateway_response: verified.gateway_response ?? null,
+      amount: verified.amount,
+      currency: verified.currency,
+      paid_at: verified.paid_at ?? null,
+      message: verified.gateway_response ?? null,
+      url: null,
+      customer: verified.customer,
+      metadata: verified.metadata,
+    };
+  }
   return paystackFetchAllowPending<PaystackChargeData>(
     `/charge/${encodeURIComponent(reference)}`,
   );
@@ -520,10 +551,43 @@ async function paystackFetchAllowPending<T>(
   // Successful charge or intermediate auth step
   if (json.status && json.data) return json.data;
 
-  // Some PIN/OTP required responses still include usable data
-  if (json.data && typeof json.data === "object" && "reference" in json.data) {
-    return json.data;
+  // PIN / OTP / 3DS often arrive with status:false but still include data
+  if (json.data && typeof json.data === "object") {
+    const data = json.data as T & {
+      status?: string;
+      url?: string | null;
+      reference?: string;
+      message?: string;
+    };
+    const st = (data.status || "").toLowerCase();
+    if (
+      data.reference ||
+      data.url ||
+      st === "abandoned" ||
+      st === "send_otp" ||
+      st === "send_pin" ||
+      st === "send_phone" ||
+      st === "send_birthday" ||
+      st === "open_url" ||
+      st === "pending"
+    ) {
+      return json.data;
+    }
   }
 
-  throw new Error(json.message || `Paystack charge failed (${res.status})`);
+  const message = json.message || `Paystack charge failed (${res.status})`;
+  if (/authorization was abandoned/i.test(message)) {
+    const data = (json.data || {}) as T & {
+      url?: string | null;
+      reference?: string;
+      status?: string;
+    };
+    return {
+      ...data,
+      status: data.status || "abandoned",
+      url: data.url ?? null,
+    } as T;
+  }
+
+  throw new Error(message);
 }
