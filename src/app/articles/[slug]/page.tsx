@@ -2,7 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { articleDownloadPath } from "@/lib/submission-utils";
+import {
+  articleDownloadPath,
+  resolvePublishedPdfUrl,
+} from "@/lib/submission-utils";
 import { ArticleMetricsPanel } from "@/components/article-metrics";
 import { ArticleKeywords } from "@/components/article-keywords";
 import {
@@ -63,7 +66,10 @@ export default async function ArticleDetailPage({
 
   const dbArticle = await prisma.publishedArticle.findFirst({
     where: { slug, isActive: true, deletedAt: null },
-    include: { journal: true },
+    include: {
+      journal: true,
+      submission: { select: { manuscriptUrl: true } },
+    },
   });
 
   if (dbArticle) {
@@ -107,6 +113,11 @@ export default async function ArticleDetailPage({
       publishedAt: formatDate(r.publishedAt),
     }));
 
+    const manuscriptUrl = resolvePublishedPdfUrl(
+      dbArticle.manuscriptUrl,
+      dbArticle.submission?.manuscriptUrl,
+    );
+
     const article = {
       title: dbArticle.title,
       articleType: dbArticle.articleType,
@@ -131,7 +142,7 @@ export default async function ArticleDetailPage({
       views: dbArticle.views + 1,
       downloads: dbArticle.downloads,
       citations: dbArticle.citations,
-      manuscriptUrl: dbArticle.manuscriptUrl,
+      manuscriptUrl,
       slug: dbArticle.slug,
       recommendations,
       relatedCards,
@@ -152,7 +163,7 @@ export default async function ArticleDetailPage({
           volume: dbArticle.volume,
           issue: dbArticle.issue,
           pages: dbArticle.pages,
-          manuscriptUrl: dbArticle.manuscriptUrl,
+          manuscriptUrl,
           license: dbArticle.license,
           openAccess: dbArticle.openAccess,
           journal: {
@@ -224,6 +235,9 @@ function ArticleView({
     title: article.title,
     journalTitle: article.journalTitle,
     publishedAt: article.publishedAt,
+    volume: article.volume,
+    issue: article.issue,
+    pages: article.pages,
     doi: article.doi,
   });
   const related = article.relatedCards ?? [];
@@ -411,6 +425,9 @@ function ArticleView({
                 journalTitle={article.journalTitle}
                 journalSlug={article.journalSlug}
                 publishedAt={article.publishedAt}
+                volume={article.volume}
+                issue={article.issue}
+                pages={article.pages}
                 doi={article.doi}
               />
               <div className="mt-4 flex flex-wrap gap-3">
@@ -482,6 +499,9 @@ function ArticleView({
                     journalTitle={article.journalTitle}
                     journalSlug={article.journalSlug}
                     publishedAt={article.publishedAt}
+                    volume={article.volume}
+                    issue={article.issue}
+                    pages={article.pages}
                     doi={article.doi}
                   />
                   <div className="border-t border-[var(--line)] bg-white p-5">

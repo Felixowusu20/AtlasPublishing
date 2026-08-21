@@ -2,17 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { jsonError } from "@/lib/api";
 import { fetchCloudinaryAsset } from "@/lib/cloudinary-fetch";
-import { mimeFromUrl } from "@/lib/file-view";
+import { fileExtension, mimeFromUrl } from "@/lib/file-view";
+import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 type Params = { params: Promise<{ slug: string }> };
 
-function safeFilename(title: string, slug: string) {
+function safeFilename(title: string, slug: string, sourceUrl?: string) {
   const base = (title || slug)
     .replace(/[^\w\s-]+/g, "")
     .trim()
     .replace(/\s+/g, "-")
     .slice(0, 80);
-  return `${base || slug}.pdf`;
+  const ext = fileExtension(sourceUrl || "");
+  const useExt = ["pdf", "doc", "docx"].includes(ext) ? ext : "pdf";
+  return `${base || slug}.${useExt}`;
 }
 
 /**
@@ -35,20 +38,27 @@ export async function GET(request: Request, { params }: Params) {
   try {
     const article = await prisma.publishedArticle.findFirst({
       where: { slug, isActive: true, deletedAt: null },
-      select: { id: true, manuscriptUrl: true, title: true },
+      select: {
+        id: true,
+        manuscriptUrl: true,
+        title: true,
+        submission: { select: { manuscriptUrl: true } },
+      },
     });
 
     if (!article) return jsonError("Article not found", 404);
-    if (!article.manuscriptUrl) {
+
+    const pdfSource = resolvePublishedPdfUrl(
+      article.manuscriptUrl,
+      article.submission?.manuscriptUrl,
+    );
+    if (!pdfSource) {
       return jsonError("PDF is not available for this article yet", 404);
     }
 
-    const asset = await fetchCloudinaryAsset(article.manuscriptUrl);
+    const asset = await fetchCloudinaryAsset(pdfSource);
     if (!asset) {
-      console.error(
-        "[article-download] Cloudinary fetch failed for",
-        article.manuscriptUrl,
-      );
+      console.error("[article-download] Cloudinary fetch failed for", pdfSource);
       return jsonError(
         "Could not fetch the PDF. The file may be blocked by storage settings.",
         502,
@@ -57,13 +67,17 @@ export async function GET(request: Request, { params }: Params) {
 
     await prisma.publishedArticle.update({
       where: { id: article.id },
-      data: { downloads: { increment: 1 } },
+      data: {
+        downloads: { increment: 1 },
+        // Keep the public record pointing at a file after publish.
+        ...(article.manuscriptUrl ? {} : { manuscriptUrl: pdfSource }),
+      },
     });
 
-    const filename = safeFilename(article.title, slug);
+    const filename = safeFilename(article.title, slug, pdfSource);
     const contentType =
-      mimeFromUrl(article.manuscriptUrl) !== "application/octet-stream"
-        ? mimeFromUrl(article.manuscriptUrl)
+      mimeFromUrl(pdfSource) !== "application/octet-stream"
+        ? mimeFromUrl(pdfSource)
         : asset.upstreamType || "application/pdf";
 
     const disposition = preferInline

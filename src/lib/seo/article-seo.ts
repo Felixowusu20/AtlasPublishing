@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import type { ScholarArticleInput } from "@/lib/seo/scholar";
+import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 const articleSelect = {
   slug: true,
@@ -17,6 +18,7 @@ const articleSelect = {
   coverImageUrl: true,
   license: true,
   openAccess: true,
+  submission: { select: { manuscriptUrl: true } },
   journal: {
     select: {
       title: true,
@@ -50,7 +52,10 @@ export function toScholarInput(
     volume: article.volume,
     issue: article.issue,
     pages: article.pages,
-    manuscriptUrl: article.manuscriptUrl,
+    manuscriptUrl: resolvePublishedPdfUrl(
+      article.manuscriptUrl,
+      article.submission?.manuscriptUrl,
+    ),
     coverImageUrl: article.coverImageUrl,
     license: article.license,
     openAccess: article.openAccess,

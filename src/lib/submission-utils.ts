@@ -84,6 +84,17 @@ export function articleDownloadPath(slug: string) {
   return `/api/articles/${encodeURIComponent(slug)}/download`;
 }
 
+/**
+ * File readers should download: a typeset PDF if one was uploaded at
+ * publish, otherwise the author's original manuscript.
+ */
+export function resolvePublishedPdfUrl(
+  publishedUrl?: string | null,
+  submissionUrl?: string | null,
+) {
+  return publishedUrl?.trim() || submissionUrl?.trim() || null;
+}
+
 /** Logged-in author checkout (no manuscript viewer). */
 export function authorApcPayPath(submissionId: string) {
   return `/pay/s/${encodeURIComponent(submissionId)}`;

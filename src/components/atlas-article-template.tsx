@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { AuthorOrcidLine } from "@/components/orcid-id";
 import { journalArticlePalette } from "@/lib/journal-colors";
 import { ensureManuscriptHtml } from "@/lib/import-manuscript";
+import { buildApaCitation } from "@/lib/apa-citation";
 
 type Props = {
   journalTitle: string;
@@ -480,6 +481,31 @@ export function NahdaArticleTemplate({
             ) : null}
           </section>
         ) : null}
+        <section className="nahda-end-matter nahda-span-all">
+          <div>
+            <h2
+              className="text-[11px] font-bold uppercase tracking-[0.14em]"
+              style={{
+                color: "var(--j-primary)",
+                fontFamily: "Helvetica, Arial, sans-serif",
+              }}
+            >
+              How to Cite
+            </h2>
+            <p>
+              {buildApaCitation({
+                authors,
+                title,
+                journalTitle,
+                publishedAt,
+                volume,
+                issue,
+                pages,
+                doi,
+              }).text}
+            </p>
+          </div>
+        </section>
         </div>
       </div>
             </td>

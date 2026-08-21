@@ -11,6 +11,7 @@ import { journalColorFromKey } from "@/lib/journal-colors";
 import { issueKey } from "@/lib/seo/article-seo";
 import { periodicalJsonLd } from "@/lib/seo/jsonld";
 import { buildJournalMetadata } from "@/lib/seo/scholar";
+import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -75,13 +76,17 @@ export default async function JournalDetailPage({
   const { tab: rawTab } = await searchParams;
 
   let journal = null;
-  let articles: Awaited<ReturnType<typeof prisma.publishedArticle.findMany>> =
-    [];
+  let articles: Array<
+    Awaited<ReturnType<typeof prisma.publishedArticle.findMany>>[number] & {
+      submission?: { manuscriptUrl: string | null } | null;
+    }
+  > = [];
   try {
     journal = await prisma.journal.findUnique({ where: { slug } });
     if (journal) {
       articles = await prisma.publishedArticle.findMany({
         where: { journalId: journal.id, isActive: true, deletedAt: null },
+        include: { submission: { select: { manuscriptUrl: true } } },
         orderBy: { publishedAt: "desc" },
         take: 50,
       });
@@ -347,7 +352,12 @@ export default async function JournalDetailPage({
                     views: a.views,
                     downloads: a.downloads,
                     keywords: a.keywords,
-                    hasPdf: Boolean(a.manuscriptUrl),
+                    hasPdf: Boolean(
+                      resolvePublishedPdfUrl(
+                        a.manuscriptUrl,
+                        a.submission?.manuscriptUrl,
+                      ),
+                    ),
                   }}
                 />
               ))}

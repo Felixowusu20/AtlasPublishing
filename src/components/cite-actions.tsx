@@ -42,7 +42,7 @@ export function CiteActions({ citation, doiHref, doiLabel }: Props) {
         ) : (
           <>
             <CopyIcon />
-            Copy citation
+            Copy APA citation
           </>
         )}
       </button>

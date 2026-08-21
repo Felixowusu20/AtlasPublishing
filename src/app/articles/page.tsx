@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArticleListingCard } from "@/components/article-listing-card";
 import { prisma } from "@/lib/db";
+import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,10 @@ async function getArticles(): Promise<ArticleCard[]> {
   try {
     const rows = await prisma.publishedArticle.findMany({
       where: { isActive: true, deletedAt: null },
-      include: { journal: true },
+      include: {
+        journal: true,
+        submission: { select: { manuscriptUrl: true } },
+      },
       orderBy: { publishedAt: "desc" },
     });
     return rows.map((a) => ({
@@ -48,7 +52,9 @@ async function getArticles(): Promise<ArticleCard[]> {
       views: a.views,
       downloads: a.downloads,
       keywords: a.keywords,
-      hasPdf: Boolean(a.manuscriptUrl),
+      hasPdf: Boolean(
+        resolvePublishedPdfUrl(a.manuscriptUrl, a.submission?.manuscriptUrl),
+      ),
     }));
   } catch {
     return [];

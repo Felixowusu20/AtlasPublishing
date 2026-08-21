@@ -1,240 +1,118 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-
-function cleanDoi(input: string) {
-  return input
-    .trim()
-    .replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")
-    .replace(/^doi:\s*/i, "")
-    .toLowerCase();
-}
-
-type JournalOption = {
-  id: string;
-  slug: string;
-  title: string;
-  shortTitle: string;
-};
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type Props = {
-  variant?: "header" | "mobile";
+  variant?: "header" | "mobile" | "bar";
 };
 
 export function NavbarSearch({ variant = "header" }: Props) {
   const router = useRouter();
-  const [journals, setJournals] = useState<JournalOption[]>([]);
-  const [journal, setJournal] = useState("");
-  const [q, setQ] = useState("");
-  const [doi, setDoi] = useState("");
-  const [mobileTab, setMobileTab] = useState<"search" | "doi">("search");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isHome = pathname === "/";
+  const isSearchPage = pathname === "/search";
+  const [q, setQ] = useState(
+    isHome || isSearchPage ? (searchParams.get("q") ?? "") : "",
+  );
+  const timer = useRef<number | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/cms/journals");
-        const data = await res.json();
-        if (cancelled) return;
-        const list = ((data.journals ?? []) as JournalOption[]).map((j) => ({
-          id: j.id,
-          slug: j.slug,
-          title: j.title,
-          shortTitle: j.shortTitle,
-        }));
-        setJournals(list);
-      } catch {
-        if (!cancelled) setJournals([]);
-      }
-    })();
+    if (!isHome && !isSearchPage) return;
+    setQ(searchParams.get("q") ?? "");
+  }, [isHome, isSearchPage, searchParams]);
+
+  useEffect(() => {
     return () => {
-      cancelled = true;
+      if (timer.current) window.clearTimeout(timer.current);
     };
   }, []);
 
-  function runSearch(e?: FormEvent) {
-    e?.preventDefault();
-    const query = q.trim();
+  function applyQuery(next: string, replace: boolean) {
+    const trimmed = next.trim();
     const params = new URLSearchParams();
-    if (query) params.set("q", query);
-    if (journal) params.set("journal", journal);
+    if (trimmed) params.set("q", trimmed);
     params.set("type", "articles");
     const qs = params.toString();
-    router.push(qs ? `/search?${qs}` : "/search");
+    const href = isHome ? (trimmed ? `/?q=${encodeURIComponent(trimmed)}` : "/") : qs ? `/search?${qs}` : "/search";
+    if (replace) router.replace(href, { scroll: false });
+    else router.push(href);
   }
 
-  function runDoi(e?: FormEvent) {
+  function onQueryChange(value: string) {
+    setQ(value);
+    if (!isHome && !isSearchPage) return;
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => applyQuery(value, true), 220);
+  }
+
+  function runSearch(e?: FormEvent) {
     e?.preventDefault();
-    const raw = doi.trim();
-    if (!raw) return;
-    const cleaned = cleanDoi(raw);
-    if (!cleaned) return;
-    router.push(`/doi/${cleaned}`);
+    if (timer.current) window.clearTimeout(timer.current);
+    applyQuery(q, isHome || isSearchPage);
   }
 
-  const journalOptions = (
-    <>
-      <option value="">All journals</option>
-      {journals.map((j) => (
-        <option key={j.id} value={j.slug}>
-          {j.shortTitle || j.title}
-        </option>
-      ))}
-    </>
-  );
-
-  /** Mobile / narrow: tabbed stacked card */
-  const mobilePanel = (
-    <div className="w-full">
-      <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 shadow-sm">
-        <div className="grid grid-cols-2 gap-1 p-1">
+  const field = (
+    <form
+      onSubmit={runSearch}
+      className={
+        variant === "header"
+          ? "flex min-w-0 flex-1 items-stretch"
+          : "flex min-w-0 flex-1 items-center gap-2 rounded-full border border-[var(--line)] bg-white px-3 py-1.5 text-[var(--muted)]"
+      }
+      role="search"
+    >
+      {variant === "header" ? (
+        <>
+          <span className="inline-flex h-9 items-center rounded-l-lg border border-r-0 border-[var(--line)] bg-white px-2.5 text-[var(--muted)]">
+            <SearchIcon />
+          </span>
+          <input
+            type="search"
+            className="h-9 min-w-0 flex-1 border border-[var(--line)] bg-white px-2.5 text-sm outline-none focus:border-[var(--accent)]"
+            value={q}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="Search papers…"
+            aria-label="Search papers"
+            enterKeyHint="search"
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
           <button
-            type="button"
-            onClick={() => setMobileTab("search")}
-            className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-              mobileTab === "search"
-                ? "bg-white text-[var(--ink)] shadow-sm"
-                : "text-[var(--muted)]"
-            }`}
+            type="submit"
+            className="h-9 shrink-0 rounded-r-lg bg-[var(--accent)] px-4 text-xs font-semibold text-white hover:bg-[#0c5756]"
           >
-            Search papers
+            Search
           </button>
+        </>
+      ) : (
+        <>
+          <SearchIcon />
+          <input
+            type="search"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
+            value={q}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="Search…"
+            aria-label="Search papers"
+            enterKeyHint="search"
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
           <button
-            type="button"
-            onClick={() => setMobileTab("doi")}
-            className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-              mobileTab === "doi"
-                ? "bg-white text-[var(--ink)] shadow-sm"
-                : "text-[var(--muted)]"
-            }`}
+            type="submit"
+            className="shrink-0 rounded-full bg-[var(--accent)] px-2.5 py-1 text-[11px] font-semibold text-white"
           >
-            Open DOI
+            Go
           </button>
-        </div>
-
-        {mobileTab === "search" ? (
-          <form onSubmit={runSearch} className="space-y-2.5 bg-white p-3">
-            <label className="block">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-                Journal
-              </span>
-              <select
-                className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
-                value={journal}
-                onChange={(e) => setJournal(e.target.value)}
-                aria-label="Filter by journal"
-              >
-                {journalOptions}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-                Keywords
-              </span>
-              <input
-                className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Title, author, or keyword"
-                aria-label="Search articles"
-                enterKeyHint="search"
-              />
-            </label>
-            <button
-              type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-3 py-2.5 text-sm font-semibold text-white"
-            >
-              <SearchIcon />
-              Search articles
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={runDoi} className="space-y-2.5 bg-white p-3">
-            <label className="block">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-                Digital Object Identifier
-              </span>
-              <input
-                className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 font-mono text-sm outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
-                value={doi}
-                onChange={(e) => setDoi(e.target.value)}
-                placeholder="10.58000/…"
-                aria-label="Resolve DOI"
-                enterKeyHint="go"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-            </label>
-            <p className="text-[11px] leading-relaxed text-[var(--muted)]">
-              Paste a Nahda DOI to open the article page directly.
-            </p>
-            <button
-              type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--ink)] px-3 py-2.5 text-sm font-semibold text-white"
-            >
-              Open article
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </form>
   );
 
-  if (variant === "mobile") {
-    return mobilePanel;
-  }
-
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-3">
-      <form
-        onSubmit={runSearch}
-        className="flex min-w-0 flex-1 items-stretch"
-        role="search"
-      >
-        <select
-          className="h-9 max-w-[12rem] shrink-0 rounded-l-lg border border-[var(--line)] bg-[var(--surface)] px-2 text-[11px] font-semibold text-[var(--ink)] outline-none focus:border-[var(--accent)]"
-          value={journal}
-          onChange={(e) => setJournal(e.target.value)}
-          aria-label="Filter by journal"
-          title="Choose a journal"
-        >
-          {journalOptions}
-        </select>
-        <input
-          className="h-9 min-w-0 flex-1 border border-l-0 border-[var(--line)] bg-white px-2.5 text-sm outline-none focus:border-[var(--accent)]"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search title, author, keyword…"
-          aria-label="Search articles"
-        />
-        <button
-          type="submit"
-          className="h-9 shrink-0 rounded-r-lg bg-[var(--accent)] px-4 text-xs font-semibold text-white hover:bg-[#0c5756]"
-        >
-          Search
-        </button>
-      </form>
-
-      <form onSubmit={runDoi} className="flex shrink-0 items-stretch">
-        <input
-          className="h-9 w-[13rem] rounded-l-lg border border-[var(--line)] bg-white px-2.5 text-xs outline-none focus:border-[var(--accent)]"
-          value={doi}
-          onChange={(e) => setDoi(e.target.value)}
-          placeholder="Paste DOI to open article"
-          aria-label="Resolve DOI"
-          title="Paste a DOI to open the article"
-        />
-        <button
-          type="submit"
-          className="h-9 shrink-0 rounded-r-lg border border-l-0 border-[var(--line)] bg-[var(--ink)] px-3 text-xs font-semibold text-white hover:bg-[#16324a]"
-        >
-          DOI
-        </button>
-      </form>
-    </div>
-  );
+  if (variant === "mobile") return field;
+  return field;
 }
 
 function SearchIcon() {

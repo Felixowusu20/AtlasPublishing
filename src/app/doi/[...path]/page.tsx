@@ -2,13 +2,15 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { findArticleByDoi, normalizeDoi } from "@/lib/doi";
+import { atlasDoiPath, findArticleByDoi, normalizeDoi } from "@/lib/doi";
 import { articleDownloadPath } from "@/lib/submission-utils";
 import { formatMetric } from "@/components/article-metrics";
 import { JsonLd } from "@/components/json-ld";
 import { scholarlyArticleJsonLd } from "@/lib/seo/jsonld";
 import { absoluteUrl, buildArticleMetadata } from "@/lib/seo/scholar";
 import { authorDisplayName } from "@/lib/orcid";
+import { ArticleCitation, buildCitationText } from "@/components/article-citation";
+import { CiteActions } from "@/components/cite-actions";
 
 type Props = {
   params: Promise<{ path: string[] }>;
@@ -98,6 +100,17 @@ export default async function DoiRecordPage({ params, searchParams }: Props) {
   const downloadHref = article.manuscriptUrl
     ? articleDownloadPath(article.slug)
     : null;
+  const doiNorm = normalizeDoi(article.doi || doi);
+  const citation = buildCitationText({
+    authors: article.authors,
+    title: article.title,
+    journalTitle: article.journal.title,
+    publishedAt: article.publishedAt,
+    volume: article.volume,
+    issue: article.issue,
+    pages: article.pages,
+    doi: article.doi,
+  });
 
   return (
     <div className="page-wrap max-w-3xl">
@@ -198,6 +211,27 @@ export default async function DoiRecordPage({ params, searchParams }: Props) {
               </span>
             ) : null}
           </div>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <ArticleCitation
+          authors={article.authors}
+          title={article.title}
+          journalTitle={article.journal.title}
+          journalSlug={article.journal.slug}
+          publishedAt={article.publishedAt}
+          volume={article.volume}
+          issue={article.issue}
+          pages={article.pages}
+          doi={article.doi}
+        />
+        <div className="mt-3">
+          <CiteActions
+            citation={citation}
+            doiHref={doiNorm ? atlasDoiPath(doiNorm) : null}
+            doiLabel={doiNorm || null}
+          />
         </div>
       </div>
 

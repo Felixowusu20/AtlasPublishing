@@ -565,7 +565,7 @@ function DashboardInner() {
                     n.submission?.status === "PUBLISHED" ||
                     n.title.toLowerCase().includes("published");
                   const downloadHref =
-                    published?.slug && published.manuscriptUrl
+                    published?.slug
                       ? articleDownloadPath(published.slug)
                       : null;
                   return (

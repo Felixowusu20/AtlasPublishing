@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 /** Nahda house DOI prefix (replace with your Crossref prefix when registered). */
 export const ATLAS_DOI_PREFIX = "10.58000";
@@ -126,6 +127,7 @@ export async function findArticleByDoi(
       citations: true,
       openAccess: true,
       license: true,
+      submission: { select: { manuscriptUrl: true } },
       journal: {
         select: {
           title: true,
@@ -137,7 +139,15 @@ export async function findArticleByDoi(
       },
     },
   });
-  if (exact) return exact;
+  if (exact) {
+    return {
+      ...exact,
+      manuscriptUrl: resolvePublishedPdfUrl(
+        exact.manuscriptUrl,
+        exact.submission?.manuscriptUrl,
+      ),
+    };
+  }
 
   // Fallback: DOI stored with or without https://doi.org/ prefix
   const candidates = await db.publishedArticle.findMany({
@@ -166,6 +176,7 @@ export async function findArticleByDoi(
       citations: true,
       openAccess: true,
       license: true,
+      submission: { select: { manuscriptUrl: true } },
       journal: {
         select: {
           title: true,
@@ -179,9 +190,16 @@ export async function findArticleByDoi(
     take: 500,
   });
 
-  return (
-    candidates.find((row) => row.doi && normalizeDoi(row.doi) === doi) ?? null
-  );
+  const match =
+    candidates.find((row) => row.doi && normalizeDoi(row.doi) === doi) ?? null;
+  if (!match) return null;
+  return {
+    ...match,
+    manuscriptUrl: resolvePublishedPdfUrl(
+      match.manuscriptUrl,
+      match.submission?.manuscriptUrl,
+    ),
+  };
 }
 
 /** Assign Nahda DOIs to published articles that do not have one yet. */

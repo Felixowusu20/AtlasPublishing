@@ -5,6 +5,7 @@ import { ArticleListingCard } from "@/components/article-listing-card";
 import { prisma } from "@/lib/db";
 import { issueKey, parseIssueKey } from "@/lib/seo/article-seo";
 import { absoluteUrl, buildJournalMetadata } from "@/lib/seo/scholar";
+import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,7 @@ export default async function JournalIssuePage({
 
   const articles = await prisma.publishedArticle.findMany({
     where: { journalId: journal.id, isActive: true, deletedAt: null },
+    include: { submission: { select: { manuscriptUrl: true } } },
     orderBy: { publishedAt: "desc" },
   });
 
@@ -121,7 +123,12 @@ export default async function JournalIssuePage({
               views: a.views,
               downloads: a.downloads,
               keywords: a.keywords,
-              hasPdf: Boolean(a.manuscriptUrl),
+              hasPdf: Boolean(
+                resolvePublishedPdfUrl(
+                  a.manuscriptUrl,
+                  a.submission?.manuscriptUrl,
+                ),
+              ),
             }}
           />
         ))}

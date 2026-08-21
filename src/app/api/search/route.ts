@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { jsonOk } from "@/lib/api";
 import { normalizeDoi } from "@/lib/doi";
+import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 type SearchArticle = {
   id: string;
@@ -14,6 +15,9 @@ type SearchArticle = {
   keywords: string[];
   journalTitle: string;
   journalSlug: string;
+  journalShortTitle?: string;
+  coverImageUrl?: string | null;
+  coverColor?: string;
   publishedAt: string;
   volume?: string;
   issue?: string;
@@ -87,7 +91,10 @@ export async function GET(request: Request) {
           deletedAt: null,
           ...journalFilter,
         },
-        include: { journal: true },
+        include: {
+          journal: true,
+          submission: { select: { manuscriptUrl: true } },
+        },
         orderBy: { publishedAt: "desc" },
         take: 150,
       }),
@@ -137,12 +144,17 @@ export async function GET(request: Request) {
         keywords: a.keywords,
         journalTitle: a.journal.title,
         journalSlug: a.journal.slug,
+        journalShortTitle: a.journal.shortTitle,
+        coverImageUrl: a.journal.coverImageUrl,
+        coverColor: a.journal.coverColor,
         publishedAt: a.publishedAt.toISOString().slice(0, 10),
         volume: a.volume ?? undefined,
         issue: a.issue ?? undefined,
         views: a.views,
         downloads: a.downloads,
-        hasPdf: Boolean(a.manuscriptUrl),
+        hasPdf: Boolean(
+          resolvePublishedPdfUrl(a.manuscriptUrl, a.submission?.manuscriptUrl),
+        ),
       }));
 
     journalResults = dbJournals.map((j) => ({

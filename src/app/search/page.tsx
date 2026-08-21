@@ -45,7 +45,7 @@ function SearchPageInner() {
   const searchParams = useSearchParams();
   const initialQ = searchParams.get("q") ?? "";
   const initialJournal = searchParams.get("journal") ?? "";
-  const initialType = searchParams.get("type") ?? "all";
+  const initialType = searchParams.get("type") ?? "articles";
 
   const [q, setQ] = useState(initialQ);
   const [journal, setJournal] = useState(initialJournal);
@@ -58,7 +58,7 @@ function SearchPageInner() {
   useEffect(() => {
     setQ(searchParams.get("q") ?? "");
     setJournal(searchParams.get("journal") ?? "");
-    setType(searchParams.get("type") ?? "all");
+    setType(searchParams.get("type") ?? "articles");
   }, [searchParams]);
 
   useEffect(() => {

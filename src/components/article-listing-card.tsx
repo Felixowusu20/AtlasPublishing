@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArticleMetrics } from "@/components/article-metrics";
 import { authorDisplayName } from "@/lib/orcid";
+import { articleDownloadPath } from "@/lib/submission-utils";
 
 export type ArticleCardData = {
   slug: string;
@@ -37,14 +38,13 @@ function typeLabel(articleType: string) {
 export function ArticleListingCard({
   article,
   showAbstract = true,
-  compact = false,
 }: Props) {
   const doi =
     article.doi && article.doi !== "Pending" ? article.doi : null;
   const href = `/articles/${article.slug}`;
 
   return (
-    <article className="group w-full min-w-0 max-w-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--line)] transition hover:-translate-y-0.5 hover:shadow-md hover:ring-[var(--accent)]/25">
+    <article className="group flex h-full w-full min-w-0 max-w-full flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--line)] transition hover:-translate-y-0.5 hover:shadow-md hover:ring-[var(--accent)]/25">
       {/* Accent strip — mirrors article page masthead bar */}
       <div className="flex min-w-0 items-stretch bg-[var(--accent)] text-white">
         <Link
@@ -58,8 +58,8 @@ export function ArticleListingCard({
         </span>
       </div>
 
-      <div className={`min-w-0 ${compact ? "p-4 sm:p-5" : "p-4 sm:p-6"}`}>
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5">
+        <div className="flex min-h-[1.5rem] flex-wrap items-center gap-2">
           {article.openAccess ? (
             <span className="inline-flex items-center gap-1 rounded bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:text-[11px]">
               <svg
@@ -89,13 +89,7 @@ export function ArticleListingCard({
         </div>
 
         <Link href={href} className="block min-w-0">
-          <h3
-            className={`mt-2.5 break-words text-pretty font-semibold leading-snug text-[var(--ink)] transition group-hover:text-[var(--accent)] ${
-              compact
-                ? "font-[family-name:var(--font-display)] text-base sm:text-lg"
-                : "font-[family-name:var(--font-display)] text-lg sm:text-xl"
-            }`}
-          >
+          <h3 className="mt-2.5 break-words text-pretty font-[family-name:var(--font-display)] text-base font-semibold leading-snug text-[var(--ink)] transition group-hover:text-[var(--accent)] sm:text-lg">
             {article.title}
           </h3>
         </Link>
@@ -105,24 +99,21 @@ export function ArticleListingCard({
           {article.authors.length > 4 ? " et al." : ""}
         </p>
 
-        {showAbstract && article.abstract ? (
-          <p
-            className={`mt-3 break-words text-justify text-[15px] leading-relaxed text-[var(--ink)]/90 sm:text-base ${
-              compact ? "line-clamp-3" : "line-clamp-4"
-            }`}
-          >
-            {article.abstract}
+        {showAbstract ? (
+          <p className="mt-3 min-h-[4.5rem] break-words text-justify text-[15px] leading-relaxed text-[var(--ink)]/90 line-clamp-3 sm:text-base">
+            {article.abstract?.trim() || "\u00a0"}
           </p>
         ) : null}
 
-        {article.keywords && article.keywords.length > 0 ? (
-          <p className="mt-3 break-words text-justify text-xs font-medium leading-relaxed text-[var(--accent)] sm:text-[13px]">
-            {article.keywords.slice(0, 5).join(", ")}
-            {article.keywords.length > 5 ? "…" : ""}
-          </p>
-        ) : null}
+        <p className="mt-3 min-h-[2.4rem] break-words text-justify text-xs font-medium leading-relaxed text-[var(--accent)] line-clamp-2 sm:text-[13px]">
+          {article.keywords && article.keywords.length > 0
+            ? `${article.keywords.slice(0, 5).join(", ")}${
+                article.keywords.length > 5 ? "…" : ""
+              }`
+            : "\u00a0"}
+        </p>
 
-        <div className="mt-4 flex min-w-0 flex-col gap-3 border-t border-[var(--line)] pt-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="mt-auto flex min-w-0 flex-col gap-3 border-t border-[var(--line)] pt-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-col gap-1.5 text-xs text-[var(--muted)] sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1 sm:text-[13px]">
             {doi ? (
               <Link
@@ -147,9 +138,9 @@ export function ArticleListingCard({
           </div>
 
           <div className="flex shrink-0 items-center gap-4">
-            {article.hasPdf && doi ? (
+            {article.hasPdf ? (
               <a
-                href={`/doi/${doi}?download=1`}
+                href={articleDownloadPath(article.slug)}
                 className="text-sm font-semibold text-[var(--ink)] hover:text-[var(--accent)]"
               >
                 PDF

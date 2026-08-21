@@ -341,7 +341,7 @@ export default function PublishedArticlesPage() {
       logoUrl: sub.journal.coverImageUrl || "",
       body: savedBody,
       figures: parseFigures(sub.productionFigures),
-      pdfUrl: "",
+      pdfUrl: sub.manuscriptUrl || "",
     });
 
     void fetch(
@@ -1203,8 +1203,8 @@ export default function PublishedArticlesPage() {
                     </p>
                     <p className="mt-1 text-[11px] text-[var(--muted)]">
                       Print the live preview (Save as PDF) or upload a Word /
-                      Google Docs export. Optional — you can still publish
-                      without it.
+                      Google Docs export. If you skip this, the author’s
+                      submitted manuscript stays downloadable after publish.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button

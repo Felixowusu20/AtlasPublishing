@@ -1,43 +1,85 @@
 import Link from "next/link";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
-import { authorDisplayName } from "@/lib/orcid";
+import {
+  buildApaCitation,
+  type ApaCitationInput,
+} from "@/lib/apa-citation";
 
-type Props = {
-  authors: string[];
-  title: string;
-  journalTitle: string;
+type Props = ApaCitationInput & {
   journalSlug?: string;
-  publishedAt: string;
-  doi: string;
   /** Compact sidebar variant vs full footer */
   variant?: "card" | "banner";
   className?: string;
 };
 
-/** Plain-text citation for copy / share actions. */
-export function buildCitationText(opts: {
-  authors: string[];
-  title: string;
-  journalTitle: string;
-  publishedAt: string;
-  doi: string;
+/** Plain-text APA 7 citation for copy / share actions. */
+export function buildCitationText(opts: ApaCitationInput) {
+  return buildApaCitation(opts).text;
+}
+
+function ApaCitationText({
+  citation,
+  isBanner,
+  journalSlug,
+}: {
+  citation: ReturnType<typeof buildApaCitation>;
+  isBanner: boolean;
+  journalSlug?: string;
 }) {
-  const names = opts.authors.map(authorDisplayName).filter(Boolean);
-  const authorLabel =
-    names.length === 0
-      ? "Author"
-      : names.length === 1
-        ? names[0]
-        : names.length === 2
-          ? `${names[0]} & ${names[1]}`
-          : `${names[0]} et al.`;
-  const doiPart =
-    opts.doi && opts.doi !== "Pending" ? ` DOI: ${normalizeDoi(opts.doi)}` : "";
-  return `${authorLabel}. ${opts.title}. ${opts.journalTitle}. ${opts.publishedAt}.${doiPart}`;
+  const ink = isBanner ? "text-white" : "text-[var(--ink)]";
+  const journalClass = "italic text-[var(--brand-orange)]";
+  const hasLocator = Boolean(
+    citation.volume || citation.issue || citation.pages,
+  );
+  const doiHref = citation.doiUrl
+    ? atlasDoiPath(
+        normalizeDoi(citation.doiUrl.replace(/^https?:\/\/doi\.org\//i, "")),
+      )
+    : null;
+
+  return (
+    <p className={`text-[15px] leading-[1.75] sm:text-base ${ink}`}>
+      <span className="font-medium">{citation.authors}</span>
+      {` (${citation.year}). ${citation.title}${/[.?!]$/.test(citation.title) ? "" : "."} `}
+      {journalSlug ? (
+        <Link
+          href={`/journals/${journalSlug}`}
+          className={`${journalClass} hover:underline`}
+        >
+          {citation.journal}
+        </Link>
+      ) : (
+        <span className={journalClass}>{citation.journal}</span>
+      )}
+      {hasLocator ? ", " : "."}
+      {citation.volume ? <em>{citation.volume}</em> : null}
+      {citation.issue ? <span>({citation.issue})</span> : null}
+      {citation.pages ? (
+        <span>
+          {citation.volume || citation.issue ? ", " : null}
+          {citation.pages}
+        </span>
+      ) : null}
+      {hasLocator ? "." : null}
+      {citation.doiUrl && doiHref ? (
+        <>
+          {" "}
+          <a
+            href={doiHref}
+            className={`break-all underline-offset-2 hover:underline ${
+              isBanner ? "text-emerald-200" : "text-[var(--accent)]"
+            }`}
+          >
+            {citation.doiUrl}
+          </a>
+        </>
+      ) : null}
+    </p>
+  );
 }
 
 /**
- * How-to-cite block with spaced parts and Nahda brand accents.
+ * How-to-cite block shown as a single APA 7th-edition paragraph.
  */
 export function ArticleCitation({
   authors,
@@ -45,20 +87,23 @@ export function ArticleCitation({
   journalTitle,
   journalSlug,
   publishedAt,
+  volume,
+  issue,
+  pages,
   doi,
   variant = "card",
   className = "",
 }: Props) {
-  const names = authors.map(authorDisplayName).filter(Boolean);
-  const authorList =
-    names.length === 0
-      ? ["Author"]
-      : names.length <= 3
-        ? names
-        : [...names.slice(0, 2), `et al.`];
-
-  const doiNorm = doi && doi !== "Pending" ? normalizeDoi(doi) : null;
-  const doiHref = doiNorm ? atlasDoiPath(doiNorm) : null;
+  const citation = buildApaCitation({
+    authors,
+    title,
+    journalTitle,
+    publishedAt,
+    volume,
+    issue,
+    pages,
+    doi,
+  });
   const isBanner = variant === "banner";
 
   return (
@@ -70,152 +115,42 @@ export function ArticleCitation({
       } ${className}`}
     >
       <div
-        className={`flex items-center gap-2 border-b px-4 py-3 sm:px-5 ${
+        className={`flex items-center justify-between gap-2 border-b px-4 py-3 sm:px-5 ${
           isBanner
             ? "border-white/10 bg-[var(--accent)]/25"
             : "border-[var(--line)] bg-[linear-gradient(90deg,var(--accent-soft),white_70%)]"
         }`}
       >
-        <span
-          className={`h-2 w-2 rounded-full ${
-            isBanner ? "bg-[var(--brand-orange)]" : "bg-[var(--accent)]"
-          }`}
-        />
-        <figcaption
-          className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${
-            isBanner ? "text-white/75" : "text-[var(--accent)]"
-          }`}
-        >
-          How to cite
-        </figcaption>
-      </div>
-
-      <div className="space-y-4 px-4 py-5 sm:px-5 sm:py-6">
-        {/* Authors */}
-        <p
-          className={`flex flex-wrap items-baseline gap-x-1 gap-y-1 text-[14px] leading-relaxed sm:text-[15px] ${
-            isBanner ? "text-white" : "text-[var(--ink)]"
-          }`}
-        >
-          {authorList.map((name, i) => {
-            const isEtAl = name === "et al.";
-            const isLast = i === authorList.length - 1;
-            const sep =
-              isLast || isEtAl
-                ? ""
-                : i === authorList.length - 2
-                  ? authorList[authorList.length - 1] === "et al."
-                    ? " "
-                    : " & "
-                  : ", ";
-            return (
-              <span key={`${name}-${i}`}>
-                <span
-                  className={
-                    isEtAl
-                      ? isBanner
-                        ? "italic text-white/65"
-                        : "italic text-[var(--muted)]"
-                      : isBanner
-                        ? "font-semibold text-emerald-200"
-                        : "font-semibold text-[var(--accent)]"
-                  }
-                >
-                  {name}
-                </span>
-                {sep ? (
-                  <span className={isBanner ? "text-white/40" : "text-[var(--muted)]"}>
-                    {sep}
-                  </span>
-                ) : null}
-              </span>
-            );
-          })}
-        </p>
-
-        {/* Title */}
-        <p
-          className={`font-[family-name:var(--font-display)] text-[1.05rem] font-semibold leading-snug tracking-tight sm:text-[1.15rem] ${
-            isBanner ? "text-white" : "text-[var(--ink)]"
-          }`}
-        >
-          {title}
-        </p>
-
-        {/* Journal · date */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
-          {journalSlug ? (
-            <Link
-              href={`/journals/${journalSlug}`}
-              className={`font-semibold transition ${
-                isBanner
-                  ? "text-[var(--brand-orange)] hover:text-[#e8835a]"
-                  : "text-[var(--brand-orange)] hover:underline"
-              }`}
-            >
-              {journalTitle}
-            </Link>
-          ) : (
-            <span
-              className={`font-semibold ${
-                isBanner ? "text-[var(--brand-orange)]" : "text-[var(--brand-orange)]"
-              }`}
-            >
-              {journalTitle}
-            </span>
-          )}
+        <div className="flex items-center gap-2">
           <span
-            className={`select-none ${isBanner ? "text-white/35" : "text-[var(--line)]"}`}
-            aria-hidden
-          >
-            ·
-          </span>
-          <time
-            className={
-              isBanner ? "tabular-nums text-white/70" : "tabular-nums text-[var(--muted)]"
-            }
-          >
-            {publishedAt}
-          </time>
-        </div>
-
-        {/* DOI */}
-        {doiNorm ? (
-          <div
-            className={`flex flex-wrap items-center gap-2 rounded-xl px-3.5 py-3 ${
-              isBanner
-                ? "bg-white/8 ring-1 ring-white/15"
-                : "bg-[var(--accent-soft)]/70 ring-1 ring-[var(--accent)]/15"
+            className={`h-2 w-2 rounded-full ${
+              isBanner ? "bg-[var(--brand-orange)]" : "bg-[var(--accent)]"
+            }`}
+          />
+          <figcaption
+            className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${
+              isBanner ? "text-white/75" : "text-[var(--accent)]"
             }`}
           >
-            <span
-              className={`text-[10px] font-bold uppercase tracking-[0.16em] ${
-                isBanner ? "text-[var(--brand-orange)]" : "text-[var(--accent)]"
-              }`}
-            >
-              DOI
-            </span>
-            {doiHref ? (
-              <a
-                href={doiHref}
-                className={`min-w-0 break-all text-[13px] font-semibold underline-offset-2 hover:underline ${
-                  isBanner ? "text-white" : "text-[var(--ink)]"
-                }`}
-              >
-                {doiNorm}
-              </a>
-            ) : (
-              <span
-                className={`min-w-0 break-all text-[13px] font-semibold ${
-                  isBanner ? "text-white" : "text-[var(--ink)]"
-                }`}
-              >
-                {doiNorm}
-              </span>
-            )}
-          </div>
-        ) : null}
+            Cite this article
+          </figcaption>
+        </div>
+        <span
+          className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${
+            isBanner ? "text-white/50" : "text-[var(--muted)]"
+          }`}
+        >
+          APA 7th
+        </span>
       </div>
+
+      <blockquote className="px-4 py-5 sm:px-5 sm:py-6">
+        <ApaCitationText
+          citation={citation}
+          isBanner={isBanner}
+          journalSlug={journalSlug}
+        />
+      </blockquote>
     </figure>
   );
 }

@@ -198,7 +198,11 @@ export async function POST(request: Request) {
       return jsonError(`DOI already in use: ${doi}`, 400);
     }
 
-    const publishedPdfUrl = body.pdfUrl || null;
+    const publishedPdfUrl =
+      body.pdfUrl ||
+      previous?.manuscriptUrl ||
+      submission.manuscriptUrl ||
+      null;
 
     const articleData = {
       title: body.title,
