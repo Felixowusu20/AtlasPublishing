@@ -44,7 +44,7 @@ export async function chromePrintToPdf(html: string): Promise<Buffer> {
     await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
     await page.emulateMediaType("print");
     await page.setContent(html, {
-      waitUntil: "networkidle0",
+      waitUntil: "load",
       timeout: 60000,
     });
     await page.evaluate(async () => {
