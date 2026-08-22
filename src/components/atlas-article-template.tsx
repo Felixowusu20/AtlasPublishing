@@ -35,6 +35,19 @@ type Props = {
   journalUrl?: string;
 };
 
+function AbstractHtml({ abstract }: { abstract: string }) {
+  const html = ensureManuscriptHtml(abstract);
+  if (!html) {
+    return <p>Abstract will appear here.</p>;
+  }
+  return (
+    <div
+      className="nahda-abstract-html"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
 function ArticleBodyHtml({ body }: { body?: string }) {
   if (!body?.trim()) return null;
   const html = ensureManuscriptHtml(body);
@@ -81,20 +94,23 @@ function RunningFooter({
             © {year} The Authors. Published by Nahda Publications
           </p>
         </div>
-        <div className="min-w-0 text-left sm:max-w-[55%] sm:text-right">
-          <a
-            href={doiHref}
-            target="_blank"
-            rel="noreferrer"
-            className="break-all text-[11px] font-medium hover:underline"
-            style={{ color: "var(--j-link)" }}
-          >
-            {doiLabel}
-          </a>
-          <p className="mt-0.5 text-[10px] text-[#0b1f33]">
-            <em>{journalShortTitle || journalTitle || "Journal"}</em>
-            {citeBits.length > 0 ? ` ${citeBits.join(", ")}` : ` ${year}`}
-          </p>
+        <div className="flex min-w-0 items-end justify-end gap-3 sm:max-w-[55%]">
+          <div className="min-w-0 text-left sm:text-right">
+            <a
+              href={doiHref}
+              target="_blank"
+              rel="noreferrer"
+              className="break-all text-[11px] font-medium hover:underline"
+              style={{ color: "var(--j-link)" }}
+            >
+              {doiLabel}
+            </a>
+            <p className="mt-0.5 text-[10px] text-[#0b1f33]">
+              <em>{journalShortTitle || journalTitle || "Journal"}</em>
+              {citeBits.length > 0 ? ` ${citeBits.join(", ")}` : ` ${year}`}
+            </p>
+          </div>
+          <span className="nahda-print-folio" aria-hidden />
         </div>
       </div>
     </footer>
@@ -197,7 +213,7 @@ export function NahdaArticleTemplate({
     <article
       id="nahda-article-template"
       lang="en"
-      className="nahda-article mx-auto max-w-[820px] bg-white text-[#0b1f33] shadow-sm"
+      className="nahda-article mx-auto max-w-[820px] bg-white text-[#0b1f33]"
       style={
         {
           fontFamily: "Georgia, 'Times New Roman', serif",
@@ -416,9 +432,7 @@ export function NahdaArticleTemplate({
           >
             Abstract
           </h2>
-          <p>
-            {reflowArticleText(abstract) || "Abstract will appear here."}
-          </p>
+          <AbstractHtml abstract={abstract} />
         </section>
 
         {keywords.length > 0 && (

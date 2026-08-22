@@ -563,6 +563,7 @@ input[type="search"]::-webkit-search-results-decoration {
 .nahda-article {
   position: relative;
   overflow: visible;
+  border-radius: 0;
 }
 
 .nahda-article-inner {
@@ -578,7 +579,9 @@ input[type="search"]::-webkit-search-results-decoration {
   margin: 1.15em 0 0;
 }
 
-.nahda-article-abstract p {
+.nahda-article-abstract p,
+.nahda-abstract-html,
+.nahda-abstract-html p {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -593,6 +596,65 @@ input[type="search"]::-webkit-search-results-decoration {
   word-break: normal;
   white-space: normal;
   color: #0b1f33;
+}
+
+.nahda-abstract-html p[style*="text-align: left"],
+.nahda-abstract-html p[style*="text-align:left"],
+.nahda-abstract-html [style*="text-align: left"],
+.nahda-abstract-html [style*="text-align:left"] {
+  text-align: left;
+  text-align-last: left;
+}
+
+.nahda-abstract-html p[style*="text-align: center"],
+.nahda-abstract-html p[style*="text-align:center"],
+.nahda-abstract-html [style*="text-align: center"],
+.nahda-abstract-html [style*="text-align:center"] {
+  text-align: center;
+  text-align-last: center;
+}
+
+.nahda-abstract-html p[style*="text-align: right"],
+.nahda-abstract-html p[style*="text-align:right"],
+.nahda-abstract-html [style*="text-align: right"],
+.nahda-abstract-html [style*="text-align:right"] {
+  text-align: right;
+  text-align-last: right;
+}
+
+.nahda-abstract-html p[style*="text-align: justify"],
+.nahda-abstract-html p[style*="text-align:justify"] {
+  text-align: justify;
+  text-align-last: left;
+}
+
+.nahda-abstract-html strong,
+.nahda-abstract-html b {
+  font-weight: 700;
+}
+
+.nahda-abstract-html em,
+.nahda-abstract-html i {
+  font-style: italic;
+}
+
+.nahda-abstract-html u {
+  text-decoration: underline;
+}
+
+.nahda-abstract-html s,
+.nahda-abstract-html strike {
+  text-decoration: line-through;
+}
+
+.nahda-abstract-html sup {
+  font-size: 0.72em;
+  vertical-align: super;
+}
+
+.nahda-abstract-html sub {
+  font-size: 0.72em;
+  vertical-align: sub;
 }
 
 .nahda-article-front {
@@ -736,9 +798,12 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .nahda-running-footer {
   position: relative;
-  z-index: 1;
-  background: white;
-  padding: 0.55rem 2rem 0.7rem;
+  z-index: 0;
+  background: transparent;
+  padding: 0.55rem 0 0;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .nahda-running-footer img {
@@ -761,7 +826,13 @@ input[type="search"]::-webkit-search-results-decoration {
 
   @page {
     size: A4;
-    margin: 12mm 14mm 16mm;
+    margin: 12mm 14mm 18mm;
+    @bottom-right {
+      content: counter(page);
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 8pt;
+      color: #5b6b7c;
+    }
   }
 
   html,
@@ -790,11 +861,40 @@ input[type="search"]::-webkit-search-results-decoration {
     height: auto !important;
   }
 
+  .rounded-xl,
+  .rounded-2xl,
+  .rounded-lg,
+  .shadow-sm,
+  .shadow-xl {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .nahda-article,
+  .nahda-article-inner,
+  .nahda-print-frame,
+  .nahda-article-flow,
+  .nahda-article-body,
+  .nahda-article-front,
+  .nahda-article-abstract,
+  .nahda-keywords {
+    border-radius: 0 !important;
+    overflow: visible !important;
+    clip-path: none !important;
+    -webkit-clip-path: none !important;
+  }
+
+  .nahda-article img,
+  .nahda-article-body img {
+    border-radius: 0 !important;
+  }
+
   .nahda-article {
     position: static !important;
     box-shadow: none !important;
     outline: none !important;
     border: none !important;
+    border-radius: 0 !important;
     max-width: none !important;
     overflow: visible !important;
     background: white !important;
@@ -975,6 +1075,7 @@ input[type="search"]::-webkit-search-results-decoration {
     padding: 0 !important;
     border: none !important;
     border-top: none !important;
+    box-shadow: none !important;
     background: transparent !important;
     break-inside: avoid;
   }
@@ -1003,5 +1104,93 @@ input[type="search"]::-webkit-search-results-decoration {
     font-size: 7.5px !important;
     line-height: 1.2 !important;
     margin: 0 !important;
+  }
+}
+
+.nahda-print-folio {
+  display: none;
+  min-width: 1.25rem;
+  flex-shrink: 0;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 8pt;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #5b6b7c;
+  text-align: right;
+}
+
+/* Off-screen HTML source for the print-layout PDF (not the rounded preview). */
+.nahda-pdf-source {
+  position: absolute;
+  left: -12000px;
+  top: 0;
+  width: 210mm;
+  background: #fff;
+  pointer-events: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.nahda-pdf-print,
+.nahda-pdf-print.nahda-article {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+  max-width: none !important;
+  overflow: visible !important;
+  clip-path: none !important;
+  background: #fff !important;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.nahda-pdf-print img,
+.nahda-pdf-print header,
+.nahda-pdf-print .nahda-article-inner,
+.nahda-pdf-print .nahda-article-flow,
+.nahda-pdf-print .nahda-article-body,
+.nahda-pdf-print .nahda-article-front,
+.nahda-pdf-print .nahda-print-frame {
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+
+.nahda-pdf-print header,
+.nahda-pdf-print .nahda-article-inner {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.nahda-pdf-print .nahda-article-flow {
+  column-count: 2 !important;
+  column-fill: auto !important;
+  column-gap: 7mm !important;
+}
+
+.nahda-pdf-print .nahda-article-flow .nahda-article-body {
+  display: contents !important;
+}
+
+.nahda-pdf-print .nahda-running-footer,
+.nahda-pdf-print .nahda-print-frame > tfoot,
+.nahda-pdf-print .nahda-web-only {
+  display: none !important;
+}
+
+.nahda-pdf-print .nahda-article-flow p,
+.nahda-pdf-print .nahda-article-flow li,
+.nahda-pdf-print .nahda-article-abstract p {
+  orphans: 3;
+  widows: 3;
+}
+
+@media print {
+  .nahda-print-folio {
+    display: block !important;
+  }
+
+  .nahda-pdf-source {
+    display: none !important;
   }
 }

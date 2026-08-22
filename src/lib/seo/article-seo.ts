@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { ScholarArticleInput } from "@/lib/seo/scholar";
 import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
+import { htmlToPlainText } from "@/lib/import-manuscript";
 
 const articleSelect = {
   slug: true,
@@ -84,7 +85,8 @@ export function validateScholarReadiness(input: {
 
   if (!input.title?.trim()) errors.push("Missing article title");
   if (!input.authors?.length) errors.push("Missing authors");
-  if (!input.abstract?.trim() || (input.abstract?.trim().length ?? 0) < 40) {
+  const abstractText = htmlToPlainText(input.abstract ?? "").trim();
+  if (!abstractText || abstractText.length < 40) {
     errors.push("Abstract missing or too short for indexing");
   }
   if (!input.publishedAt) errors.push("Missing publication date");

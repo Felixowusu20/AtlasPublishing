@@ -84,15 +84,28 @@ export function articleDownloadPath(slug: string) {
   return `/api/articles/${encodeURIComponent(slug)}/download`;
 }
 
+/** True when the URL is a typeset Nahda PDF, not a Word/Office upload. */
+export function isTypesetPdfUrl(url?: string | null) {
+  const value = url?.trim() ?? "";
+  if (!value) return false;
+  const lower = value.toLowerCase();
+  if (/\.(docx?|xlsx?|pptx?|rtf|odt|zip)(\?|#|$)/i.test(lower)) return false;
+  if (lower.includes("published-pdfs")) return true;
+  if (/\.pdf(\?|#|$)/i.test(lower)) return true;
+  return false;
+}
+
 /**
- * File readers should download: a typeset PDF if one was uploaded at
- * publish, otherwise the author's original manuscript.
+ * Public download should be the Nahda-styled PDF created at publish,
+ * never the author's original Word / Google Docs file.
  */
 export function resolvePublishedPdfUrl(
   publishedUrl?: string | null,
   submissionUrl?: string | null,
 ) {
-  return publishedUrl?.trim() || submissionUrl?.trim() || null;
+  if (isTypesetPdfUrl(publishedUrl)) return publishedUrl!.trim();
+  if (isTypesetPdfUrl(submissionUrl)) return submissionUrl!.trim();
+  return null;
 }
 
 /** Logged-in author checkout (no manuscript viewer). */

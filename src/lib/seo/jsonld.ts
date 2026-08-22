@@ -1,6 +1,7 @@
 import { absoluteUrl, articleCanonicalPath, articlePdfUrl } from "@/lib/seo/scholar";
 import { normalizeDoi } from "@/lib/doi";
 import { orcidUrl, parseAuthorOrcid } from "@/lib/orcid";
+import { htmlToPlainText } from "@/lib/import-manuscript";
 
 type ScholarlyArticleJsonLdInput = {
   slug: string;
@@ -89,7 +90,7 @@ export function scholarlyArticleJsonLd(article: ScholarlyArticleJsonLdInput) {
     mainEntityOfPage: url,
     headline: article.title,
     name: article.title,
-    description: article.abstract,
+    description: htmlToPlainText(article.abstract),
     datePublished: published,
     author: authors,
     isPartOf,

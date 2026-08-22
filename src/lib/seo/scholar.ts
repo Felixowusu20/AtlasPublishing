@@ -3,6 +3,7 @@ import { getAppBaseUrlOptional } from "@/lib/app-url";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
 import { authorDisplayName } from "@/lib/orcid";
 import { articleDownloadPath } from "@/lib/submission-utils";
+import { htmlToPlainText } from "@/lib/import-manuscript";
 
 /** Absolute site origin for SEO tags (never throws). */
 export function seoBaseUrl(): string {
@@ -88,7 +89,7 @@ export function buildArticleMetadata(article: ScholarArticleInput): Metadata {
   const { first, last } = parsePageRange(article.pages);
   const date = formatScholarDate(article.publishedAt);
   const description =
-    article.abstract.replace(/\s+/g, " ").trim().slice(0, 320) ||
+    htmlToPlainText(article.abstract).replace(/\s+/g, " ").trim().slice(0, 320) ||
     `${article.title} — ${article.journal.title}`;
 
   const other: Record<string, string | string[]> = {

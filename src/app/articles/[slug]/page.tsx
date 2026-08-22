@@ -17,6 +17,7 @@ import { JsonLd } from "@/components/json-ld";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
 import { formatArticleDate } from "@/lib/article-dates";
 import { authorDisplayName } from "@/lib/orcid";
+import { ensureManuscriptHtml } from "@/lib/import-manuscript";
 import {
   ArticleMasthead,
   type MastheadRecommendation,
@@ -340,9 +341,14 @@ function ArticleView({
                   </h2>
                   <div className="h-px flex-1 bg-[var(--line)]" />
                 </div>
-                <p className="mt-4 text-justify text-[15px] leading-[1.75] text-[var(--ink)] [text-align-last:left] hyphens-auto sm:text-[16px] sm:leading-[1.8] first-letter:mr-2 first-letter:font-[family-name:var(--font-display)] first-letter:text-[2rem] first-letter:font-semibold first-letter:leading-[0.85] first-letter:text-[var(--accent)] max-sm:first-letter:float-none sm:first-letter:float-left sm:first-letter:text-[2.75rem]">
-                  {article.abstract}
-                </p>
+                <div
+                  className="nahda-abstract-html mt-4 text-justify text-[15px] leading-[1.75] text-[var(--ink)] [text-align-last:left] hyphens-auto sm:text-[16px] sm:leading-[1.8]"
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      ensureManuscriptHtml(article.abstract) ||
+                      "<p>Abstract will appear here.</p>",
+                  }}
+                />
               </section>
 
               {article.keywords.length > 0 ? (

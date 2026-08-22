@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArticleMetrics } from "@/components/article-metrics";
 import { authorDisplayName } from "@/lib/orcid";
 import { articleDownloadPath } from "@/lib/submission-utils";
+import { htmlToPlainText } from "@/lib/import-manuscript";
 
 export type ArticleCardData = {
   slug: string;
@@ -101,7 +102,7 @@ export function ArticleListingCard({
 
         {showAbstract ? (
           <p className="mt-3 min-h-[4.5rem] break-words text-justify text-[15px] leading-relaxed text-[var(--ink)]/90 line-clamp-3 sm:text-base">
-            {article.abstract?.trim() || "\u00a0"}
+            {htmlToPlainText(article.abstract ?? "").trim() || "\u00a0"}
           </p>
         ) : null}
 

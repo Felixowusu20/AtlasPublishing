@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   // Avoid streaming-metadata hydration mismatches in browsers
   // (MetadataWrapper <div hidden> vs whitespace).
   htmlLimitedBots: /.*/,
+  serverExternalPackages: ["puppeteer-core"],
   experimental: {
     proxyClientMaxBodySize: "50mb",
     serverActions: {

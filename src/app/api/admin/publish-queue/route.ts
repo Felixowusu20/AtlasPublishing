@@ -8,6 +8,7 @@ import {
   progressForStatus,
   slugify,
   articleDownloadPath,
+  isTypesetPdfUrl,
 } from "@/lib/submission-utils";
 import {
   allocateNextAtlasDoi,
@@ -18,6 +19,7 @@ import {
 import { getAppBaseUrl } from "@/lib/app-url";
 import { validateScholarReadiness, issueKey } from "@/lib/seo/article-seo";
 import { articleDateYear, parseArticleDate } from "@/lib/article-dates";
+import { ensureManuscriptHtml, htmlToPlainText } from "@/lib/import-manuscript";
 
 /** Accepted manuscripts waiting to be published into the journal template. */
 export async function GET() {
@@ -73,7 +75,7 @@ const publishSchema = z.object({
   doi: z.string().optional(),
   authors: z.array(z.string()).min(1),
   affiliations: z.array(z.string()).optional(),
-  abstract: z.string().min(10),
+  abstract: z.string().min(1),
   keywords: z.array(z.string()).optional(),
   articleType: z.string().min(1),
   volume: z.string().optional(),
@@ -177,6 +179,10 @@ export async function POST(request: Request) {
     const receivedAt = parseArticleDate(body.receivedAt);
     const acceptedAt = parseArticleDate(body.acceptedAt);
     const publishedAt = parseArticleDate(body.publishedAt) ?? new Date();
+    const abstract = ensureManuscriptHtml(body.abstract);
+    if (htmlToPlainText(abstract).trim().length < 10) {
+      return jsonError("Add an abstract before publishing.");
+    }
     const publishYear = articleDateYear(body.publishedAt);
     let doi = body.doi?.trim()
       ? normalizeDoi(body.doi)
@@ -199,10 +205,17 @@ export async function POST(request: Request) {
     }
 
     const publishedPdfUrl =
-      body.pdfUrl ||
-      previous?.manuscriptUrl ||
-      submission.manuscriptUrl ||
-      null;
+      body.pdfUrl && isTypesetPdfUrl(body.pdfUrl)
+        ? body.pdfUrl
+        : previous?.manuscriptUrl && isTypesetPdfUrl(previous.manuscriptUrl)
+          ? previous.manuscriptUrl
+          : null;
+    if (!publishedPdfUrl) {
+      return jsonError(
+        "Generate the Nahda-styled PDF from the article template before publishing. The original Word or Google Docs file is not used as the public download.",
+        400,
+      );
+    }
 
     const articleData = {
       title: body.title,
@@ -221,7 +234,7 @@ export async function POST(request: Request) {
       articleType: body.articleType,
       openAccess: body.openAccess ?? true,
       license: body.license || "CC BY 4.0",
-      abstract: body.abstract,
+      abstract,
       keywords: body.keywords ?? submission.keywords,
       manuscriptUrl: publishedPdfUrl,
       coverImageUrl:

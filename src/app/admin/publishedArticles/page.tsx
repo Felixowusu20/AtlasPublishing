@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { NahdaArticleTemplate } from "@/components/atlas-article-template";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
@@ -15,11 +16,17 @@ import { AuthorOrcidLine, OrcidIdIcon } from "@/components/orcid-id";
 import { useAutosave } from "@/hooks/use-autosave";
 import { uploadFileDirect } from "@/lib/client-upload";
 import {
+  articleTemplateToPdf,
+  nahdaPdfFile,
+  pdfErrorMessage,
+} from "@/lib/nahda-pdf";
+import {
   formatAuthorWithOrcid,
   normalizeOrcid,
   parseAuthorOrcid,
 } from "@/lib/orcid";
 import { htmlToPlainText } from "@/lib/import-manuscript";
+import { RichTextField } from "@/components/rich-text-field";
 import { journalArticlePalette } from "@/lib/journal-colors";
 import { formatArticleDate, toDateInputValue } from "@/lib/article-dates";
 
@@ -199,6 +206,10 @@ export default function PublishedArticlesPage() {
   const [publishing, setPublishing] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [publishPhase, setPublishPhase] = useState<
+    "idle" | "pdf" | "upload" | "publish"
+  >("idle");
+  const pdfSourceRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [draftDirty, setDraftDirty] = useState(false);
@@ -258,7 +269,9 @@ export default function PublishedArticlesPage() {
       keywords: splitList(f.keywords, ","),
     };
     if (f.title.trim().length >= 2) payload.title = f.title.trim();
-    if (f.abstract.trim().length >= 10) payload.abstract = f.abstract.trim();
+    if (htmlToPlainText(f.abstract).trim().length >= 10) {
+      payload.abstract = f.abstract.trim();
+    }
     try {
       const res = await fetch("/api/admin/manuscripts", {
         method: "PATCH",
@@ -341,7 +354,7 @@ export default function PublishedArticlesPage() {
       logoUrl: sub.journal.coverImageUrl || "",
       body: savedBody,
       figures: parseFigures(sub.productionFigures),
-      pdfUrl: sub.manuscriptUrl || "",
+      pdfUrl: "",
     });
 
     void fetch(
@@ -454,6 +467,10 @@ export default function PublishedArticlesPage() {
 
   async function onPdfUpload(file: File | null) {
     if (!file) return;
+    if (file.type && file.type !== "application/pdf") {
+      setError("Upload a Nahda PDF only — Word and Google Docs files stay in editing, not in the public download.");
+      return;
+    }
     setUploadingPdf(true);
     setError("");
     try {
@@ -465,6 +482,50 @@ export default function PublishedArticlesPage() {
       setSuccess("PDF uploaded and ready to publish.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "PDF upload failed");
+    } finally {
+      setUploadingPdf(false);
+    }
+  }
+
+  async function generateAndUploadPdf() {
+    try {
+      const root = pdfSourceRef.current;
+      if (!root) {
+        throw new Error(
+          "The Nahda template is still loading. Wait a moment and try again.",
+        );
+      }
+      const blob = await articleTemplateToPdf(root);
+      const file = nahdaPdfFile(form.title || selected?.title || "article", blob);
+      return await uploadFileDirect(file, {
+        folder: "atlas/published-pdfs",
+        resourceType: "raw",
+      });
+    } catch (err) {
+      console.error("[nahda-pdf]", err);
+      throw new Error(
+        pdfErrorMessage(
+          err,
+          "Could not generate the Nahda-styled PDF. Stay on this page and try Publish again.",
+        ),
+      );
+    }
+  }
+
+  async function onGeneratePdf() {
+    setUploadingPdf(true);
+    setError("");
+    setSuccess("");
+    try {
+      if (draftDirty) await persistDraft();
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+      const uploaded = await generateAndUploadPdf();
+      setForm((f) => ({ ...f, pdfUrl: uploaded.url }));
+      setSuccess("Nahda-styled PDF generated from the template. Open it to proof, then publish.");
+    } catch (err) {
+      setError(
+        pdfErrorMessage(err, "Could not generate the Nahda PDF from the template."),
+      );
     } finally {
       setUploadingPdf(false);
     }
@@ -493,6 +554,7 @@ export default function PublishedArticlesPage() {
     if (!selected) return;
     if (draftDirty) await persistDraft();
     setPublishing(true);
+    setPublishPhase("pdf");
     setError("");
     setSuccess("");
 
@@ -502,10 +564,37 @@ export default function PublishedArticlesPage() {
 
     if (!authors.length) {
       setPublishing(false);
+      setPublishPhase("idle");
       setError("Add at least one author name.");
       return;
     }
+    if (htmlToPlainText(form.abstract).trim().length < 10) {
+      setPublishing(false);
+      setPublishPhase("idle");
+      setError("Add an abstract before publishing.");
+      return;
+    }
 
+    let pdfUrl = form.pdfUrl;
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+      const uploaded = await generateAndUploadPdf();
+      pdfUrl = uploaded.url;
+      setForm((f) => ({ ...f, pdfUrl }));
+      setPublishPhase("upload");
+    } catch (err) {
+      setPublishing(false);
+      setPublishPhase("idle");
+      setError(
+        pdfErrorMessage(
+          err,
+          "Could not generate the Nahda-styled PDF. Stay on this page and try Publish again.",
+        ),
+      );
+      return;
+    }
+
+    setPublishPhase("publish");
     const res = await fetch("/api/admin/publish-queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -535,17 +624,19 @@ export default function PublishedArticlesPage() {
           filename: f.filename,
           caption: f.caption,
         })),
-        pdfUrl: form.pdfUrl || undefined,
+        pdfUrl,
       }),
     });
     const contentType = res.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) {
       setPublishing(false);
+      setPublishPhase("idle");
       setError("Publish failed: server returned an unexpected response.");
       return;
     }
     const data = await res.json();
     setPublishing(false);
+    setPublishPhase("idle");
 
     if (!res.ok) {
       setError(data.error ?? "Publish failed");
@@ -611,6 +702,43 @@ export default function PublishedArticlesPage() {
       setActionBusy(false);
     }
   }
+
+  const publishButtonLabel = !publishing
+    ? "Publish and email author"
+    : publishPhase === "pdf" || publishPhase === "upload"
+      ? "Generating Nahda PDF…"
+      : "Publishing…";
+
+  const captureTemplate =
+    selected ? (
+      <NahdaArticleTemplate
+        journalTitle={selected.journal.title}
+        journalShortTitle={selected.journal.shortTitle}
+        journalSlug={selected.journal.slug}
+        coverColor={selected.journal.coverColor}
+        journalUrl={`/journals/${selected.journal.slug}`}
+        manuscriptId={selected.manuscriptId}
+        title={form.title}
+        authors={previewAuthors}
+        affiliations={previewAffiliations}
+        abstract={form.abstract}
+        keywords={previewKeywords}
+        articleType={form.articleType}
+        doi={form.doi}
+        volume={form.volume}
+        issue={form.issue}
+        pages={form.pages}
+        receivedAt={previewDates.receivedAt}
+        acceptedAt={previewDates.acceptedAt}
+        publishedAt={previewDates.publishedAt}
+        license={form.license}
+        openAccess={form.openAccess}
+        logoUrl={form.logoUrl || selected.journal.coverImageUrl || null}
+        funding={selected.funding}
+        conflictOfInterest={selected.conflictOfInterest}
+        body={form.body}
+      />
+    ) : null;
 
   return (
     <div>
@@ -706,7 +834,9 @@ export default function PublishedArticlesPage() {
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
             Edit metadata on this journal’s template, import Word or Google
-            Docs for the body, then print or upload a PDF and publish.
+            Docs only to fill the body, then publish. Nahda generates a
+            styled PDF from the reviewed template — readers never download
+            the original Word file.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -729,7 +859,13 @@ export default function PublishedArticlesPage() {
         </p>
       )}
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[300px_1fr] print:block">
+      <div
+        className={`mt-8 grid gap-6 print:block ${
+          selected
+            ? "lg:grid-cols-[220px_minmax(0,1fr)]"
+            : "lg:grid-cols-[300px_1fr]"
+        }`}
+      >
         <section className="print:hidden">
           <h2 className="text-sm font-semibold text-[var(--ink)]">
             Accepted queue
@@ -898,7 +1034,9 @@ export default function PublishedArticlesPage() {
               </div>
 
               {pane === "edit" ? (
-                <form onSubmit={onPublish} className="mt-5 space-y-3 print:hidden">
+                <form onSubmit={onPublish} className="mt-5 print:hidden">
+                  <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
+                    <div className="order-2 min-w-0 space-y-3 lg:order-1">
                   <div className="rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 p-4">
                     <p className="text-xs font-semibold text-[var(--ink)]">
                       Journal logo
@@ -1080,21 +1218,14 @@ export default function PublishedArticlesPage() {
                       }
                     />
                   </label>
-                  <label className="field">
-                    <span>Abstract</span>
-                    <textarea
-                      required
-                      rows={5}
-                      className="text-justify"
-                      value={form.abstract}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, abstract: e.target.value }))
-                      }
-                    />
-                    <span className="mt-1 block text-[11px] text-[var(--muted)]">
-                      Pre-filled from the accepted submission
-                    </span>
-                  </label>
+                  <RichTextField
+                    label="Abstract"
+                    value={form.abstract}
+                    onChange={(abstract) =>
+                      setForm((f) => ({ ...f, abstract }))
+                    }
+                    hint="Pre-filled from the accepted submission. Use the toolbar to bold, italicize, or justify."
+                  />
                   <label className="field">
                     <span>Keywords (comma-separated)</span>
                     <input
@@ -1105,304 +1236,337 @@ export default function PublishedArticlesPage() {
                     />
                   </label>
 
-                  <div className="overflow-visible rounded-xl border border-[var(--line)] bg-[#e8edf2] p-3 sm:p-4">
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                      Journal template · header through abstract
-                    </p>
-                    <NahdaArticleTemplate
-                      journalTitle={selected.journal.title}
-                      journalShortTitle={selected.journal.shortTitle}
-                      journalSlug={selected.journal.slug}
-                      coverColor={selected.journal.coverColor}
-                      journalUrl={`/journals/${selected.journal.slug}`}
-                      manuscriptId={selected.manuscriptId}
-                      title={form.title}
-                      authors={previewAuthors}
-                      affiliations={previewAffiliations}
-                      abstract={form.abstract}
-                      keywords={previewKeywords}
-                      articleType={form.articleType}
-                      doi={form.doi}
-                      volume={form.volume}
-                      issue={form.issue}
-                      pages={form.pages}
-                      receivedAt={previewDates.receivedAt}
-                      acceptedAt={previewDates.acceptedAt}
-                      publishedAt={previewDates.publishedAt}
-                      license={form.license}
-                      openAccess={form.openAccess}
-                      logoUrl={
-                        form.logoUrl || selected.journal.coverImageUrl || null
-                      }
-                      funding={selected.funding}
-                      conflictOfInterest={selected.conflictOfInterest}
-                      body={undefined}
-                    />
-                  </div>
+                      <div className="overflow-visible rounded-xl border border-[var(--line)] bg-[#e8edf2] p-3 sm:p-4">
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                          Journal template · header through abstract
+                        </p>
+                        <NahdaArticleTemplate
+                          journalTitle={selected.journal.title}
+                          journalShortTitle={selected.journal.shortTitle}
+                          journalSlug={selected.journal.slug}
+                          coverColor={selected.journal.coverColor}
+                          journalUrl={`/journals/${selected.journal.slug}`}
+                          manuscriptId={selected.manuscriptId}
+                          title={form.title}
+                          authors={previewAuthors}
+                          affiliations={previewAffiliations}
+                          abstract={form.abstract}
+                          keywords={previewKeywords}
+                          articleType={form.articleType}
+                          doi={form.doi}
+                          volume={form.volume}
+                          issue={form.issue}
+                          pages={form.pages}
+                          receivedAt={previewDates.receivedAt}
+                          acceptedAt={previewDates.acceptedAt}
+                          publishedAt={previewDates.publishedAt}
+                          license={form.license}
+                          openAccess={form.openAccess}
+                          logoUrl={
+                            form.logoUrl ||
+                            selected.journal.coverImageUrl ||
+                            null
+                          }
+                          funding={selected.funding}
+                          conflictOfInterest={selected.conflictOfInterest}
+                          body={undefined}
+                        />
+                      </div>
 
-                  <div className="space-y-3 rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
+                      <div className="space-y-3 rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-semibold text-[var(--ink)]">
+                              Introduction to References
+                            </p>
+                            <p className="mt-1 text-[11px] text-[var(--muted)]">
+                              Import Word or Google Docs into the body only.
+                              Title, authors, abstract, and keywords stay on
+                              this journal&apos;s template. The public download
+                              is a Nahda PDF generated from this layout — never
+                              the original file.
+                              {selected.manuscriptReadyAt
+                                ? " A draft is already loaded from Full manuscripts."
+                                : selected.productionBody?.trim()
+                                  ? " A saved body is loaded."
+                                  : ""}
+                            </p>
+                          </div>
+                          <Link
+                            href={`/admin/manuscripts?id=${selected.id}`}
+                            className="btn-secondary !px-3 !py-2 text-xs"
+                          >
+                            Open Full manuscripts
+                          </Link>
+                        </div>
+                        <ManuscriptImportPanel
+                          hasExistingBody={Boolean(htmlToPlainText(form.body))}
+                          onError={setError}
+                          onImported={(result) =>
+                            setForm((f) => ({
+                              ...f,
+                              body: result.body,
+                              figures: result.figures,
+                            }))
+                          }
+                        />
+                        <ManuscriptEditor
+                          key={selected.id}
+                          value={form.body}
+                          onChange={(body) =>
+                            setForm((f) => ({ ...f, body }))
+                          }
+                          figures={form.figures}
+                          onFiguresChange={(figures) =>
+                            setForm((f) => ({ ...f, figures }))
+                          }
+                          onError={setError}
+                          rows={12}
+                          showImport={false}
+                          journalPrimary={
+                            journalArticlePalette(
+                              selected.journal.coverColor,
+                              selected.journal.slug ||
+                                selected.journal.shortTitle,
+                            ).primary
+                          }
+                          label="Imported body"
+                          hint="Select a heading, then pick a color. The first swatch restores the journal color. The journal template above stays bound to this paper."
+                        />
+                      </div>
+                    </div>
+
+                    <aside className="order-1 space-y-3 lg:sticky lg:top-4 lg:order-2 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto">
+                      <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 p-4">
                         <p className="text-xs font-semibold text-[var(--ink)]">
-                          Introduction to References
+                          Nahda-styled PDF
                         </p>
                         <p className="mt-1 text-[11px] text-[var(--muted)]">
-                          Import Word or Google Docs. Title, authors, abstract,
-                          and keywords stay on this journal&apos;s template.
-                          After import you can bold, color, and tidy the body.
-                          {selected.manuscriptReadyAt
-                            ? " A draft is already loaded from Full manuscripts."
-                            : selected.productionBody?.trim()
-                              ? " A saved body is loaded."
-                              : ""}
+                          Built from the print template (logo and page numbers
+                          on every page). Readers download this file, not Word.
                         </p>
+                        <div className="mt-3 flex flex-col gap-2">
+                          <button
+                            type="button"
+                            className="btn-primary !px-3 !py-2 text-xs"
+                            disabled={uploadingPdf || publishing}
+                            onClick={() => void onGeneratePdf()}
+                          >
+                            {uploadingPdf
+                              ? "Generating PDF…"
+                              : "Generate Nahda PDF"}
+                          </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="btn-secondary !px-3 !py-2 text-xs"
+                              onClick={printPreview}
+                            >
+                              Print preview
+                            </button>
+                            <label className="btn-secondary cursor-pointer !px-3 !py-2 text-xs">
+                              {uploadingPdf ? "Uploading…" : "Replace PDF"}
+                              <input
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                className="hidden"
+                                disabled={uploadingPdf || publishing}
+                                onChange={(e) =>
+                                  void onPdfUpload(e.target.files?.[0] ?? null)
+                                }
+                              />
+                            </label>
+                          </div>
+                        </div>
+                        {form.pdfUrl && (
+                          <p className="mt-2 text-[11px] text-emerald-800">
+                            PDF ready:{" "}
+                            <a
+                              href={form.pdfUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold underline"
+                            >
+                              open generated file
+                            </a>
+                          </p>
+                        )}
                       </div>
-                      <Link
-                        href={`/admin/manuscripts?id=${selected.id}`}
-                        className="btn-secondary !px-3 !py-2 text-xs"
-                      >
-                        Open Full manuscripts
-                      </Link>
-                    </div>
-                    <ManuscriptImportPanel
-                      hasExistingBody={Boolean(htmlToPlainText(form.body))}
-                      onError={setError}
-                      onImported={(result) =>
-                        setForm((f) => ({
-                          ...f,
-                          body: result.body,
-                          figures: result.figures,
-                        }))
-                      }
-                    />
-                    <ManuscriptEditor
-                      key={selected.id}
-                      value={form.body}
-                      onChange={(body) => setForm((f) => ({ ...f, body }))}
-                      figures={form.figures}
-                      onFiguresChange={(figures) =>
-                        setForm((f) => ({ ...f, figures }))
-                      }
-                      onError={setError}
-                      rows={12}
-                      showImport={false}
-                      journalPrimary={
-                        journalArticlePalette(
-                          selected.journal.coverColor,
-                          selected.journal.slug || selected.journal.shortTitle,
-                        ).primary
-                      }
-                      label="Imported body"
-                      hint="Select a heading, then pick a color. The first swatch restores the journal color. The journal template above stays bound to this paper."
-                    />
-                  </div>
 
-                  <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 p-4">
-                    <p className="text-xs font-semibold text-[var(--ink)]">
-                      Downloadable PDF
-                    </p>
-                    <p className="mt-1 text-[11px] text-[var(--muted)]">
-                      Print the live preview (Save as PDF) or upload a Word /
-                      Google Docs export. If you skip this, the author’s
-                      submitted manuscript stays downloadable after publish.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="btn-secondary !px-3 !py-2 text-xs"
-                        onClick={printPreview}
-                      >
-                        Print preview
-                      </button>
-                      <label className="btn-secondary cursor-pointer !px-3 !py-2 text-xs">
-                        {uploadingPdf ? "Uploading…" : "Upload PDF"}
-                        <input
-                          type="file"
-                          accept="application/pdf,.pdf"
-                          className="hidden"
-                          disabled={uploadingPdf}
-                          onChange={(e) =>
-                            void onPdfUpload(e.target.files?.[0] ?? null)
-                          }
-                        />
-                      </label>
-                    </div>
-                    {form.pdfUrl && (
-                      <p className="mt-2 text-[11px] text-emerald-800">
-                        PDF ready:{" "}
-                        <a
-                          href={form.pdfUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-semibold underline"
+                      <div className="space-y-3 rounded-xl border border-[var(--line)] bg-white p-4">
+                        <label className="field">
+                          <span>Article type</span>
+                          <input
+                            required
+                            value={form.articleType}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                articleType: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          <span>DOI (auto-assigned)</span>
+                          <input
+                            value={form.doi}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, doi: e.target.value }))
+                            }
+                            placeholder="10.58000/ajs.2026.0142"
+                          />
+                          <p className="text-[11px] text-[var(--muted)]">
+                            Assigned on publish
+                            {form.doi ? (
+                              <>
+                                {" "}
+                                ·{" "}
+                                <code className="rounded bg-[var(--surface)] px-1">
+                                  /doi/{form.doi}
+                                </code>
+                              </>
+                            ) : null}
+                          </p>
+                        </label>
+                        <div className="grid grid-cols-1 gap-3">
+                          <label className="field">
+                            <span>Received</span>
+                            <input
+                              type="date"
+                              value={form.receivedAt}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  receivedAt: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Accepted</span>
+                            <input
+                              type="date"
+                              value={form.acceptedAt}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  acceptedAt: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Published</span>
+                            <input
+                              type="date"
+                              value={form.publishedAt}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  publishedAt: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="field">
+                            <span>Volume</span>
+                            <input
+                              value={form.volume}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  volume: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Issue</span>
+                            <input
+                              value={form.issue}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  issue: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Pages</span>
+                            <input
+                              value={form.pages}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  pages: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="field">
+                            <span>License</span>
+                            <input
+                              value={form.license}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  license: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="flex flex-col gap-2 text-sm">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={form.openAccess}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  openAccess: e.target.checked,
+                                }))
+                              }
+                            />
+                            Open access
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={form.isFeatured}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  isFeatured: e.target.checked,
+                                }))
+                              }
+                            />
+                            Feature on homepage
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => setPane("preview")}
                         >
-                          open saved file
-                        </a>
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="field">
-                      <span>Article type</span>
-                      <input
-                        required
-                        value={form.articleType}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            articleType: e.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="field sm:col-span-2">
-                      <span>DOI (auto-assigned)</span>
-                      <input
-                        value={form.doi}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, doi: e.target.value }))
-                        }
-                        placeholder="10.58000/ajs.2026.0142"
-                      />
-                      <p className="text-[11px] text-[var(--muted)]">
-                        Assigned automatically on publish. Readers can search this
-                        DOI or open{" "}
-                        {form.doi ? (
-                          <code className="rounded bg-[var(--surface)] px-1">
-                            /doi/{form.doi}
-                          </code>
-                        ) : (
-                          "the Nahda DOI link"
-                        )}{" "}
-                        to view or download the PDF.
-                      </p>
-                    </label>
-                    <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
-                      <label className="field">
-                        <span>Received</span>
-                        <input
-                          type="date"
-                          value={form.receivedAt}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              receivedAt: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Accepted</span>
-                        <input
-                          type="date"
-                          value={form.acceptedAt}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              acceptedAt: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Published</span>
-                        <input
-                          type="date"
-                          value={form.publishedAt}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              publishedAt: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                    <label className="field">
-                      <span>Volume</span>
-                      <input
-                        value={form.volume}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, volume: e.target.value }))
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Issue</span>
-                      <input
-                        value={form.issue}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, issue: e.target.value }))
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Pages</span>
-                      <input
-                        value={form.pages}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, pages: e.target.value }))
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      <span>License</span>
-                      <input
-                        value={form.license}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, license: e.target.value }))
-                        }
-                      />
-                    </label>
-                  </div>
-
-                  <div className="flex flex-wrap gap-4 text-sm">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={form.openAccess}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            openAccess: e.target.checked,
-                          }))
-                        }
-                      />
-                      Open access
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={form.isFeatured}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            isFeatured: e.target.checked,
-                          }))
-                        }
-                      />
-                      Feature on homepage
-                    </label>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => setPane("preview")}
-                    >
-                      Preview template
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn-primary"
-                      disabled={publishing}
-                    >
-                      {publishing
-                        ? "Publishing…"
-                        : "Publish and email author"}
-                    </button>
+                          Preview template
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn-primary"
+                          disabled={publishing || uploadingPdf}
+                        >
+                          {publishButtonLabel}
+                        </button>
+                      </div>
+                    </aside>
                   </div>
                 </form>
               ) : (
@@ -1423,15 +1587,13 @@ export default function PublishedArticlesPage() {
                       <button
                         type="button"
                         className="btn-primary !px-3 !py-2 text-xs"
-                        disabled={publishing}
+                        disabled={publishing || uploadingPdf}
                         onClick={(e) => {
                           e.preventDefault();
                           void onPublish(e as unknown as FormEvent);
                         }}
                       >
-                        {publishing
-                          ? "Publishing…"
-                          : "Publish and email author"}
+                        {publishButtonLabel}
                       </button>
                     </div>
                   </div>
@@ -1483,6 +1645,18 @@ export default function PublishedArticlesPage() {
           )}
         </section>
       </div>
+      {selected && captureTemplate
+        ? createPortal(
+            <div
+              ref={pdfSourceRef}
+              className="nahda-pdf-source"
+              aria-hidden
+            >
+              {captureTemplate}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
