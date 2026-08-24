@@ -8,7 +8,7 @@ export async function POST() {
   const admin = await requireAdmin();
   if (!admin) return unauthorized();
   return jsonError(
-    "Refresh this page and try Publish again. The Nahda PDF is now generated in your browser.",
+    "This admin page is out of date. Hard-refresh (Cmd-Shift-R), then Publish again. The Nahda PDF is generated in your browser — Chrome is not required on the server.",
     410,
   );
 }

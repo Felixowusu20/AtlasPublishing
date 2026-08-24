@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { AdminAuthProvider } from "@/components/admin-auth-provider";
 import { AdminShell } from "@/components/admin-shell";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Nahda Admin",
   description: "Nahda Publications administration",

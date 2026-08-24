@@ -1,22 +1,35 @@
 /**
  * Build an A4 PDF from the live Nahda article template in the admin browser.
  * Hobby-plan Vercel functions cannot run Chrome, so this never calls the server.
+ * Page size and journal layout stay A4 — only JPEG encoding is tightened so
+ * the file fits Cloudinary's 10 MB cap.
  */
 
 import { CLOUDINARY_MAX_UPLOAD_BYTES } from "@/lib/prepare-upload-file";
+import type { jsPDF } from "jspdf";
 
 const A4_WIDTH_MM = 210;
 const A4_HEIGHT_MM = 297;
-const JPEG_QUALITY = 0.82;
 const CAPTURE_SCALE = 2;
+const UPLOAD_BUDGET_BYTES = CLOUDINARY_MAX_UPLOAD_BYTES - 128 * 1024;
+const JPEG_QUALITIES = [0.76, 0.64, 0.52, 0.42, 0.34];
+
+type PageShot = {
+  canvas: HTMLCanvasElement;
+  heightMm: number;
+};
 
 export function pdfErrorMessage(err: unknown, fallback: string) {
-  if (err instanceof Error && err.message.trim()) return err.message;
-  if (typeof err === "string" && err.trim()) return err;
-  if (err && typeof err === "object" && "message" in err) {
-    const message = String((err as { message: unknown }).message ?? "");
-    if (message.trim()) return message;
+  let message = "";
+  if (err instanceof Error && err.message.trim()) message = err.message;
+  else if (typeof err === "string" && err.trim()) message = err;
+  else if (err && typeof err === "object" && "message" in err) {
+    message = String((err as { message: unknown }).message ?? "");
   }
+  if (/google chrome is required/i.test(message) || /install chrome/i.test(message)) {
+    return "This admin page is still running the old PDF printer. Hard-refresh (Cmd-Shift-R), then Publish again. Chrome is not required.";
+  }
+  if (message.trim()) return message;
   return fallback;
 }
 
@@ -61,6 +74,50 @@ async function withOnscreenSource<T>(
   }
 }
 
+function jpegDataUrl(canvas: HTMLCanvasElement, quality: number): string {
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+function buildPdfFromPages(
+  JsPDF: typeof jsPDF,
+  pages: PageShot[],
+  quality: number,
+): Blob {
+  const pdf = new JsPDF({
+    unit: "mm",
+    format: "a4",
+    orientation: "portrait",
+    compress: true,
+  });
+
+  pages.forEach((page, i) => {
+    const img = jpegDataUrl(page.canvas, quality);
+    if (i > 0) pdf.addPage();
+    pdf.addImage(img, "JPEG", 0, 0, A4_WIDTH_MM, page.heightMm, undefined, "SLOW");
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(91, 107, 124);
+    pdf.text(String(i + 1), A4_WIDTH_MM - 14, A4_HEIGHT_MM - 8, {
+      align: "right",
+    });
+  });
+
+  return pdf.output("blob");
+}
+
+function packPdf(JsPDF: typeof jsPDF, pages: PageShot[]): Blob {
+  let best: Blob | null = null;
+  for (const quality of JPEG_QUALITIES) {
+    const blob = buildPdfFromPages(JsPDF, pages, quality);
+    best = blob;
+    if (blob.size <= UPLOAD_BUDGET_BYTES) return blob;
+  }
+  if (best && best.size <= CLOUDINARY_MAX_UPLOAD_BYTES) return best;
+  throw new Error(
+    "The journal PDF is still over the 10 MB upload limit after compression. Try Publish again.",
+  );
+}
+
 /** Rasterize the journal template in the browser and return an A4 PDF blob. */
 export async function articleTemplateToPdf(
   source: HTMLElement,
@@ -79,7 +136,7 @@ export async function articleTemplateToPdf(
   markImagesCors(article);
   await waitForImages(article);
 
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+  const [{ default: html2canvas }, { jsPDF: JsPDF }] = await Promise.all([
     import("html2canvas-pro"),
     import("jspdf"),
   ]);
@@ -91,13 +148,7 @@ export async function articleTemplateToPdf(
     const heightPx = Math.max(article.scrollHeight, article.offsetHeight, 1);
     const pagePx = Math.max(1, Math.round(widthPx * (A4_HEIGHT_MM / A4_WIDTH_MM)));
     const pageCount = Math.max(1, Math.ceil(heightPx / pagePx));
-
-    const pdf = new jsPDF({
-      unit: "mm",
-      format: "a4",
-      orientation: "portrait",
-      compress: true,
-    });
+    const pages: PageShot[] = [];
 
     for (let i = 0; i < pageCount; i++) {
       const y = i * pagePx;
@@ -113,26 +164,15 @@ export async function articleTemplateToPdf(
         logging: false,
         imageTimeout: 15000,
       });
-      const img = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
-      const heightMm = (slice / widthPx) * A4_WIDTH_MM;
-      if (i > 0) pdf.addPage();
-      pdf.addImage(img, "JPEG", 0, 0, A4_WIDTH_MM, heightMm, undefined, "FAST");
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(8);
-      pdf.setTextColor(91, 107, 124);
-      pdf.text(String(i + 1), A4_WIDTH_MM - 14, A4_HEIGHT_MM - 8, {
-        align: "right",
+      pages.push({
+        canvas,
+        heightMm: (slice / widthPx) * A4_WIDTH_MM,
       });
     }
 
-    return pdf.output("blob");
+    return packPdf(JsPDF, pages);
   });
 
-  if (blob.size > CLOUDINARY_MAX_UPLOAD_BYTES) {
-    throw new Error(
-      "The printed PDF is too large to upload. Shorten figures or try again.",
-    );
-  }
   if (blob.size < 100) {
     throw new Error(
       "The Nahda print PDF was empty. Try Print preview, then Publish again.",
