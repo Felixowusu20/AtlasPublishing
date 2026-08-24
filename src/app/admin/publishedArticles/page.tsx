@@ -1649,7 +1649,7 @@ export default function PublishedArticlesPage() {
         ? createPortal(
             <div
               ref={pdfSourceRef}
-              className="nahda-pdf-source"
+              className="nahda-pdf-source nahda-pdf-print"
               aria-hidden
             >
               {captureTemplate}
