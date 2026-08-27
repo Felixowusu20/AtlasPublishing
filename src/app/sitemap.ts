@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db";
 import { absoluteUrl, seoBaseUrl } from "@/lib/seo/scholar";
-import { issueKey } from "@/lib/seo/article-seo";
+import { issueKey, resolveArticleIssue } from "@/lib/issues";
 
 /**
  * Combined sitemap: static pages + journals + articles + derived issues.
@@ -14,6 +14,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     "",
     "/articles",
+    "/articles/current-issues",
+    "/articles/past-issues",
     "/journals",
     "/search",
     "/about",
@@ -37,7 +39,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     publishedAt: Date;
     volume: string | null;
     issue: string | null;
-    journal: { slug: string };
+    journal: {
+      slug: string;
+      frequency: string | null;
+      foundedYear: number | null;
+    };
   }[] = [];
 
   try {
@@ -55,7 +61,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           publishedAt: true,
           volume: true,
           issue: true,
-          journal: { select: { slug: true } },
+          journal: {
+            select: { slug: true, frequency: true, foundedYear: true },
+          },
         },
         orderBy: { publishedAt: "desc" },
       }),
@@ -83,7 +91,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { journalSlug: string; key: string; lastModified: Date }
   >();
   for (const a of articles) {
-    const key = issueKey(a.volume, a.issue);
+    const numbered = resolveArticleIssue({
+      volume: a.volume,
+      issue: a.issue,
+      publishedAt: a.publishedAt,
+      frequency: a.journal.frequency,
+      foundedYear: a.journal.foundedYear,
+    });
+    const key = issueKey(numbered.volume, numbered.issue);
     const id = `${a.journal.slug}::${key}`;
     const prev = issueMap.get(id);
     const lastModified = a.publishedAt;

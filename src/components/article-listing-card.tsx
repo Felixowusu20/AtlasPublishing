@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArticleMetrics } from "@/components/article-metrics";
 import { authorDisplayName } from "@/lib/orcid";
-import { articleDownloadPath } from "@/lib/submission-utils";
+import { articleViewPath } from "@/lib/submission-utils";
 import { htmlToPlainText } from "@/lib/import-manuscript";
 
 export type ArticleCardData = {
@@ -141,7 +141,9 @@ export function ArticleListingCard({
           <div className="flex shrink-0 items-center gap-4">
             {article.hasPdf ? (
               <a
-                href={articleDownloadPath(article.slug)}
+                href={articleViewPath(article.slug)}
+                target="_blank"
+                rel="noreferrer"
                 className="text-sm font-semibold text-[var(--ink)] hover:text-[var(--accent)]"
               >
                 PDF

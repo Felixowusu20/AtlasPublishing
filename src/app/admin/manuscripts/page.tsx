@@ -51,6 +51,7 @@ type QueueItem = {
     slug?: string;
     coverColor?: string;
     coverImageUrl?: string | null;
+    issn?: string | null;
   };
   author: {
     id: string;

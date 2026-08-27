@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "test": "tsx --test src/lib/payment-flow.test.ts",
+    "test": "tsx --test src/lib/payment-flow.test.ts src/lib/issues.test.ts src/lib/author-contacts.test.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "ci": "npm run lint && npm run typecheck && npm test && npm run build",

@@ -2,6 +2,7 @@ import { formatMetric } from "@/components/article-metrics";
 import { HeroSlider } from "@/components/hero-slider";
 import { HomeCatalog } from "@/components/home-catalog";
 import { prisma } from "@/lib/db";
+import { resolveArticleIssue } from "@/lib/issues";
 import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 export const dynamic = "force-dynamic";
@@ -100,7 +101,15 @@ export default async function HomePage({
 
       <HomeCatalog
         initialQuery={initialQuery}
-        articles={articles.map((article) => ({
+        articles={articles.map((article) => {
+          const numbered = resolveArticleIssue({
+            volume: article.volume,
+            issue: article.issue,
+            publishedAt: article.publishedAt,
+            frequency: article.journal.frequency,
+            foundedYear: article.journal.foundedYear,
+          });
+          return {
           id: article.id,
           slug: article.slug,
           title: article.title,
@@ -112,8 +121,8 @@ export default async function HomePage({
           publishedAt: article.publishedAt.toISOString().slice(0, 10),
           journalTitle: article.journal.title,
           journalSlug: article.journal.slug,
-          volume: article.volume ?? undefined,
-          issue: article.issue ?? undefined,
+          volume: numbered.volume,
+          issue: numbered.issue,
           views: article.views,
           downloads: article.downloads,
           keywords: article.keywords,
@@ -123,7 +132,8 @@ export default async function HomePage({
               article.submission?.manuscriptUrl,
             ),
           ),
-        }))}
+        };
+        })}
         announcements={announcements.map((item) => ({
           id: item.id,
           title: item.title,

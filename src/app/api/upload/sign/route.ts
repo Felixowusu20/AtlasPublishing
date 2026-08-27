@@ -6,6 +6,7 @@ import { signCloudinaryUpload } from "@/lib/cloudinary-sign";
 const schema = z.object({
   folder: z.string().min(1).max(120).optional(),
   resourceType: z.enum(["image", "raw", "auto", "video"]).optional(),
+  filename: z.string().min(1).max(180).optional(),
 });
 
 /**
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     const signed = signCloudinaryUpload({
       folder: body.folder ?? "nahda",
       resourceType: body.resourceType ?? "auto",
+      filename: body.filename,
     });
     return jsonOk(signed);
   } catch (err) {

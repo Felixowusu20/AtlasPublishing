@@ -7,6 +7,7 @@ import {
 
 type Props = ApaCitationInput & {
   journalSlug?: string;
+  articleSlug?: string;
   /** Compact sidebar variant vs full footer */
   variant?: "card" | "banner";
   className?: string;
@@ -21,10 +22,12 @@ function ApaCitationText({
   citation,
   isBanner,
   journalSlug,
+  articleSlug,
 }: {
   citation: ReturnType<typeof buildApaCitation>;
   isBanner: boolean;
   journalSlug?: string;
+  articleSlug?: string;
 }) {
   const ink = isBanner ? "text-white" : "text-[var(--ink)]";
   const journalClass = "italic text-[var(--brand-orange)]";
@@ -66,6 +69,8 @@ function ApaCitationText({
           {" "}
           <a
             href={doiHref}
+            target="_blank"
+            rel="noreferrer"
             className={`break-all underline-offset-2 hover:underline ${
               isBanner ? "text-emerald-200" : "text-[var(--accent)]"
             }`}
@@ -86,6 +91,7 @@ export function ArticleCitation({
   title,
   journalTitle,
   journalSlug,
+  articleSlug,
   publishedAt,
   volume,
   issue,
@@ -149,6 +155,7 @@ export function ArticleCitation({
           citation={citation}
           isBanner={isBanner}
           journalSlug={journalSlug}
+          articleSlug={articleSlug}
         />
       </blockquote>
     </figure>

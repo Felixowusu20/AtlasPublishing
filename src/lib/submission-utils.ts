@@ -84,6 +84,13 @@ export function articleDownloadPath(slug: string) {
   return `/api/articles/${encodeURIComponent(slug)}/download`;
 }
 
+/**
+ * Same generated Nahda PDF as the author-email download, opened in the browser.
+ */
+export function articleViewPath(slug: string) {
+  return `${articleDownloadPath(slug)}?view=1`;
+}
+
 /** True when the URL is a typeset Nahda PDF, not a Word/Office upload. */
 export function isTypesetPdfUrl(url?: string | null) {
   const value = url?.trim() ?? "";

@@ -8,6 +8,7 @@ import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
 import { ResubmitPanel } from "@/components/resubmit-panel";
 import { StatusBadge } from "@/components/status-badge";
+import { ReviewFileDownload } from "@/components/review-file-download";
 import { initials } from "@/lib/auth";
 import { canAuthorResubmit, uiStatus, articleDownloadPath, authorApcPayPath } from "@/lib/submission-utils";
 import type { SubmissionStatus as UiSubmissionStatus } from "@/lib/types";
@@ -27,7 +28,14 @@ type ApiSubmission = {
   updatedAt: string;
   journal: { title: string };
   authorsJson?: { name: string }[] | null;
-  feedback?: { message: string; createdAt: string }[];
+  feedback?: {
+    id: string;
+    message: string;
+    createdAt: string;
+    fileUrl?: string | null;
+    fileName?: string | null;
+    fileBytes?: number | null;
+  }[];
   payment?: {
     amountCents: number;
     amountLabel?: string;
@@ -259,6 +267,12 @@ function DashboardInner() {
                           <p className="mt-2 line-clamp-2 text-xs text-[var(--muted)]">
                             Latest feedback: {sub.feedback[0].message}
                           </p>
+                        )}
+                        {sub.feedback?.[0] && (
+                          <ReviewFileDownload
+                            submissionId={sub.id}
+                            item={sub.feedback[0]}
+                          />
                         )}
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
@@ -494,6 +508,19 @@ function DashboardInner() {
                           />
                         </div>
                       </div>
+
+                      {sub.feedback?.[0] && (
+                        <div className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--surface)]/60 px-3 py-2.5">
+                          <p className="line-clamp-2 text-xs text-[var(--muted)]">
+                            Latest feedback: {sub.feedback[0].message}
+                          </p>
+                          <ReviewFileDownload
+                            submissionId={sub.id}
+                            item={sub.feedback[0]}
+                            className="mt-2 inline-flex items-center text-xs font-semibold text-[var(--accent)] hover:underline"
+                          />
+                        </div>
+                      )}
 
                       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-[var(--line)] pt-3 text-xs text-[var(--muted)]">
                         <span>

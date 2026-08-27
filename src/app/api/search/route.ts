@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { jsonOk } from "@/lib/api";
 import { normalizeDoi } from "@/lib/doi";
+import { resolveArticleIssue } from "@/lib/issues";
 import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 type SearchArticle = {
@@ -132,7 +133,15 @@ export async function GET(request: Request) {
         ),
       )
       .slice(0, 40)
-      .map((a) => ({
+      .map((a) => {
+        const numbered = resolveArticleIssue({
+          volume: a.volume,
+          issue: a.issue,
+          publishedAt: a.publishedAt,
+          frequency: a.journal.frequency,
+          foundedYear: a.journal.foundedYear,
+        });
+        return {
         id: a.id,
         slug: a.slug,
         title: a.title,
@@ -148,14 +157,15 @@ export async function GET(request: Request) {
         coverImageUrl: a.journal.coverImageUrl,
         coverColor: a.journal.coverColor,
         publishedAt: a.publishedAt.toISOString().slice(0, 10),
-        volume: a.volume ?? undefined,
-        issue: a.issue ?? undefined,
+        volume: numbered.volume,
+        issue: numbered.issue,
         views: a.views,
         downloads: a.downloads,
         hasPdf: Boolean(
           resolvePublishedPdfUrl(a.manuscriptUrl, a.submission?.manuscriptUrl),
         ),
-      }));
+        };
+      });
 
     journalResults = dbJournals.map((j) => ({
       id: j.id,

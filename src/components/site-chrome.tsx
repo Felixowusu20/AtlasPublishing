@@ -44,7 +44,17 @@ function useNavItems(journals: NavJournal[]): NavItem[] {
           {
             label: "Latest articles",
             href: "/articles",
-            hint: "Published & Early View",
+            hint: "Published articles",
+          },
+          {
+            label: "Current issues",
+            href: "/articles/current-issues",
+            hint: "Latest issue of each journal",
+          },
+          {
+            label: "Past issues",
+            href: "/articles/past-issues",
+            hint: "Archives by year and journal",
           },
           {
             label: "Search articles",
@@ -611,6 +621,8 @@ export function SiteFooter() {
           title="Discover"
           links={[
             ["/articles", "Articles"],
+            ["/articles/current-issues", "Current issues"],
+            ["/articles/past-issues", "Past issues"],
             ["/search", "Search"],
             ["/authors/article-types", "Article types"],
             ["/about", "About"],

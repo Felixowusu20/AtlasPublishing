@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import type { ScholarArticleInput } from "@/lib/seo/scholar";
 import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 import { htmlToPlainText } from "@/lib/import-manuscript";
+import { resolveArticleIssue } from "@/lib/issues";
 
 const articleSelect = {
   slug: true,
@@ -27,6 +28,8 @@ const articleSelect = {
       issn: true,
       eIssn: true,
       shortTitle: true,
+      frequency: true,
+      foundedYear: true,
     },
   },
 } as const;
@@ -41,6 +44,13 @@ export async function loadScholarArticleBySlug(slug: string) {
 export function toScholarInput(
   article: NonNullable<Awaited<ReturnType<typeof loadScholarArticleBySlug>>>,
 ): ScholarArticleInput {
+  const numbered = resolveArticleIssue({
+    volume: article.volume,
+    issue: article.issue,
+    publishedAt: article.publishedAt,
+    frequency: article.journal.frequency,
+    foundedYear: article.journal.foundedYear,
+  });
   return {
     slug: article.slug,
     title: article.title,
@@ -50,8 +60,8 @@ export function toScholarInput(
     keywords: article.keywords,
     doi: article.doi,
     publishedAt: article.publishedAt,
-    volume: article.volume,
-    issue: article.issue,
+    volume: numbered.volume,
+    issue: numbered.issue,
     pages: article.pages,
     manuscriptUrl: resolvePublishedPdfUrl(
       article.manuscriptUrl,
@@ -105,39 +115,5 @@ export function validateScholarReadiness(input: {
   return { ok: errors.length === 0, errors, warnings };
 }
 
-/** Stable issue key used in URLs: vol-1-issue-2 or early-view */
-export function issueKey(volume?: string | null, issue?: string | null) {
-  const v = (volume || "").trim();
-  const i = (issue || "").trim();
-  if ((!v || v === "—") && (!i || i === "—" || i === "Early View")) {
-    return "early-view";
-  }
-  const vol = v && v !== "—" ? `vol-${slugPart(v)}` : "vol-x";
-  const iss = i && i !== "—" ? `issue-${slugPart(i)}` : "issue-x";
-  return `${vol}-${iss}`;
-}
+export { issueKey, parseIssueKey } from "@/lib/issues";
 
-function slugPart(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 40);
-}
-
-export function parseIssueKey(key: string): {
-  volume: string | null;
-  issue: string | null;
-  earlyView: boolean;
-} {
-  if (key === "early-view") {
-    return { volume: null, issue: null, earlyView: true };
-  }
-  const m = key.match(/^vol-([a-z0-9-]+)-issue-([a-z0-9-]+)$/i);
-  if (!m) return { volume: null, issue: null, earlyView: false };
-  return {
-    volume: m[1] === "x" ? null : m[1].replace(/-/g, " "),
-    issue: m[2] === "x" ? null : m[2].replace(/-/g, " "),
-    earlyView: false,
-  };
-}

@@ -16,6 +16,10 @@ import { formatCustomerUsd } from "@/lib/payment-currency";
 import { paystackConfigured } from "@/lib/paystack";
 import type { SubmissionStatus } from "@/generated/prisma/client";
 import { withAdminPayment } from "@/lib/payment-dto";
+import {
+  reviewFileDownloadPath,
+} from "@/lib/review-file";
+import { signReviewFileToken } from "@/lib/review-file-token";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -47,22 +51,39 @@ export async function GET(_request: Request, { params }: Params) {
   return jsonOk({ submission: withAdminPayment(submission) });
 }
 
-const reviewSchema = z.object({
-  status: z.enum([
-    "TECHNICAL_CHECK",
-    "UNDER_REVIEW",
-    "MAJOR_REVISION",
-    "MINOR_REVISION",
-    "ACCEPTED",
-    "REJECTED",
-    "IN_PRODUCTION",
-    "PUBLISHED",
-  ]),
-  message: z.string().min(10),
-  privateNotes: z.string().optional(),
-  actionRequired: z.string().optional().nullable(),
-  assignToMe: z.boolean().optional(),
-});
+const reviewSchema = z
+  .object({
+    status: z.enum([
+      "TECHNICAL_CHECK",
+      "UNDER_REVIEW",
+      "MAJOR_REVISION",
+      "MINOR_REVISION",
+      "ACCEPTED",
+      "REJECTED",
+      "IN_PRODUCTION",
+      "PUBLISHED",
+    ]),
+    message: z.string().max(20000).optional().default(""),
+    privateNotes: z.string().optional(),
+    actionRequired: z.string().optional().nullable(),
+    assignToMe: z.boolean().optional(),
+    fileUrl: z.string().url().optional(),
+    filePublicId: z.string().max(400).optional(),
+    fileName: z.string().max(260).optional(),
+    fileBytes: z.number().int().nonnegative().optional(),
+    fileResourceType: z.enum(["image", "raw", "auto", "video"]).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const comment = value.message.trim();
+    if (value.fileUrl) return;
+    if (comment.length < 10) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Write a message of at least 10 characters, or attach a review file.",
+        path: ["message"],
+      });
+    }
+  });
 
 export async function POST(request: Request, { params }: Params) {
   const admin = await requireAdmin();
@@ -82,6 +103,17 @@ export async function POST(request: Request, { params }: Params) {
 
     const status = body.status as SubmissionStatus;
     const progress = progressForStatus(status);
+    const comment = body.message.trim();
+    const storedMessage =
+      comment ||
+      (body.fileName
+        ? `Review file attached: ${body.fileName}`
+        : "Review file attached.");
+    const notificationBody = comment
+      ? comment.slice(0, 280)
+      : body.fileName
+        ? `A review file is ready to download: ${body.fileName}`
+        : storedMessage.slice(0, 280);
 
     // Production / publish statuses require APC cleared first
     if (
@@ -100,8 +132,16 @@ export async function POST(request: Request, { params }: Params) {
           submissionId: id,
           reviewerId: admin.sub,
           status,
-          message: body.message,
+          message: storedMessage,
           privateNotes: body.privateNotes,
+          fileUrl: body.fileUrl,
+          filePublicId: body.filePublicId,
+          fileName: body.fileName,
+          fileBytes:
+            body.fileBytes != null && body.fileBytes <= 2_147_483_647
+              ? body.fileBytes
+              : undefined,
+          fileResourceType: body.fileResourceType,
         },
       });
 
@@ -143,7 +183,7 @@ export async function POST(request: Request, { params }: Params) {
           userId: submission.authorId,
           submissionId: id,
           title: `Review update: ${labelStatus(status)}`,
-          body: body.message.slice(0, 280),
+          body: notificationBody,
         },
       });
 
@@ -153,6 +193,17 @@ export async function POST(request: Request, { params }: Params) {
     const base = getAppBaseUrl();
     const needsRevision =
       status === "MAJOR_REVISION" || status === "MINOR_REVISION";
+    const reviewFile =
+      updated.feedback.fileUrl && updated.feedback.fileName
+        ? {
+            name: updated.feedback.fileName,
+            href: `${base}${reviewFileDownloadPath(
+              id,
+              updated.feedback.id,
+              signReviewFileToken(updated.feedback.id),
+            )}`,
+          }
+        : null;
 
     let latestSubmission = updated.sub;
     let emailSent = false;
@@ -225,11 +276,15 @@ export async function POST(request: Request, { params }: Params) {
             journalTitle: submission.journal.title,
             amountLabel: apcAmountLabel,
             checkoutUrl,
+            reviewFile,
           }),
           text: [
             `Your manuscript ${submission.manuscriptId} was accepted.`,
             `Please pay the APC (${apcAmountLabel}) using this payment link:`,
             checkoutUrl,
+            ...(reviewFile
+              ? ["", `Download the review file (${reviewFile.name}):`, reviewFile.href]
+              : []),
           ].join("\n"),
         });
         emailSent = mail.ok;
@@ -255,11 +310,15 @@ export async function POST(request: Request, { params }: Params) {
             journalTitle: submission.journal.title,
             amountLabel: amount,
             checkoutUrl: payUrl,
+            reviewFile,
           }),
           text: [
             `Your manuscript ${submission.manuscriptId} was accepted.`,
             `Please pay the APC (${amount}) using this payment link:`,
             payUrl,
+            ...(reviewFile
+              ? ["", `Download the review file (${reviewFile.name}):`, reviewFile.href]
+              : []),
           ].join("\n"),
         });
         emailSent = mail.ok;
@@ -277,14 +336,18 @@ export async function POST(request: Request, { params }: Params) {
             title: submission.title,
             status: "Accepted — in production",
             message:
-              body.message ||
+              comment ||
               "Your manuscript was accepted and does not require further APC payment. It is now in production.",
             manuscriptId: submission.manuscriptId,
             submissionUrl: `${base}/submissions/${id}`,
+            reviewFile,
           }),
           text: [
             `Your manuscript ${submission.manuscriptId} was accepted and is in production.`,
             `${base}/submissions/${id}`,
+            ...(reviewFile
+              ? ["", `Download the review file (${reviewFile.name}):`, reviewFile.href]
+              : []),
           ].join("\n"),
         });
         emailSent = mail.ok;
@@ -296,16 +359,20 @@ export async function POST(request: Request, { params }: Params) {
             authorName: submission.author.name,
             title: submission.title,
             status: labelStatus(status),
-            message: body.message,
+            message: comment,
             manuscriptId: submission.manuscriptId,
             submissionUrl: `${base}/submissions/${id}`,
             needsRevision,
+            reviewFile,
           }),
           text: [
             `Review update for ${submission.manuscriptId}`,
             `Status: ${labelStatus(status)}`,
             "",
-            body.message,
+            comment || storedMessage,
+            ...(reviewFile
+              ? ["", `Download the review file (${reviewFile.name}):`, reviewFile.href]
+              : []),
             "",
             `Open: ${base}/submissions/${id}`,
           ].join("\n"),

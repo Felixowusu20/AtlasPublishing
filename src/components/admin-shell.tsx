@@ -14,6 +14,7 @@ type NavIcon =
   | "inbox"
   | "manuscripts"
   | "publish"
+  | "finances"
   | "hero"
   | "articles"
   | "news"
@@ -56,6 +57,13 @@ const nav: {
     short: "Publish",
     icon: "publish",
     roles: ["SUPER_ADMIN", "REVIEWER"],
+  },
+  {
+    href: "/admin/finances",
+    label: "Finances",
+    short: "Finance",
+    icon: "finances",
+    roles: ["SUPER_ADMIN"],
   },
   {
     href: "/admin/hero",
@@ -159,6 +167,15 @@ function NavGlyph({
         <svg {...common}>
           <path d="M12 19V5" />
           <polyline points="5 12 12 5 19 12" />
+        </svg>
+      );
+    case "finances":
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M3 10h18" />
+          <path d="M7 15h2" />
+          <path d="M12 15h5" />
         </svg>
       );
     case "hero":

@@ -8,6 +8,7 @@ import { ManuscriptViewer } from "@/components/manuscript-viewer";
 import { ResubmitPanel } from "@/components/resubmit-panel";
 import { ApcPayPanel } from "@/components/apc-pay-panel";
 import { NahdaLoader } from "@/components/nahda-loader";
+import { FeedbackHistory } from "@/components/feedback-history";
 import {
   articleDownloadPath,
   canAuthorResubmit,
@@ -20,6 +21,9 @@ type Feedback = {
   status: string;
   createdAt: string;
   reviewer: { name: string };
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileBytes?: number | null;
 };
 
 type Submission = {
@@ -225,34 +229,18 @@ function Detail({ id }: { id: string }) {
 
       {!isPublished && (
         <section className="mt-8">
-          <h2 className="font-[family-name:var(--font-display)] text-xl">
-            Reviewer feedback
-          </h2>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            The same feedback is emailed to you when a reviewer sends an update.
-          </p>
-          <div className="mt-4 space-y-3">
-            {sub.feedback.length === 0 && (
-              <p className="text-sm text-[var(--muted)]">
-                No reviewer messages yet.
-              </p>
-            )}
-            {sub.feedback.map((f) => (
-              <article
-                key={f.id}
-                className="rounded-xl border border-[var(--line)] bg-white p-4"
-              >
-                <p className="text-xs text-[var(--muted)]">
-                  {f.message.startsWith("Author response")
-                    ? "You"
-                    : f.reviewer.name}{" "}
-                  · {uiStatus(f.status as Parameters<typeof uiStatus>[0])} ·{" "}
-                  {new Date(f.createdAt).toLocaleString()}
-                </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm">{f.message}</p>
-              </article>
-            ))}
-          </div>
+          <FeedbackHistory
+            submissionId={sub.id}
+            items={sub.feedback}
+            title="Reviewer feedback"
+            emptyLabel="No reviewer messages yet."
+            hint="The same feedback is emailed to you when a reviewer sends an update. Download attached review files here or from the email link."
+            fromLabel={(item) =>
+              item.message.startsWith("Author response")
+                ? "You"
+                : item.reviewer.name
+            }
+          />
         </section>
       )}
 

@@ -7,6 +7,9 @@ export type CloudinarySignParams = {
   signature: string;
   folder: string;
   resourceType: "image" | "raw" | "auto" | "video";
+  useFilename?: string;
+  uniqueFilename?: string;
+  filenameOverride?: string;
 };
 
 /**
@@ -16,6 +19,7 @@ export type CloudinarySignParams = {
 export function signCloudinaryUpload(opts: {
   folder: string;
   resourceType?: "image" | "raw" | "auto" | "video";
+  filename?: string;
 }): CloudinarySignParams {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
   const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
@@ -28,12 +32,18 @@ export function signCloudinaryUpload(opts: {
   const timestamp = Math.round(Date.now() / 1000);
   const folder = opts.folder || "nahda";
   const resourceType = opts.resourceType ?? "auto";
+  const filename = opts.filename?.trim().slice(0, 180);
 
   // Sign only the params included in the browser FormData (besides file/api_key).
   const paramsToSign: Record<string, string | number> = {
     timestamp,
     folder,
   };
+  if (filename) {
+    paramsToSign.use_filename = "true";
+    paramsToSign.unique_filename = "true";
+    paramsToSign.filename_override = filename;
+  }
 
   const signature = cloudinary.utils.api_sign_request(paramsToSign, apiSecret);
 
@@ -44,5 +54,12 @@ export function signCloudinaryUpload(opts: {
     signature,
     folder,
     resourceType,
+    ...(filename
+      ? {
+          useFilename: "true",
+          uniqueFilename: "true",
+          filenameOverride: filename,
+        }
+      : {}),
   };
 }

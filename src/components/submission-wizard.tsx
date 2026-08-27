@@ -15,6 +15,13 @@ type JournalOption = {
   slug: string;
 };
 
+type ExtraAuthor = {
+  name: string;
+  email: string;
+  affiliation: string;
+  orcid: string;
+};
+
 type FormState = {
   journalId: string;
   articleType: ArticleType | "";
@@ -25,6 +32,7 @@ type FormState = {
   authorEmail: string;
   affiliation: string;
   orcid: string;
+  extraAuthors: ExtraAuthor[];
   funding: string;
   conflictOfInterest: string;
   ethicsStatement: string;
@@ -41,6 +49,7 @@ const emptyForm: FormState = {
   authorEmail: "",
   affiliation: "",
   orcid: "",
+  extraAuthors: [],
   funding: "",
   conflictOfInterest: "The authors declare no conflict of interest.",
   ethicsStatement: "",
@@ -106,10 +115,20 @@ export function SubmissionWizard() {
     if (step === 1) return Boolean(form.journalId && form.articleType);
     if (step === 2)
       return Boolean(form.title.trim() && form.abstract.trim() && form.keywords.trim());
-    if (step === 3)
-      return Boolean(
-        form.authorName.trim() && form.authorEmail.trim() && form.affiliation.trim(),
+    if (step === 3) {
+      const extrasOk = form.extraAuthors.every(
+        (author) =>
+          author.name.trim() &&
+          author.email.trim() &&
+          author.email.includes("@"),
       );
+      return Boolean(
+        form.authorName.trim() &&
+          form.authorEmail.trim() &&
+          form.affiliation.trim() &&
+          extrasOk,
+      );
+    }
     if (step === 4) return Boolean(form.conflictOfInterest.trim());
     if (step === 5) return Boolean(file);
     return true;
@@ -159,6 +178,14 @@ export function SubmissionWizard() {
               orcid: form.orcid.trim() || undefined,
               isCorresponding: true,
             },
+            ...form.extraAuthors.map((author, index) => ({
+              name: author.name.trim(),
+              email: author.email.trim(),
+              affiliation: author.affiliation.trim() || form.affiliation,
+              orcid: author.orcid.trim() || undefined,
+              isCorresponding: false,
+              order: index + 2,
+            })),
           ],
         }),
       });
@@ -373,6 +400,108 @@ export function SubmissionWizard() {
                 article.
               </span>
             </label>
+
+            <div className="space-y-3 border-t border-[var(--line)] pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-[var(--ink)]">
+                  Additional authors
+                </p>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-[var(--accent)] hover:underline"
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      extraAuthors: [
+                        ...prev.extraAuthors,
+                        { name: "", email: "", affiliation: "", orcid: "" },
+                      ],
+                    }))
+                  }
+                >
+                  + Add author
+                </button>
+              </div>
+              <p className="text-[11px] text-[var(--muted)]">
+                Each listed author receives the same “manuscript received” and
+                “article published” emails.
+              </p>
+              {form.extraAuthors.map((author, index) => (
+                <div
+                  key={index}
+                  className="space-y-3 rounded-xl border border-[var(--line)] bg-[var(--surface)]/40 p-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-[var(--muted)]">
+                      Author {index + 2}
+                    </p>
+                    <button
+                      type="button"
+                      className="text-[11px] font-semibold text-rose-700 hover:underline"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          extraAuthors: prev.extraAuthors.filter(
+                            (_, i) => i !== index,
+                          ),
+                        }))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <label className="field">
+                    <span>Name</span>
+                    <input
+                      value={author.name}
+                      onChange={(e) =>
+                        setForm((prev) => {
+                          const extraAuthors = [...prev.extraAuthors];
+                          extraAuthors[index] = {
+                            ...author,
+                            name: e.target.value,
+                          };
+                          return { ...prev, extraAuthors };
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Email</span>
+                    <input
+                      type="email"
+                      value={author.email}
+                      onChange={(e) =>
+                        setForm((prev) => {
+                          const extraAuthors = [...prev.extraAuthors];
+                          extraAuthors[index] = {
+                            ...author,
+                            email: e.target.value,
+                          };
+                          return { ...prev, extraAuthors };
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Affiliation (optional)</span>
+                    <input
+                      value={author.affiliation}
+                      onChange={(e) =>
+                        setForm((prev) => {
+                          const extraAuthors = [...prev.extraAuthors];
+                          extraAuthors[index] = {
+                            ...author,
+                            affiliation: e.target.value,
+                          };
+                          return { ...prev, extraAuthors };
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -449,7 +578,13 @@ export function SubmissionWizard() {
               <span className="font-semibold">Title:</span> {form.title}
             </p>
             <p>
-              <span className="font-semibold">Author:</span> {form.authorName}
+              <span className="font-semibold">Authors:</span>{" "}
+              {[
+                form.authorName,
+                ...form.extraAuthors.map((author) => author.name.trim()),
+              ]
+                .filter(Boolean)
+                .join(", ")}
               {form.orcid.trim() ? ` · ORCID ${form.orcid.trim()}` : ""}
             </p>
             <p>

@@ -7,9 +7,11 @@ import { getBoardByJournal } from "@/data/mock";
 import { prisma } from "@/lib/db";
 import { parseApcAmountCents } from "@/lib/apc";
 import { formatCustomerUsd } from "@/lib/format-usd";
+import { displayIssn } from "@/lib/issn";
 import { journalColorFromKey } from "@/lib/journal-colors";
-import { issueKey } from "@/lib/seo/article-seo";
+import { deriveIssueRecords, resolveArticleIssue } from "@/lib/issues";
 import { periodicalJsonLd } from "@/lib/seo/jsonld";
+import { issueKey } from "@/lib/seo/article-seo";
 import { buildJournalMetadata } from "@/lib/seo/scholar";
 import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
@@ -88,7 +90,6 @@ export default async function JournalDetailPage({
         where: { journalId: journal.id, isActive: true, deletedAt: null },
         include: { submission: { select: { manuscriptUrl: true } } },
         orderBy: { publishedAt: "desc" },
-        take: 50,
       });
     }
   } catch {
@@ -101,52 +102,35 @@ export default async function JournalDetailPage({
   const cover = journalColorFromKey(journal.slug, journal.coverColor);
   const board = getBoardByJournal(slug);
 
-  // Derive published issues from real article volume/issue fields
-  const issueMap = new Map<
-    string,
-    {
-      key: string;
-      volume: string | null;
-      issue: string | null;
-      count: number;
-      latest: Date;
-      title: string;
-    }
-  >();
-  for (const a of articles) {
-    const key = issueKey(a.volume, a.issue);
-    const existing = issueMap.get(key);
-    const title =
-      key === "early-view"
-        ? "Early View"
-        : [
-            a.volume && a.volume !== "—" ? `Vol. ${a.volume}` : null,
-            a.issue && a.issue !== "—" ? `Issue ${a.issue}` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ") || "Issue";
-    if (!existing) {
-      issueMap.set(key, {
-        key,
-        volume: a.volume,
-        issue: a.issue,
-        count: 1,
-        latest: a.publishedAt,
-        title,
-      });
-    } else {
-      existing.count += 1;
-      if (a.publishedAt > existing.latest) existing.latest = a.publishedAt;
-    }
-  }
-  const issues = [...issueMap.values()].sort(
-    (a, b) => b.latest.getTime() - a.latest.getTime(),
+  // Derive published issues from real article volume/issue + publish dates
+  const issues = deriveIssueRecords(
+    articles.map((a) => ({
+      volume: a.volume,
+      issue: a.issue,
+      publishedAt: a.publishedAt,
+      journal: {
+        id: journal.id,
+        slug: journal.slug,
+        title: journal.title,
+        shortTitle: journal.shortTitle,
+        frequency: journal.frequency,
+        foundedYear: journal.foundedYear,
+        issn: journal.issn,
+      },
+    })),
   );
-  const currentIssue = issues[0];
+  const currentIssue = issues.find((issue) => issue.isCurrent) ?? issues[0];
   const currentArticles = currentIssue
-    ? articles.filter(
-        (a) => issueKey(a.volume, a.issue) === currentIssue.key,
-      )
+    ? articles.filter((a) => {
+        const numbered = resolveArticleIssue({
+          volume: a.volume,
+          issue: a.issue,
+          publishedAt: a.publishedAt,
+          frequency: journal.frequency,
+          foundedYear: journal.foundedYear,
+        });
+        return issueKey(numbered.volume, numbered.issue) === currentIssue.key;
+      })
     : articles;
 
   return (
@@ -195,9 +179,9 @@ export default async function JournalDetailPage({
                   {journal.description}
                 </p>
                 <p className="mt-3 text-xs text-white/60">
-                  {journal.issn ? `ISSN ${journal.issn}` : null}
-                  {journal.eIssn ? `, eISSN ${journal.eIssn}` : null}
-                  {journal.issn || journal.eIssn ? ", " : ""}
+                  ISSN {displayIssn(journal.issn)}
+                  {journal.eIssn ? `, eISSN ${journal.eIssn}` : ""}
+                  {", "}
                   {journal.openAccess ? "Open Access" : "Subscription"}
                   {journal.foundedYear ? `, Founded ${journal.foundedYear}` : ""}
                 </p>
@@ -282,9 +266,8 @@ export default async function JournalDetailPage({
                   ["Editor-in-Chief", journal.editorInChief ?? "—"],
                   [
                     "ISSN",
-                    [journal.issn, journal.eIssn ? `eISSN ${journal.eIssn}` : null]
-                      .filter(Boolean)
-                      .join(" · ") || "—",
+                    displayIssn(journal.issn) +
+                      (journal.eIssn ? ` · eISSN ${journal.eIssn}` : ""),
                   ],
                 ] as const
               ).map(([k, v]) => (
@@ -323,7 +306,7 @@ export default async function JournalDetailPage({
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
               {currentIssue
-                ? `${currentIssue.count} articles · Updated ${currentIssue.latest.toISOString().slice(0, 10)}`
+                ? `${currentIssue.articleCount} articles · ${currentIssue.intervalLabel}`
                 : "Latest published articles for this journal"}
             </p>
             <div className="mt-6 space-y-4">
@@ -332,7 +315,15 @@ export default async function JournalDetailPage({
                   No articles in the current issue yet.
                 </p>
               )}
-              {currentArticles.map((a) => (
+              {currentArticles.map((a) => {
+                const numbered = resolveArticleIssue({
+                  volume: a.volume,
+                  issue: a.issue,
+                  publishedAt: a.publishedAt,
+                  frequency: journal.frequency,
+                  foundedYear: journal.foundedYear,
+                });
+                return (
                 <ArticleListingCard
                   key={a.id}
                   compact
@@ -347,8 +338,8 @@ export default async function JournalDetailPage({
                     publishedAt: a.publishedAt.toISOString().slice(0, 10),
                     journalTitle: journal.title,
                     journalSlug: journal.slug,
-                    volume: a.volume ?? undefined,
-                    issue: a.issue ?? undefined,
+                    volume: numbered.volume,
+                    issue: numbered.issue,
                     views: a.views,
                     downloads: a.downloads,
                     keywords: a.keywords,
@@ -360,7 +351,8 @@ export default async function JournalDetailPage({
                     ),
                   }}
                 />
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -371,7 +363,9 @@ export default async function JournalDetailPage({
               Published issues
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Browse volumes and issues published in this journal.
+              Browse volumes dated from article publication, using this
+              journal’s {journal.frequency?.toLowerCase() || "publishing"}{" "}
+              schedule.
             </p>
             <div className="mt-6 space-y-2">
               {issues.length === 0 && (
@@ -379,7 +373,7 @@ export default async function JournalDetailPage({
                   No archived issues listed yet.
                 </p>
               )}
-              {issues.map((issue, index) => (
+              {issues.map((issue) => (
                 <div
                   key={issue.key}
                   className="card flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
@@ -387,19 +381,18 @@ export default async function JournalDetailPage({
                   <div>
                     <p className="font-medium text-[var(--ink)]">
                       {issue.title}
-                      {index === 0 ? (
+                      {issue.isCurrent ? (
                         <span className="ml-2 rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--accent)]">
                           Current
                         </span>
                       ) : null}
                     </p>
                     <p className="text-xs text-[var(--muted)]">
-                      {issue.count} articles ·{" "}
-                      {issue.latest.toISOString().slice(0, 10)}
+                      {issue.intervalLabel} · {issue.articleCount} articles
                     </p>
                   </div>
                   <Link
-                    href={`/journals/${slug}/issues/${issue.key}`}
+                    href={issue.href}
                     className="text-sm font-semibold text-[var(--accent)]"
                   >
                     View articles →

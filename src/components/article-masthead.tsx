@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ArticleMetricsPanel } from "@/components/article-metrics";
 import { AuthorOrcidLine } from "@/components/orcid-id";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import { displayIssn } from "@/lib/issn";
 import { authorDisplayName } from "@/lib/orcid";
 
 export type MastheadRecommendation = {
@@ -40,6 +41,9 @@ type Props = {
   recommendations?: MastheadRecommendation[];
   /** When true, masthead sits inside a shared article shell (no extra bottom padding clash). */
   embedded?: boolean;
+  articleSlug?: string;
+  issn?: string | null;
+  issueHref?: string | null;
 };
 
 function NahdaMark() {
@@ -88,6 +92,8 @@ export function ArticleMasthead({
   readMoreHref,
   recommendations = [],
   embedded = false,
+  issn,
+  issueHref,
 }: Props) {
   const metricsId = useId();
   const recsId = useId();
@@ -156,6 +162,9 @@ export function ArticleMasthead({
                 {journalTitle}
               </p>
             ) : null}
+            <p className="mt-1 text-[10px] tracking-wide text-[var(--muted)]">
+              ISSN {displayIssn(issn)}
+            </p>
           </div>
         </div>
 
@@ -247,6 +256,8 @@ export function ArticleMasthead({
                 {link ? (
                   <a
                     href={link}
+                    target="_blank"
+                    rel="noreferrer"
                     className="break-all underline decoration-white/60 underline-offset-2 hover:decoration-white"
                   >
                     {normalizeDoi(doi)}
@@ -261,7 +272,7 @@ export function ArticleMasthead({
               href={readMoreTarget}
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-sm bg-[var(--accent)] px-5 py-2.5 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#0c5756]"
               {...(readMoreHref
-                ? {}
+                ? { target: "_blank", rel: "noreferrer" }
                 : { "aria-label": "Read more — jump to article content" })}
             >
               <GlobeIcon />
@@ -395,7 +406,17 @@ export function ArticleMasthead({
             Received {receivedAt}
             {" · "}Accepted {acceptedAt}
             {" · "}Published {publishedAt}
-            {" · "}Vol. {volume} · Issue {issue}
+            {" · "}ISSN {displayIssn(issn)}
+            {" · "}
+            {issueHref ? (
+              <Link href={issueHref} className="hover:text-[var(--accent)] hover:underline">
+                Vol. {volume} · Issue {issue}
+              </Link>
+            ) : (
+              <>
+                Vol. {volume} · Issue {issue}
+              </>
+            )}
             {pages && pages !== "—" ? ` · pp. ${pages}` : ""}
           </p>
         </div>

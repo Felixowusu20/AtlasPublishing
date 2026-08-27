@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { ArticleListingCard } from "@/components/article-listing-card";
+import { ArticlesHubNav } from "@/components/articles-hub-nav";
 import { prisma } from "@/lib/db";
 import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
+import { resolveArticleIssue } from "@/lib/issues";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,15 @@ async function getArticles(): Promise<ArticleCard[]> {
       },
       orderBy: { publishedAt: "desc" },
     });
-    return rows.map((a) => ({
+    return rows.map((a) => {
+      const numbered = resolveArticleIssue({
+        volume: a.volume,
+        issue: a.issue,
+        publishedAt: a.publishedAt,
+        frequency: a.journal.frequency,
+        foundedYear: a.journal.foundedYear,
+      });
+      return {
       id: a.id,
       slug: a.slug,
       title: a.title,
@@ -43,8 +52,8 @@ async function getArticles(): Promise<ArticleCard[]> {
       abstract: a.abstract,
       articleType: a.articleType,
       openAccess: a.openAccess,
-      volume: a.volume ?? "—",
-      issue: a.issue ?? "Early View",
+      volume: numbered.volume,
+      issue: numbered.issue,
       doi: a.doi ?? "Pending",
       publishedAt: a.publishedAt.toISOString().slice(0, 10),
       journalTitle: a.journal.title,
@@ -55,7 +64,8 @@ async function getArticles(): Promise<ArticleCard[]> {
       hasPdf: Boolean(
         resolvePublishedPdfUrl(a.manuscriptUrl, a.submission?.manuscriptUrl),
       ),
-    }));
+    };
+    });
   } catch {
     return [];
   }
@@ -85,38 +95,11 @@ export default async function ArticlesPage({
             </p>
             <h1 className="page-title mt-1">Articles</h1>
             <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
-              Published and Early View content. Each listing matches the live
-              article page — journal bar, open-access badge, DOI, and metrics.
+              Published articles by journal issue. Each paper counts toward the
+              volume and issue number set from its publication date.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/articles"
-              className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition ${
-                !access
-                  ? "bg-[var(--accent)] text-white"
-                  : "border border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--accent)]/40"
-              }`}
-            >
-              All
-            </Link>
-            <Link
-              href="/articles?access=oa"
-              className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition ${
-                access === "oa"
-                  ? "bg-[var(--accent)] text-white"
-                  : "border border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--accent)]/40"
-              }`}
-            >
-              Open access
-            </Link>
-            <Link
-              href="/search"
-              className="rounded-lg border border-[var(--line)] bg-white px-3.5 py-2 text-sm font-semibold text-[var(--ink)] transition hover:border-[var(--accent)]/40"
-            >
-              Search by DOI
-            </Link>
-          </div>
+          <ArticlesHubNav active={access === "oa" ? "oa" : "all"} />
         </div>
 
         <div className="mt-8 w-full min-w-0 space-y-4">

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma, prismaFailureMessage } from "@/lib/db";
 import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
-import { articlePublishedEmailHtml, sendEmail } from "@/lib/mail";
+import { articlePublishedEmailHtml, sendEmailToAll } from "@/lib/mail";
 import { requireAdmin } from "@/lib/session";
 import {
   progressForStatus,
@@ -18,8 +18,15 @@ import {
 } from "@/lib/doi";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { validateScholarReadiness, issueKey } from "@/lib/seo/article-seo";
+import { deriveIssueRecords, isPlaceholderIssue, numberedIssuePlacement } from "@/lib/issues";
+import { persistNumberedIssues } from "@/lib/issue-catalog";
 import { articleDateYear, parseArticleDate } from "@/lib/article-dates";
 import { ensureManuscriptHtml, htmlToPlainText } from "@/lib/import-manuscript";
+import { optionalIssn } from "@/lib/issn";
+import {
+  jointAuthorGreeting,
+  notifyAuthorContacts,
+} from "@/lib/author-contacts";
 
 /** Accepted manuscripts waiting to be published into the journal template. */
 export async function GET() {
@@ -27,7 +34,8 @@ export async function GET() {
   if (!admin) return unauthorized();
 
   try {
-    const [queue, recentlyPublished] = await Promise.all([
+    await persistNumberedIssues();
+    const [queue, recentlyPublished, issueSource] = await Promise.all([
       prisma.submission.findMany({
         where: {
           deletedAt: null,
@@ -59,9 +67,32 @@ export async function GET() {
         orderBy: { publishedAt: "desc" },
         take: 40,
       }),
+      prisma.publishedArticle.findMany({
+        where: { isActive: true, deletedAt: null },
+        select: {
+          volume: true,
+          issue: true,
+          publishedAt: true,
+          journal: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              shortTitle: true,
+              frequency: true,
+              foundedYear: true,
+              issn: true,
+            },
+          },
+        },
+      }),
     ]);
 
-    return jsonOk({ queue, recentlyPublished });
+    return jsonOk({
+      queue,
+      recentlyPublished,
+      journalIssues: deriveIssueRecords(issueSource),
+    });
   } catch (err) {
     console.error("[publish-queue GET]", err);
     return jsonError("Could not load publish queue", 500);
@@ -81,6 +112,7 @@ const publishSchema = z.object({
   volume: z.string().optional(),
   issue: z.string().optional(),
   pages: z.string().optional(),
+  issn: z.string().optional(),
   license: z.string().optional(),
   openAccess: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
@@ -217,6 +249,19 @@ export async function POST(request: Request) {
       );
     }
 
+    const placement = numberedIssuePlacement({
+      publishedAt,
+      frequency: submission.journal.frequency,
+      foundedYear: submission.journal.foundedYear,
+    });
+    const volume =
+      body.volume?.trim() && body.volume.trim() !== "—"
+        ? body.volume.trim()
+        : placement.volume;
+    const issue = isPlaceholderIssue(body.issue)
+      ? placement.issue
+      : body.issue!.trim();
+
     const articleData = {
       title: body.title,
       slug,
@@ -228,8 +273,8 @@ export async function POST(request: Request) {
       publishedAt,
       receivedAt: receivedAt ?? null,
       acceptedAt: acceptedAt ?? null,
-      volume: body.volume || undefined,
-      issue: body.issue || "Early View",
+      volume,
+      issue,
       pages: body.pages || undefined,
       articleType: body.articleType,
       openAccess: body.openAccess ?? true,
@@ -248,6 +293,13 @@ export async function POST(request: Request) {
 
     const result = await prisma.$transaction(
       async (tx) => {
+        if (body.issn !== undefined) {
+          await tx.journal.update({
+            where: { id: submission.journalId },
+            data: { issn: optionalIssn(body.issn) },
+          });
+        }
+
         const article = previous
           ? await tx.publishedArticle.update({
               where: { id: previous.id },
@@ -311,6 +363,8 @@ export async function POST(request: Request) {
       );
       if (result.doi) revalidatePath(atlasDoiPath(result.doi));
       revalidatePath("/articles");
+      revalidatePath("/articles/current-issues");
+      revalidatePath("/articles/past-issues");
       revalidatePath("/sitemap.xml");
     } catch (err) {
       console.error("[publish-revalidate]", err);
@@ -318,18 +372,28 @@ export async function POST(request: Request) {
 
     let emailSent = false;
     try {
-      const mail = await sendEmail({
-        to: submission.author.email,
-        subject: `Congratulations! “${result.title}” is published`,
-        html: articlePublishedEmailHtml({
-          authorName: submission.author.name,
-          title: result.title,
-          manuscriptId: submission.manuscriptId,
-          journalTitle: result.journal.title,
-          articleUrl,
-          pdfUrl: pdfDownloadUrl,
-        }),
+      const contacts = notifyAuthorContacts({
+        authorsJson: submission.authorsJson,
+        fallback: {
+          name: submission.author.name,
+          email: submission.author.email,
+        },
       });
+      const greeting = jointAuthorGreeting(contacts);
+      const mail = await sendEmailToAll(
+        contacts.map((c) => c.email),
+        {
+          subject: `Congratulations! “${result.title}” is published`,
+          html: articlePublishedEmailHtml({
+            authorName: greeting,
+            title: result.title,
+            manuscriptId: submission.manuscriptId,
+            journalTitle: result.journal.title,
+            articleUrl,
+            pdfUrl: pdfDownloadUrl,
+          }),
+        },
+      );
       emailSent = Boolean(mail.ok);
     } catch (err) {
       console.error("[publish-email]", err);

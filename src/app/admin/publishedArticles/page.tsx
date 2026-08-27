@@ -26,9 +26,16 @@ import {
   parseAuthorOrcid,
 } from "@/lib/orcid";
 import { htmlToPlainText } from "@/lib/import-manuscript";
+import { slugify } from "@/lib/submission-utils";
 import { RichTextField } from "@/components/rich-text-field";
 import { journalArticlePalette } from "@/lib/journal-colors";
 import { formatArticleDate, toDateInputValue } from "@/lib/article-dates";
+import {
+  findIssueRecord,
+  issuesForJournal,
+  numberedIssuePlacement,
+  type IssueRecord,
+} from "@/lib/issues";
 
 type AuthorEntry = {
   name: string;
@@ -63,6 +70,9 @@ type QueueItem = {
     slug: string;
     coverColor: string;
     coverImageUrl?: string | null;
+    issn?: string | null;
+    frequency?: string | null;
+    foundedYear?: number | null;
   };
   author: {
     id: string;
@@ -94,6 +104,7 @@ type TemplateForm = {
   keywords: string;
   articleType: string;
   doi: string;
+  issn: string;
   volume: string;
   issue: string;
   pages: string;
@@ -160,8 +171,9 @@ function emptyForm(): TemplateForm {
     keywords: "",
     articleType: "Research Article",
     doi: "",
+    issn: "",
     volume: "",
-    issue: "Early View",
+    issue: "",
     pages: "",
     receivedAt: "",
     acceptedAt: "",
@@ -199,6 +211,7 @@ export default function PublishedArticlesPage() {
   const router = useRouter();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [recent, setRecent] = useState<PublishedItem[]>([]);
+  const [journalIssues, setJournalIssues] = useState<IssueRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<TemplateForm>(emptyForm());
   const [pane, setPane] = useState<Pane>("edit");
@@ -247,6 +260,34 @@ export default function PublishedArticlesPage() {
     }),
     [form.receivedAt, form.acceptedAt, form.publishedAt],
   );
+  const selectedJournalIssues = useMemo(
+    () =>
+      selected ? issuesForJournal(journalIssues, selected.journal.id) : [],
+    [journalIssues, selected],
+  );
+  const matchedIssue = useMemo(
+    () =>
+      selected
+        ? findIssueRecord(
+            journalIssues,
+            selected.journal.id,
+            form.volume,
+            form.issue,
+          )
+        : null,
+    [journalIssues, selected, form.volume, form.issue],
+  );
+  const suggestedPlacement = useMemo(() => {
+    if (!selected) return null;
+    return numberedIssuePlacement({
+      publishedAt: form.publishedAt || new Date(),
+      frequency: selected.journal.frequency,
+      foundedYear: selected.journal.foundedYear,
+    });
+  }, [
+    selected,
+    form.publishedAt,
+  ]);
 
   const skipDirty = useRef(false);
   const formRef = useRef(form);
@@ -334,6 +375,12 @@ export default function PublishedArticlesPage() {
       ? sub.productionBody
       : emptyForm().body;
     // Title, abstract, keywords always come from the accepted submission
+    const publishedAt = toDateInputValue(new Date());
+    const placement = numberedIssuePlacement({
+      publishedAt,
+      frequency: sub.journal.frequency,
+      foundedYear: sub.journal.foundedYear,
+    });
     setForm({
       title: sub.title?.trim() || "",
       authorEntries: authorEntriesFromSubmission(sub),
@@ -342,12 +389,13 @@ export default function PublishedArticlesPage() {
       keywords: (sub.keywords ?? []).join(", "),
       articleType: sub.articleType || "Research Article",
       doi: "",
-      volume: "",
-      issue: "Early View",
+      issn: sub.journal.issn ?? "",
+      volume: placement.volume,
+      issue: placement.issue,
       pages: "",
       receivedAt: toDateInputValue(sub.submittedAt),
       acceptedAt: "",
-      publishedAt: toDateInputValue(new Date()),
+      publishedAt,
       license: "CC BY 4.0",
       openAccess: true,
       isFeatured: true,
@@ -424,6 +472,7 @@ export default function PublishedArticlesPage() {
       const nextQueue: QueueItem[] = data.queue ?? [];
       setQueue(nextQueue);
       setRecent(data.recentlyPublished ?? []);
+      setJournalIssues(data.journalIssues ?? []);
 
       const targetId =
         preferId ||
@@ -607,6 +656,7 @@ export default function PublishedArticlesPage() {
         keywords,
         articleType: form.articleType,
         doi: form.doi || undefined,
+        issn: form.issn || undefined,
         volume: form.volume || undefined,
         issue: form.issue || undefined,
         pages: form.pages || undefined,
@@ -717,6 +767,7 @@ export default function PublishedArticlesPage() {
         journalSlug={selected.journal.slug}
         coverColor={selected.journal.coverColor}
         journalUrl={`/journals/${selected.journal.slug}`}
+        articleUrl={`/articles/${slugify(form.title)}`}
         manuscriptId={selected.manuscriptId}
         title={form.title}
         authors={previewAuthors}
@@ -1246,6 +1297,7 @@ export default function PublishedArticlesPage() {
                           journalSlug={selected.journal.slug}
                           coverColor={selected.journal.coverColor}
                           journalUrl={`/journals/${selected.journal.slug}`}
+                          articleUrl={`/articles/${slugify(form.title)}`}
                           manuscriptId={selected.manuscriptId}
                           title={form.title}
                           authors={previewAuthors}
@@ -1342,8 +1394,9 @@ export default function PublishedArticlesPage() {
                           Nahda-styled PDF
                         </p>
                         <p className="mt-1 text-[11px] text-[var(--muted)]">
-                          Built from the print template (logo and page numbers
-                          on every page). Readers download this file, not Word.
+                          Same A4 layout as Print preview: margins, two-column
+                          body, Nahda logo, DOI, and page numbers. Readers
+                          download this file, not Word.
                         </p>
                         <div className="mt-3 flex flex-col gap-2">
                           <button
@@ -1461,14 +1514,123 @@ export default function PublishedArticlesPage() {
                             <input
                               type="date"
                               value={form.publishedAt}
+                              onChange={(e) => {
+                                const publishedAt = e.target.value;
+                                const placement = numberedIssuePlacement({
+                                  publishedAt: publishedAt || new Date(),
+                                  frequency: selected.journal.frequency,
+                                  foundedYear: selected.journal.foundedYear,
+                                });
+                                setForm((f) => ({
+                                  ...f,
+                                  publishedAt,
+                                  volume: placement.volume,
+                                  issue: placement.issue,
+                                }));
+                              }}
+                            />
+                          </label>
+                          <label className="field">
+                            <span>
+                              ISSN{" "}
+                              <span className="font-normal text-[var(--muted)]">
+                                (optional)
+                              </span>
+                            </span>
+                            <input
+                              value={form.issn}
                               onChange={(e) =>
                                 setForm((f) => ({
                                   ...f,
-                                  publishedAt: e.target.value,
+                                  issn: e.target.value,
                                 }))
                               }
+                              placeholder="Not assigned yet"
+                              autoComplete="off"
                             />
                           </label>
+                        </div>
+                        <div className="space-y-3 rounded-xl border border-[var(--line)] bg-[var(--surface)]/40 p-3">
+                          <p className="text-xs font-semibold text-[var(--ink)]">
+                            Issue assignment
+                          </p>
+                          <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                            Volume and issue number follow the publish date and{" "}
+                            {selected.journal.frequency?.toLowerCase() ||
+                              "the"}{" "}
+                            schedule of{" "}
+                            <strong>{selected.journal.title}</strong>.
+                          </p>
+                          {selectedJournalIssues.length > 0 ? (
+                            <label className="field">
+                              <span>Existing issues in this journal</span>
+                              <select
+                                value={
+                                  matchedIssue
+                                    ? `${matchedIssue.journalId}::${matchedIssue.key}`
+                                    : "__date__"
+                                }
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value === "__date__") {
+                                    const placement = numberedIssuePlacement({
+                                      publishedAt:
+                                        form.publishedAt || new Date(),
+                                      frequency: selected.journal.frequency,
+                                      foundedYear:
+                                        selected.journal.foundedYear,
+                                    });
+                                    setForm((f) => ({
+                                      ...f,
+                                      volume: placement.volume,
+                                      issue: placement.issue,
+                                    }));
+                                    return;
+                                  }
+                                  const found = selectedJournalIssues.find(
+                                    (row) =>
+                                      `${row.journalId}::${row.key}` === value,
+                                  );
+                                  if (!found) return;
+                                  setForm((f) => ({
+                                    ...f,
+                                    volume:
+                                      found.volume && found.volume !== "—"
+                                        ? found.volume
+                                        : "",
+                                    issue:
+                                      found.issue && found.issue !== "—"
+                                        ? found.issue
+                                        : "",
+                                  }));
+                                }}
+                              >
+                                <option value="__date__">
+                                  Issue for this publish date
+                                  {suggestedPlacement
+                                    ? ` (Vol. ${suggestedPlacement.volume} · Issue ${suggestedPlacement.issue})`
+                                    : ""}
+                                </option>
+                                {selectedJournalIssues.map((row) => (
+                                  <option
+                                    key={`${row.journalId}-${row.key}`}
+                                    value={`${row.journalId}::${row.key}`}
+                                  >
+                                    {row.title} · {row.intervalLabel} ·{" "}
+                                    {row.articleCount} article
+                                    {row.articleCount === 1 ? "" : "s"}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : null}
+                          <p className="rounded-lg bg-white px-3 py-2 text-[11px] leading-relaxed text-[var(--muted)] ring-1 ring-[var(--line)]">
+                            {matchedIssue
+                              ? `Will be added to ${matchedIssue.title} (${matchedIssue.intervalLabel}). Currently ${matchedIssue.articleCount} article${matchedIssue.articleCount === 1 ? "" : "s"}; this publish makes ${matchedIssue.articleCount + 1}.`
+                              : suggestedPlacement
+                                ? `Will count toward Vol. ${suggestedPlacement.volume} · Issue ${suggestedPlacement.issue} of ${selected.journal.title}.`
+                                : "Set a volume and issue number."}
+                          </p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <label className="field">
@@ -1604,6 +1766,7 @@ export default function PublishedArticlesPage() {
                       journalSlug={selected.journal.slug}
                       coverColor={selected.journal.coverColor}
                       journalUrl={`/journals/${selected.journal.slug}`}
+                      articleUrl={`/articles/${slugify(form.title)}`}
                       manuscriptId={selected.manuscriptId}
                       title={form.title}
                       authors={previewAuthors}

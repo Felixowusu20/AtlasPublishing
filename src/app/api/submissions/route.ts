@@ -7,10 +7,14 @@ import { notifyAdmins } from "@/lib/notify-admins";
 import { getAppBaseUrl } from "@/lib/app-url";
 import {
   authorGreetingName,
-  sendEmail,
+  sendEmailToAll,
   submissionAcknowledgementEmailHtml,
 } from "@/lib/mail";
 import { withCustomerPayment } from "@/lib/payment-dto";
+import {
+  jointAuthorGreeting,
+  notifyAuthorContacts,
+} from "@/lib/author-contacts";
 
 export async function GET() {
   const session = await requireUser(["AUTHOR"]);
@@ -129,23 +133,24 @@ export async function POST(request: Request) {
 
     const base = getAppBaseUrl();
     const submissionUrl = `${base}/submissions/${submission.id}`;
-    const authorEmail = session.email;
-    const authorName = session.name || "Author";
+    const contacts = notifyAuthorContacts({
+      authorsJson: body.authors,
+      fallback: { name: session.name, email: session.email },
+    });
+    const greeting = jointAuthorGreeting(contacts);
+    const recipientEmails = contacts.map((c) => c.email);
 
-    // Must await: on serverless (Vercel/etc.) returning before SMTP completes
-    // freezes the isolate and drops the acknowledgement email.
-    const mail = await sendEmail({
-      to: authorEmail,
+    const mail = await sendEmailToAll(recipientEmails, {
       subject: `Manuscript received: ${manuscriptId}`,
       html: submissionAcknowledgementEmailHtml({
-        authorName,
+        authorName: greeting,
         title: submission.title,
         manuscriptId,
         journalTitle: journal.title,
         submissionUrl,
       }),
       text: [
-        `Dear ${authorGreetingName(authorName)},`,
+        `Dear ${authorGreetingName(greeting)},`,
         "",
         `Thank you for submitting your manuscript entitled “${submission.title}” to ${journal.title}.`,
         "",
@@ -168,7 +173,7 @@ export async function POST(request: Request) {
     });
     if (!mail.ok) {
       console.error(
-        `[submission-ack-email] to=${authorEmail} skipped=${mail.skipped} error=${mail.error ?? "unknown"}`,
+        `[submission-ack-email] to=${recipientEmails.join(",")} skipped=${mail.skipped} sent=${mail.sent}`,
       );
     }
 

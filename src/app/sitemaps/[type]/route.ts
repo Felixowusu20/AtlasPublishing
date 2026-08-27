@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { absoluteUrl } from "@/lib/seo/scholar";
-import { issueKey } from "@/lib/seo/article-seo";
+import { issueKey, resolveArticleIssue } from "@/lib/issues";
 
 function urlset(urls: { loc: string; lastmod?: string; priority?: string }[]) {
   const body = urls
@@ -84,12 +84,21 @@ export async function GET(
           volume: true,
           issue: true,
           publishedAt: true,
-          journal: { select: { slug: true } },
+          journal: {
+            select: { slug: true, frequency: true, foundedYear: true },
+          },
         },
       });
       const map = new Map<string, Date>();
       for (const a of articles) {
-        const key = `${a.journal.slug}/${issueKey(a.volume, a.issue)}`;
+        const numbered = resolveArticleIssue({
+          volume: a.volume,
+          issue: a.issue,
+          publishedAt: a.publishedAt,
+          frequency: a.journal.frequency,
+          foundedYear: a.journal.foundedYear,
+        });
+        const key = `${a.journal.slug}/${issueKey(numbered.volume, numbered.issue)}`;
         const prev = map.get(key);
         if (!prev || a.publishedAt > prev) map.set(key, a.publishedAt);
       }

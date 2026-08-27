@@ -1,8 +1,15 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArticleListingCard } from "@/components/article-listing-card";
 import { prisma } from "@/lib/db";
+import { displayIssn } from "@/lib/issn";
+import {
+  deriveIssueRecords,
+  formatDateInterval,
+  issueTitle,
+  resolveArticleIssue,
+} from "@/lib/issues";
 import { issueKey, parseIssueKey } from "@/lib/seo/article-seo";
 import { absoluteUrl, buildJournalMetadata } from "@/lib/seo/scholar";
 import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
@@ -19,15 +26,7 @@ export async function generateMetadata({
     const journal = await prisma.journal.findUnique({ where: { slug } });
     if (!journal?.isActive) return { title: "Issue | Nahda Publications" };
     const parsed = parseIssueKey(key);
-    const label =
-      key === "early-view"
-        ? "Early View"
-        : [
-            parsed.volume ? `Vol. ${parsed.volume}` : null,
-            parsed.issue ? `Issue ${parsed.issue}` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ") || "Issue";
+    const label = issueTitle(parsed.volume, parsed.issue);
     const meta = buildJournalMetadata({
       title: `${journal.title} — ${label}`,
       shortTitle: journal.shortTitle,
@@ -63,22 +62,51 @@ export default async function JournalIssuePage({
     orderBy: { publishedAt: "desc" },
   });
 
-  const matched = articles.filter((a) => issueKey(a.volume, a.issue) === key);
+  const resolvedOf = (a: (typeof articles)[number]) =>
+    resolveArticleIssue({
+      volume: a.volume,
+      issue: a.issue,
+      publishedAt: a.publishedAt,
+      frequency: journal.frequency,
+      foundedYear: journal.foundedYear,
+    });
+
+  if (key === "early-view") {
+    const records = deriveIssueRecords(
+      articles.map((a) => ({
+        volume: a.volume,
+        issue: a.issue,
+        publishedAt: a.publishedAt,
+        journal,
+      })),
+    );
+    const current = records.find((row) => row.isCurrent);
+    redirect(current?.href ?? `/journals/${slug}?tab=archives`);
+  }
+
+  const matched = articles.filter((a) => {
+    const numbered = resolvedOf(a);
+    return issueKey(numbered.volume, numbered.issue) === key;
+  });
   if (matched.length === 0 && articles.length > 0) {
-    // Unknown key with articles elsewhere — 404
     notFound();
   }
 
   const parsed = parseIssueKey(key);
-  const title =
-    key === "early-view"
-      ? "Early View"
-      : [
-          parsed.volume ? `Vol. ${parsed.volume}` : null,
-          parsed.issue ? `Issue ${parsed.issue}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · ") || "Issue";
+  const first = matched[0] ? resolvedOf(matched[0]) : null;
+  const title = issueTitle(
+    first?.volume ?? parsed.volume,
+    first?.issue ?? parsed.issue,
+  );
+  const dates = matched.map((a) => a.publishedAt);
+  const interval =
+    dates.length > 0
+      ? formatDateInterval(
+          dates.reduce((a, b) => (a < b ? a : b)),
+          dates.reduce((a, b) => (a > b ? a : b)),
+          journal.frequency,
+        )
+      : null;
 
   return (
     <div className="page-wrap">
@@ -95,7 +123,8 @@ export default async function JournalIssuePage({
       <p className="mt-2 text-sm text-[var(--muted)]">
         {matched.length} article{matched.length === 1 ? "" : "s"} in{" "}
         {journal.title}
-        {journal.issn ? ` · ISSN ${journal.issn}` : ""}
+        {interval ? ` · ${interval}` : ""}
+        {` · ISSN ${displayIssn(journal.issn)}`}
       </p>
 
       <div className="mt-8 space-y-4">
@@ -118,8 +147,8 @@ export default async function JournalIssuePage({
               publishedAt: a.publishedAt.toISOString().slice(0, 10),
               journalTitle: journal.title,
               journalSlug: journal.slug,
-              volume: a.volume ?? undefined,
-              issue: a.issue ?? undefined,
+              volume: resolvedOf(a).volume,
+              issue: resolvedOf(a).issue,
               views: a.views,
               downloads: a.downloads,
               keywords: a.keywords,

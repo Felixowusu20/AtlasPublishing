@@ -430,7 +430,6 @@ input[type="search"]::-webkit-search-results-decoration {
   color: #0b1f33;
   font-family: Helvetica, Arial, sans-serif;
 }
-
 .nahda-article-body figure:has(table) > .nahda-table-wrap,
 .nahda-article-body figure.table-full > .nahda-table-wrap,
 .nahda-article-body figure:has(table) > table,
@@ -1119,16 +1118,28 @@ input[type="search"]::-webkit-search-results-decoration {
   text-align: right;
 }
 
-/* Off-screen HTML source for the print-layout PDF (not the rounded preview). */
+/* Off-screen HTML source: same printable width as @media print (210mm − 14mm − 14mm). */
 .nahda-pdf-source {
   position: absolute;
   left: -12000px;
   top: 0;
-  width: 210mm;
+  width: 182mm;
+  min-width: 182mm;
+  max-width: 182mm;
   background: #fff;
+  opacity: 1;
   pointer-events: none;
   border-radius: 0;
   overflow: visible;
+  box-sizing: border-box;
+}
+
+.nahda-pdf-print,
+.nahda-pdf-print.nahda-article,
+.nahda-pdf-print .nahda-article {
+  width: 182mm !important;
+  max-width: 182mm !important;
+  box-sizing: border-box !important;
 }
 
 .nahda-pdf-print,
@@ -1137,7 +1148,6 @@ input[type="search"]::-webkit-search-results-decoration {
   box-shadow: none !important;
   outline: none !important;
   border: none !important;
-  max-width: none !important;
   overflow: visible !important;
   clip-path: none !important;
   background: #fff !important;
@@ -1151,7 +1161,10 @@ input[type="search"]::-webkit-search-results-decoration {
 .nahda-pdf-print .nahda-article-flow,
 .nahda-pdf-print .nahda-article-body,
 .nahda-pdf-print .nahda-article-front,
-.nahda-pdf-print .nahda-print-frame {
+.nahda-pdf-print .nahda-print-frame,
+.nahda-pdf-print .nahda-table-wrap,
+.nahda-pdf-print figure,
+.nahda-pdf-print table {
   border-radius: 0 !important;
   overflow: visible !important;
 }
@@ -1162,14 +1175,32 @@ input[type="search"]::-webkit-search-results-decoration {
   padding-right: 0 !important;
 }
 
+.nahda-pdf-print .nahda-article-inner {
+  padding-bottom: 0.35rem !important;
+}
+
 .nahda-pdf-print .nahda-article-flow {
   column-count: 2 !important;
-  column-fill: auto !important;
+  column-fill: balance !important;
   column-gap: 7mm !important;
+  margin-top: 0.55em !important;
 }
 
 .nahda-pdf-print .nahda-article-flow .nahda-article-body {
   display: contents !important;
+}
+
+.nahda-pdf-print .nahda-span-all,
+.nahda-pdf-print figure.figure-full,
+.nahda-pdf-print figure.table-full,
+.nahda-pdf-print figure:has(img),
+.nahda-pdf-print figure:has(table),
+.nahda-pdf-print .nahda-table-wrap,
+.nahda-pdf-print .nahda-workflow,
+.nahda-pdf-print .nahda-end-matter {
+  column-span: all !important;
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 .nahda-pdf-print .nahda-running-footer,

@@ -4,6 +4,9 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState, use } from "react";
 import { ManuscriptViewer } from "@/components/manuscript-viewer";
 import { NahdaLoader } from "@/components/nahda-loader";
+import { FeedbackHistory } from "@/components/feedback-history";
+import { readApiJson, uploadFileDirect } from "@/lib/client-upload";
+import { formatBytes } from "@/lib/prepare-upload-file";
 import { uiStatus } from "@/lib/submission-utils";
 
 const statuses = [
@@ -23,6 +26,9 @@ type Feedback = {
   status: (typeof statuses)[number];
   createdAt: string;
   reviewer: { name: string };
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileBytes?: number | null;
 };
 
 type Submission = {
@@ -63,6 +69,8 @@ export default function AdminSubmissionDetailPage({
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [status, setStatus] = useState<(typeof statuses)[number]>("UNDER_REVIEW");
   const [message, setMessage] = useState("");
+  const [reviewFile, setReviewFile] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [actionRequired, setActionRequired] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -114,38 +122,86 @@ export default function AdminSubmissionDetailPage({
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    const comment = message.trim();
+    if (!reviewFile && comment.length < 10) {
+      setError("Write a short comment, or attach a review file.");
+      return;
+    }
     setLoading(true);
     setError("");
     setSuccess("");
-    const res = await fetch(`/api/admin/submissions/${id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status,
-        message,
-        actionRequired: actionRequired || undefined,
-        assignToMe: true,
-      }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? "Failed");
-      return;
-    }
-    setMessage("");
-    setActionRequired("");
-    setSubmission(data.submission);
-    if (status === "ACCEPTED") {
-      setSuccess(
-        data.checkoutUrl
-          ? `Accepted. Payment link sent${data.apcAmountLabel ? ` (${data.apcAmountLabel})` : ""}.`
-          : data.emailSent
-            ? "Accepted. No APC due; moved toward production."
-            : "Accepted.",
-      );
-    } else {
-      setSuccess(data.emailSent ? "Feedback sent." : "Feedback saved.");
+    try {
+      let filePayload: {
+        fileUrl?: string;
+        filePublicId?: string;
+        fileName?: string;
+        fileBytes?: number;
+        fileResourceType?: string;
+      } = {};
+      if (reviewFile) {
+        const uploaded = await uploadFileDirect(reviewFile, {
+          folder: "atlas/review-files",
+          resourceType: "raw",
+          prepare: false,
+        });
+        filePayload = {
+          fileUrl: uploaded.url,
+          filePublicId: uploaded.publicId,
+          fileName: reviewFile.name,
+          fileBytes: reviewFile.size,
+          fileResourceType: ["image", "raw", "video", "auto"].includes(
+            uploaded.resourceType,
+          )
+            ? uploaded.resourceType
+            : "raw",
+        };
+      }
+
+      const res = await fetch(`/api/admin/submissions/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status,
+          message: comment,
+          actionRequired: actionRequired || undefined,
+          assignToMe: true,
+          ...filePayload,
+        }),
+      });
+      const data = await readApiJson<{
+        error?: string;
+        submission?: Submission;
+        emailSent?: boolean;
+        checkoutUrl?: string;
+        apcAmountLabel?: string;
+      }>(res);
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed");
+      }
+      setMessage("");
+      setActionRequired("");
+      setReviewFile(null);
+      setFileInputKey((n) => n + 1);
+      if (data.submission) setSubmission(data.submission);
+      if (status === "ACCEPTED") {
+        setSuccess(
+          data.checkoutUrl
+            ? `Accepted. Payment link sent${data.apcAmountLabel ? ` (${data.apcAmountLabel})` : ""}.`
+            : data.emailSent
+              ? "Accepted. No APC due; moved toward production."
+              : "Accepted.",
+        );
+      } else {
+        setSuccess(
+          data.emailSent
+            ? "Feedback sent. The author was emailed and can download the file from their dashboard."
+            : "Feedback saved.",
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -262,24 +318,10 @@ export default function AdminSubmissionDetailPage({
           )}
 
           <section className="mt-6">
-            <h2 className="text-sm font-semibold">Feedback history</h2>
-            <div className="mt-3 space-y-3">
-              {submission.feedback.length === 0 && (
-                <p className="text-sm text-[var(--muted)]">No feedback yet.</p>
-              )}
-              {submission.feedback.map((f) => (
-                <div
-                  key={f.id}
-                  className="rounded-xl border border-[var(--line)] bg-white p-4"
-                >
-                  <p className="text-xs text-[var(--muted)]">
-                    {f.reviewer.name} · {uiStatus(f.status)} ·{" "}
-                    {new Date(f.createdAt).toLocaleString()}
-                  </p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm">{f.message}</p>
-                </div>
-              ))}
-            </div>
+            <FeedbackHistory
+              submissionId={submission.id}
+              items={submission.feedback}
+            />
           </section>
         </div>
 
@@ -289,8 +331,8 @@ export default function AdminSubmissionDetailPage({
         >
           <h2 className="text-sm font-semibold">Send review feedback</h2>
           <p className="text-xs text-[var(--muted)]">
-            Author receives an email and a dashboard notification. Progress bar
-            updates immediately.
+            Attach a review file (any format or size) and an optional comment.
+            The author is emailed and can download the file from their dashboard.
           </p>
           <label className="field">
             <span>New status</span>
@@ -308,14 +350,26 @@ export default function AdminSubmissionDetailPage({
             </select>
           </label>
           <label className="field">
-            <span>Message to author</span>
+            <span>Comment to author (optional with a file)</span>
             <textarea
-              required
               rows={6}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Summarize decision and requested changes…"
+              placeholder="Optional note. Required only if you do not attach a file."
             />
+          </label>
+          <label className="field">
+            <span>Review file (any format, any size)</span>
+            <input
+              key={fileInputKey}
+              type="file"
+              onChange={(e) => setReviewFile(e.target.files?.[0] ?? null)}
+            />
+            {reviewFile && (
+              <p className="mt-1 text-[11px] text-[var(--muted)]">
+                {reviewFile.name} · {formatBytes(reviewFile.size)}
+              </p>
+            )}
           </label>
           <label className="field">
             <span>Action required (optional)</span>
@@ -383,7 +437,11 @@ export default function AdminSubmissionDetailPage({
             </div>
           )}
           <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? "Sending…" : "Send feedback"}
+            {loading
+              ? reviewFile
+                ? "Uploading and sending…"
+                : "Sending…"
+              : "Send feedback"}
           </button>
         </form>
       </div>

@@ -68,16 +68,23 @@ export async function uploadFileDirect(
   options: {
     folder?: string;
     resourceType?: "image" | "raw" | "auto" | "video";
+    /** Keep the original bytes (review files). Default compresses oversized Word/images. */
+    prepare?: boolean;
   } = {},
 ): Promise<UploadedAsset> {
-  const prepared = await prepareUploadFile(file);
+  const prepared =
+    options.prepare === false ? file : await prepareUploadFile(file);
   const folder = options.folder ?? "nahda";
   const resourceType = options.resourceType ?? "auto";
 
   const signRes = await fetch("/api/upload/sign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder, resourceType }),
+    body: JSON.stringify({
+      folder,
+      resourceType,
+      filename: prepared.name,
+    }),
   });
   const signed = await readApiJson<{
     error?: string;
@@ -87,6 +94,9 @@ export async function uploadFileDirect(
     signature?: string;
     folder?: string;
     resourceType?: string;
+    useFilename?: string;
+    uniqueFilename?: string;
+    filenameOverride?: string;
   }>(signRes);
 
   if (!signRes.ok) {
@@ -111,6 +121,13 @@ export async function uploadFileDirect(
     fd.append("timestamp", String(signed.timestamp));
     fd.append("signature", signed.signature!);
     fd.append("folder", signed.folder || folder);
+    if (signed.useFilename) fd.append("use_filename", signed.useFilename);
+    if (signed.uniqueFilename) {
+      fd.append("unique_filename", signed.uniqueFilename);
+    }
+    if (signed.filenameOverride) {
+      fd.append("filename_override", signed.filenameOverride);
+    }
     return fd;
   };
 

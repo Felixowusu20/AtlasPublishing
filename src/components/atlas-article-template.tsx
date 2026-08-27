@@ -173,7 +173,7 @@ export function NahdaArticleTemplate({
     ? doi.startsWith("http")
       ? doi
       : `https://doi.org/${doi}`
-    : articleUrl || "#";
+    : "#";
   const doiLabel = doi
     ? doi.startsWith("http")
       ? doi
@@ -182,7 +182,7 @@ export function NahdaArticleTemplate({
   const jUrl =
     journalUrl ||
     (journalSlug ? `/journals/${journalSlug}` : "/journals");
-  const readUrl = articleUrl || doiHref;
+  const readUrl = articleUrl || "#";
   const licenseHref = "https://creativecommons.org/licenses/by/4.0/";
   const licenseLabel = license.replace(/\s+/g, "-");
 

@@ -162,6 +162,24 @@ export async function sendEmail(options: {
   }
 }
 
+/** Send the same message to every address (used for received + published notices). */
+export async function sendEmailToAll(
+  emails: string[],
+  options: Omit<Parameters<typeof sendEmail>[0], "to">,
+) {
+  const unique = [
+    ...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean)),
+  ];
+  let ok = 0;
+  let skipped = 0;
+  for (const to of unique) {
+    const result = await sendEmail({ ...options, to });
+    if (result.ok) ok += 1;
+    if (result.skipped) skipped += 1;
+  }
+  return { ok: ok > 0, skipped: skipped === unique.length && unique.length > 0, sent: ok };
+}
+
 export function welcomeEmailHtml(name: string) {
   const loginUrl = `${appBaseUrl()}/login`;
   return emailDocument({
@@ -275,7 +293,18 @@ export function reviewFeedbackEmailHtml(opts: {
   manuscriptId: string;
   submissionUrl: string;
   needsRevision?: boolean;
+  reviewFile?: { name: string; href: string } | null;
 }) {
+  const comment = opts.message.trim();
+  const fileBlock = opts.reviewFile
+    ? `<p style="margin:16px 0 8px"><strong>Review file:</strong> ${escapeHtml(opts.reviewFile.name)}</p>
+      <p style="margin:0 0 14px">
+        <a href="${escapeHtml(opts.reviewFile.href)}"
+           style="color:${BRAND.green};font-weight:600">Download the review file</a>
+        — you can also download it from your author dashboard.
+      </p>`
+    : "";
+
   return emailDocument({
     title: `Editorial update: ${escapeHtml(opts.manuscriptId)}`,
     bodyHtml: `
@@ -285,19 +314,26 @@ export function reviewFeedbackEmailHtml(opts: {
         (${escapeHtml(opts.manuscriptId)}) has a new editorial update.
       </p>
       <p style="margin:0 0 8px"><strong>Status:</strong> ${escapeHtml(opts.status)}</p>
-      <div style="background:${BRAND.paper};border:1px solid ${BRAND.line};padding:16px 18px;margin:16px 0">
+      ${
+        comment
+          ? `<div style="background:${BRAND.paper};border:1px solid ${BRAND.line};padding:16px 18px;margin:16px 0">
         <p style="margin:0 0 8px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:${BRAND.muted}">
           Editor / reviewer message
         </p>
-        <p style="margin:0;white-space:pre-wrap">${escapeHtml(opts.message).replace(/\n/g, "<br/>")}</p>
-      </div>
+        <p style="margin:0;white-space:pre-wrap">${escapeHtml(comment).replace(/\n/g, "<br/>")}</p>
+      </div>`
+          : ""
+      }
+      ${fileBlock}
       ${
         opts.needsRevision
           ? `<p style="margin:0 0 14px">Please revise your manuscript and use <strong>Resubmit</strong> on your author portal to return the corrected file for review.</p>`
           : ""
       }
     `,
-    cta: { href: opts.submissionUrl, label: "Open manuscript" },
+    cta: opts.reviewFile
+      ? { href: opts.reviewFile.href, label: "Download review file" }
+      : { href: opts.submissionUrl, label: "Open manuscript" },
   });
 }
 
@@ -389,7 +425,7 @@ export function articlePublishedEmailHtml(opts: {
   articleUrl: string;
   pdfUrl?: string | null;
 }) {
-  const firstName = opts.authorName.trim().split(/\s+/)[0] || opts.authorName;
+  const greeting = authorGreetingName(opts.authorName);
 
   const links = opts.pdfUrl
     ? `
@@ -413,7 +449,7 @@ export function articlePublishedEmailHtml(opts: {
   return emailDocument({
     title: "Congratulations! Your article is published",
     bodyHtml: `
-      <p style="margin:0 0 14px">Dear ${escapeHtml(firstName)},</p>
+      <p style="margin:0 0 14px">Dear ${escapeHtml(greeting)},</p>
       <p style="margin:0 0 14px">
         Congratulations! We are delighted to let you know that your manuscript
         <strong>${escapeHtml(opts.title)}</strong>
@@ -447,7 +483,15 @@ export function apcPaymentEmailHtml(opts: {
   amountLabel: string;
   checkoutUrl: string;
   submissionUrl?: string;
+  reviewFile?: { name: string; href: string } | null;
 }) {
+  const fileBlock = opts.reviewFile
+    ? `<p style="margin:18px 0 8px"><strong>Review file:</strong> ${escapeHtml(opts.reviewFile.name)}</p>
+      <p style="margin:0 0 14px">
+        <a href="${escapeHtml(opts.reviewFile.href)}"
+           style="color:${BRAND.green};font-weight:600">Download the review file</a>
+      </p>`
+    : "";
   return emailDocument({
     title: "Payment request",
     bodyHtml: `
@@ -470,6 +514,7 @@ export function apcPaymentEmailHtml(opts: {
       <p style="margin:0 0 14px;font-size:13px;color:${BRAND.muted}">
         Secure payment • Visa • Mastercard
       </p>
+      ${fileBlock}
     `,
     cta: { href: opts.checkoutUrl, label: `Pay ${opts.amountLabel}` },
     footerNote:

@@ -16,6 +16,8 @@ type Journal = {
   slug: string;
   description: string;
   subjects: string[];
+  issn?: string | null;
+  eIssn?: string | null;
   editorInChief?: string | null;
   frequency?: string | null;
   reviewType?: string | null;
@@ -31,6 +33,8 @@ type FormState = {
   shortTitle: string;
   description: string;
   subjects: string;
+  issn: string;
+  eIssn: string;
   editorInChief: string;
   frequency: string;
   reviewType: string;
@@ -46,6 +50,8 @@ function emptyForm(coverColor: string = JOURNAL_COVER_COLORS[0]): FormState {
     shortTitle: "",
     description: "",
     subjects: "",
+    issn: "",
+    eIssn: "",
     editorInChief: "",
     frequency: "Quarterly",
     reviewType: "DOUBLE_BLIND",
@@ -62,6 +68,8 @@ function formFromJournal(j: Journal): FormState {
     shortTitle: j.shortTitle,
     description: j.description,
     subjects: (j.subjects ?? []).join(", "),
+    issn: j.issn ?? "",
+    eIssn: j.eIssn ?? "",
     editorInChief: j.editorInChief ?? "",
     frequency: j.frequency ?? "Quarterly",
     reviewType: j.reviewType ?? "DOUBLE_BLIND",
@@ -147,6 +155,8 @@ export default function JournalsCmsPage() {
       title: form.title,
       shortTitle: form.shortTitle,
       description: form.description,
+      issn: form.issn.trim() || null,
+      eIssn: form.eIssn.trim() || null,
       editorInChief: form.editorInChief || undefined,
       frequency: form.frequency,
       reviewType: form.reviewType,
@@ -370,6 +380,34 @@ export default function JournalsCmsPage() {
             }
           />
         </label>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="field">
+            <span>
+              ISSN{" "}
+              <span className="font-normal text-[var(--muted)]">(optional)</span>
+            </span>
+            <input
+              value={form.issn}
+              onChange={(e) => setForm((p) => ({ ...p, issn: e.target.value }))}
+              placeholder="Not assigned yet"
+              autoComplete="off"
+            />
+          </label>
+          <label className="field">
+            <span>
+              eISSN{" "}
+              <span className="font-normal text-[var(--muted)]">(optional)</span>
+            </span>
+            <input
+              value={form.eIssn}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, eIssn: e.target.value }))
+              }
+              placeholder="Not assigned yet"
+              autoComplete="off"
+            />
+          </label>
+        </div>
         <label className="field">
           <span>Description</span>
           <textarea

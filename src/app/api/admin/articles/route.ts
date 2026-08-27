@@ -5,6 +5,10 @@ import { requireAdmin } from "@/lib/session";
 import { slugify } from "@/lib/submission-utils";
 import { allocateNextAtlasDoi, normalizeDoi } from "@/lib/doi";
 import { trashPublishedArticle } from "@/lib/recycle-bin";
+import {
+  isPlaceholderIssue,
+  numberedIssuePlacement,
+} from "@/lib/issues";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -67,6 +71,18 @@ export async function POST(request: Request) {
     if (!doi) {
       doi = await allocateNextAtlasDoi(prisma, journal, publishedAt.getFullYear());
     }
+    const placement = numberedIssuePlacement({
+      publishedAt,
+      frequency: journal.frequency,
+      foundedYear: journal.foundedYear,
+    });
+    const volume =
+      body.volume?.trim() && body.volume.trim() !== "—"
+        ? body.volume.trim()
+        : placement.volume;
+    const issue = isPlaceholderIssue(body.issue)
+      ? placement.issue
+      : body.issue!.trim();
 
     const article = await prisma.publishedArticle.create({
       data: {
@@ -77,8 +93,8 @@ export async function POST(request: Request) {
         affiliations: body.affiliations ?? [],
         journalId: body.journalId,
         publishedAt,
-        volume: body.volume,
-        issue: body.issue,
+        volume,
+        issue,
         pages: body.pages,
         articleType: body.articleType,
         openAccess: body.openAccess ?? true,

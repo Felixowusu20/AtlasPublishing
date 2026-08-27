@@ -95,7 +95,7 @@ export function scholarlyArticleJsonLd(article: ScholarlyArticleJsonLdInput) {
     author: authors,
     isPartOf,
     ...(article.volume ? { volumeNumber: article.volume } : {}),
-    ...(article.issue && article.issue !== "Early View"
+    ...(article.issue && article.issue !== "—" && !/^early view$/i.test(article.issue)
       ? { issueNumber: article.issue }
       : {}),
     ...(article.pages ? { pagination: article.pages } : {}),

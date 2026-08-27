@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import {
-  articleDownloadPath,
+  articleViewPath,
   resolvePublishedPdfUrl,
 } from "@/lib/submission-utils";
 import { ArticleMetricsPanel } from "@/components/article-metrics";
@@ -16,6 +16,14 @@ import { CiteActions } from "@/components/cite-actions";
 import { JsonLd } from "@/components/json-ld";
 import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
 import { formatArticleDate } from "@/lib/article-dates";
+import { displayIssn } from "@/lib/issn";
+import {
+  deriveIssueRecords,
+  findIssueRecord,
+  issueHref,
+  issueTitle,
+  resolveArticleIssue,
+} from "@/lib/issues";
 import { authorDisplayName } from "@/lib/orcid";
 import { ensureManuscriptHtml } from "@/lib/import-manuscript";
 import {
@@ -51,8 +59,10 @@ function formatDate(value: Date | string | null | undefined) {
 }
 
 function doiLinks(doi: string) {
-  if (!doi || doi === "Pending") return { local: null };
   const normalized = normalizeDoi(doi);
+  if (!normalized || normalized === "pending") {
+    return { local: null as string | null };
+  }
   return {
     local: atlasDoiPath(normalized),
   };
@@ -99,6 +109,43 @@ export default async function ArticleDetailPage({
       },
     });
 
+    const issuePeers = await prisma.publishedArticle.findMany({
+      where: {
+        journalId: dbArticle.journalId,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        volume: true,
+        issue: true,
+        publishedAt: true,
+      },
+    });
+    const numbered = resolveArticleIssue({
+      volume: dbArticle.volume,
+      issue: dbArticle.issue,
+      publishedAt: dbArticle.publishedAt,
+      frequency: dbArticle.journal.frequency,
+      foundedYear: dbArticle.journal.foundedYear,
+    });
+    const thisIssue = findIssueRecord(
+      deriveIssueRecords(
+        issuePeers.map((row) => ({
+          ...row,
+          journal: dbArticle.journal,
+        })),
+      ),
+      dbArticle.journalId,
+      numbered.volume,
+      numbered.issue,
+    );
+    const issuePath = issueHref(
+      dbArticle.journal.slug,
+      numbered.volume,
+      numbered.issue,
+    );
+    const issueLabel = thisIssue?.title ?? issueTitle(numbered.volume, numbered.issue);
+
     const recommendations: MastheadRecommendation[] = related.map((r) => ({
       slug: r.slug,
       title: r.title,
@@ -124,7 +171,7 @@ export default async function ArticleDetailPage({
       articleType: dbArticle.articleType,
       openAccess: dbArticle.openAccess,
       license: dbArticle.license ?? "CC BY 4.0",
-      issue: dbArticle.issue ?? "Early View",
+      issue: numbered.issue,
       authors: dbArticle.authors,
       affiliations: dbArticle.affiliations,
       journalSlug: dbArticle.journal.slug,
@@ -132,9 +179,14 @@ export default async function ArticleDetailPage({
       journalShortTitle: dbArticle.journal.shortTitle,
       journalId: dbArticle.journalId,
       logoUrl: dbArticle.coverImageUrl ?? dbArticle.journal.coverImageUrl,
-      volume: dbArticle.volume ?? "—",
+      volume: numbered.volume,
       pages: dbArticle.pages ?? "—",
       doi: dbArticle.doi ?? "Pending",
+      issn: dbArticle.journal.issn,
+      issuePath,
+      issueLabel,
+      issueInterval: thisIssue?.intervalLabel ?? null,
+      issueCount: thisIssue?.articleCount ?? 1,
       receivedAt: formatDate(dbArticle.receivedAt),
       acceptedAt: formatDate(dbArticle.acceptedAt),
       publishedAt: formatDate(dbArticle.publishedAt),
@@ -161,8 +213,8 @@ export default async function ArticleDetailPage({
           keywords: dbArticle.keywords,
           doi: dbArticle.doi,
           publishedAt: dbArticle.publishedAt,
-          volume: dbArticle.volume,
-          issue: dbArticle.issue,
+          volume: numbered.volume,
+          issue: numbered.issue,
           pages: dbArticle.pages,
           manuscriptUrl,
           license: dbArticle.license,
@@ -205,6 +257,11 @@ type ViewArticle = {
   volume: string;
   pages: string;
   doi: string;
+  issn?: string | null;
+  issuePath: string;
+  issueLabel: string;
+  issueInterval: string | null;
+  issueCount: number;
   receivedAt: string;
   acceptedAt: string;
   publishedAt: string;
@@ -227,8 +284,8 @@ function ArticleView({
   article: ViewArticle;
   jsonLd?: Record<string, unknown>;
 }) {
-  const downloadHref = article.manuscriptUrl
-    ? articleDownloadPath(article.slug)
+  const viewHref = article.manuscriptUrl
+    ? articleViewPath(article.slug)
     : null;
   const { local: doiLocal } = doiLinks(article.doi);
   const citation = buildCitationText({
@@ -292,9 +349,12 @@ function ArticleView({
             views={article.views}
             downloads={article.downloads}
             citations={article.citations}
-            readMoreHref={downloadHref}
+            readMoreHref={viewHref}
             recommendations={article.recommendations}
             embedded
+            articleSlug={article.slug}
+            issn={article.issn}
+            issueHref={article.issuePath}
           />
 
           <div className="grid gap-0 border-t border-[var(--line)] lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -402,16 +462,18 @@ function ArticleView({
                     <p className="mt-3 max-w-xl text-sm leading-relaxed text-[var(--muted)]">
                       This page presents the title, authors, affiliations,
                       abstract, keywords, DOI, and publication history.
-                      Download the Nahda-formatted PDF for figures, tables,
+                      Open the Nahda-formatted PDF for figures, tables,
                       methods, and the full reference list.
                     </p>
-                    {downloadHref ? (
+                    {viewHref ? (
                       <a
-                        href={downloadHref}
+                        href={viewHref}
+                        target="_blank"
+                        rel="noreferrer"
                         className="btn-primary mt-5 inline-flex gap-2 text-sm"
                       >
                         <PdfIcon />
-                        Download full article (PDF)
+                        Open full article (PDF)
                       </a>
                     ) : (
                       <p className="mt-4 inline-flex rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
@@ -430,6 +492,7 @@ function ArticleView({
                 title={article.title}
                 journalTitle={article.journalTitle}
                 journalSlug={article.journalSlug}
+                articleSlug={article.slug}
                 publishedAt={article.publishedAt}
                 volume={article.volume}
                 issue={article.issue}
@@ -438,12 +501,12 @@ function ArticleView({
               />
               <div className="mt-4 flex flex-wrap gap-3">
                 {doiLocal ? (
-                  <a
+                  <Link
                     href={doiLocal}
                     className="max-w-full break-all rounded-lg bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] ring-1 ring-[var(--accent)]/20 transition hover:bg-[var(--accent)] hover:text-white"
                   >
                     {normalizeDoi(article.doi)}
-                  </a>
+                  </Link>
                 ) : null}
                 <span className="rounded-lg bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] ring-1 ring-[var(--line)]">
                   {article.license}
@@ -471,13 +534,15 @@ function ArticleView({
                       Includes figures, tables, and references in the Nahda
                       article format.
                     </p>
-                    {downloadHref ? (
+                    {viewHref ? (
                       <a
-                        href={downloadHref}
+                        href={viewHref}
+                        target="_blank"
+                        rel="noreferrer"
                         className="btn-primary mt-4 w-full gap-2 text-center text-sm"
                       >
                         <PdfIcon />
-                        Download PDF
+                        Open PDF
                       </a>
                     ) : (
                       <button
@@ -504,6 +569,7 @@ function ArticleView({
                     title={article.title}
                     journalTitle={article.journalTitle}
                     journalSlug={article.journalSlug}
+                    articleSlug={article.slug}
                     publishedAt={article.publishedAt}
                     volume={article.volume}
                     issue={article.issue}
@@ -579,14 +645,20 @@ function ArticleView({
                     {article.journalTitle}
                   </Link>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    Vol. {article.volume} · Issue {article.issue}
+                    {article.issueLabel}
+                    {article.issueInterval ? ` · ${article.issueInterval}` : ""}
                     {article.pages !== "—" ? ` · pp. ${article.pages}` : ""}
                   </p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {article.issueCount} article
+                    {article.issueCount === 1 ? "" : "s"} in this issue
+                    {" · "}ISSN {displayIssn(article.issn)}
+                  </p>
                   <Link
-                    href={`/journals/${article.journalSlug}`}
+                    href={article.issuePath}
                     className="mt-3 inline-flex text-xs font-semibold text-[var(--accent)] hover:underline"
                   >
-                    Browse issue →
+                    Browse this issue →
                   </Link>
                 </div>
               </div>

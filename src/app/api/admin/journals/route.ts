@@ -4,6 +4,7 @@ import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
 import { nextJournalCoverColor } from "@/lib/journal-colors";
 import { slugify } from "@/lib/submission-utils";
+import { optionalIssn } from "@/lib/issn";
 import { syncPendingApcFromJournal } from "@/lib/apc-checkout";
 
 export async function GET() {
@@ -19,8 +20,8 @@ const schema = z.object({
   title: z.string().min(2),
   shortTitle: z.string().min(1),
   slug: z.string().optional(),
-  issn: z.string().optional(),
-  eIssn: z.string().optional(),
+  issn: z.string().nullish(),
+  eIssn: z.string().nullish(),
   doiPrefix: z.string().optional(),
   frequency: z.string().optional(),
   reviewType: z.enum(["SINGLE_BLIND", "DOUBLE_BLIND", "OPEN_REVIEW"]).optional(),
@@ -62,8 +63,8 @@ export async function POST(request: Request) {
         title: body.title,
         shortTitle: body.shortTitle,
         slug,
-        issn: body.issn,
-        eIssn: body.eIssn,
+        issn: optionalIssn(body.issn),
+        eIssn: optionalIssn(body.eIssn),
         doiPrefix: body.doiPrefix,
         frequency: body.frequency,
         reviewType: body.reviewType ?? "DOUBLE_BLIND",
@@ -112,6 +113,8 @@ export async function PATCH(request: Request) {
       where: { id },
       data: {
         ...data,
+        ...(raw.issn !== undefined ? { issn: optionalIssn(raw.issn) } : {}),
+        ...(raw.eIssn !== undefined ? { eIssn: optionalIssn(raw.eIssn) } : {}),
         ...(raw.coverImageUrl === null ? { coverImageUrl: null } : {}),
         ...(raw.coverImagePublicId === null
           ? { coverImagePublicId: null }
