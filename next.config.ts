@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   // Avoid streaming-metadata hydration mismatches in browsers
   // (MetadataWrapper <div hidden> vs whitespace).
   htmlLimitedBots: /.*/,
+  transpilePackages: ["pagedjs"],
   experimental: {
     proxyClientMaxBodySize: "50mb",
     serverActions: {

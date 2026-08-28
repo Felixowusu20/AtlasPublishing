@@ -23,7 +23,7 @@ export function doiToUrl(doi: string): string {
   return `https://doi.org/${normalizeDoi(doi)}`;
 }
 
-/** Public Nahda landing path for a DOI (resolves to article / PDF). */
+/** Public Nahda DOI path (opens the bound published PDF). */
 export function atlasDoiPath(doi: string): string {
   return `/doi/${normalizeDoi(doi)}`;
 }

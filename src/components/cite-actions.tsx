@@ -49,9 +49,11 @@ export function CiteActions({ citation, doiHref, doiLabel }: Props) {
       {doiHref ? (
         <Link
           href={doiHref}
+          target="_blank"
+          rel="noreferrer"
           className="group inline-flex items-center justify-center gap-1.5 text-center text-xs font-semibold text-[var(--accent)] hover:underline"
         >
-          Open DOI record
+          Open PDF
           <span aria-hidden className="transition group-hover:translate-x-0.5">
             →
           </span>

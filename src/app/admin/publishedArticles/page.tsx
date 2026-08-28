@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { NahdaArticleTemplate } from "@/components/atlas-article-template";
@@ -17,8 +17,11 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { uploadFileDirect } from "@/lib/client-upload";
 import {
   articleTemplateToPdf,
+  beginArticlePrint,
+  endArticlePrint,
   nahdaPdfFile,
   pdfErrorMessage,
+  stripChromePrintHeader,
 } from "@/lib/nahda-pdf";
 import {
   formatAuthorWithOrcid,
@@ -219,10 +222,18 @@ export default function PublishedArticlesPage() {
   const [publishing, setPublishing] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [pdfKind, setPdfKind] = useState<"none" | "uploaded" | "generated">(
+    "none",
+  );
+  const [uploadedPdfName, setUploadedPdfName] = useState("");
   const [publishPhase, setPublishPhase] = useState<
     "idle" | "pdf" | "upload" | "publish"
   >("idle");
+  const [publishMode, setPublishMode] = useState<
+    "uploaded" | "generated" | null
+  >(null);
   const pdfSourceRef = useRef<HTMLDivElement>(null);
+  const cleanedPdfInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [draftDirty, setDraftDirty] = useState(false);
@@ -404,6 +415,8 @@ export default function PublishedArticlesPage() {
       figures: parseFigures(sub.productionFigures),
       pdfUrl: "",
     });
+    setPdfKind("none");
+    setUploadedPdfName("");
 
     void fetch(
       `/api/admin/publish-queue/doi?journalId=${encodeURIComponent(sub.journal.id)}`,
@@ -517,22 +530,61 @@ export default function PublishedArticlesPage() {
   async function onPdfUpload(file: File | null) {
     if (!file) return;
     if (file.type && file.type !== "application/pdf") {
-      setError("Upload a Nahda PDF only — Word and Google Docs files stay in editing, not in the public download.");
+      setError(
+        "Upload the cleaned Print PDF only — Word and Google Docs files stay in editing, not in the public download.",
+      );
       return;
     }
     setUploadingPdf(true);
     setError("");
+    setSuccess("");
     try {
-      const data = await uploadFileDirect(file, {
+      const cleaned = await stripChromePrintHeader(file);
+      const data = await uploadFileDirect(cleaned, {
         folder: "atlas/published-pdfs",
         resourceType: "raw",
       });
       setForm((f) => ({ ...f, pdfUrl: data.url }));
-      setSuccess("PDF uploaded and ready to publish.");
+      setPdfKind("uploaded");
+      setUploadedPdfName(file.name);
+      setSuccess(
+        "Cleaned Print PDF uploaded (browser date header removed). Publish uploaded PDF to bind it to the article page and author email.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "PDF upload failed");
     } finally {
       setUploadingPdf(false);
+      if (cleanedPdfInputRef.current) cleanedPdfInputRef.current.value = "";
+    }
+  }
+
+  async function onUploadAndPublish(file: File | null) {
+    if (!file) return;
+    if (file.type && file.type !== "application/pdf") {
+      setError(
+        "Upload the cleaned Print PDF only — Word and Google Docs files stay in editing, not in the public download.",
+      );
+      return;
+    }
+    setUploadingPdf(true);
+    setError("");
+    setSuccess("");
+    try {
+      const cleaned = await stripChromePrintHeader(file);
+      const data = await uploadFileDirect(cleaned, {
+        folder: "atlas/published-pdfs",
+        resourceType: "raw",
+      });
+      setForm((f) => ({ ...f, pdfUrl: data.url }));
+      setPdfKind("uploaded");
+      setUploadedPdfName(file.name);
+      setUploadingPdf(false);
+      await onPublish("uploaded", data.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "PDF upload failed");
+      setUploadingPdf(false);
+    } finally {
+      if (cleanedPdfInputRef.current) cleanedPdfInputRef.current.value = "";
     }
   }
 
@@ -570,7 +622,11 @@ export default function PublishedArticlesPage() {
       await new Promise((resolve) => window.setTimeout(resolve, 120));
       const uploaded = await generateAndUploadPdf();
       setForm((f) => ({ ...f, pdfUrl: uploaded.url }));
-      setSuccess("Nahda-styled PDF generated from the template. Open it to proof, then publish.");
+      setPdfKind("generated");
+      setUploadedPdfName("");
+      setSuccess(
+        "Nahda-styled PDF generated from the template. Open it to proof, then use Generate PDF & publish.",
+      );
     } catch (err) {
       setError(
         pdfErrorMessage(err, "Could not generate the Nahda PDF from the template."),
@@ -583,6 +639,12 @@ export default function PublishedArticlesPage() {
   const printAfterPreview = useRef(false);
 
   function printPreview() {
+    beginArticlePrint(form.title || selected?.title || "Article");
+    const restore = () => {
+      endArticlePrint();
+      window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
     if (pane === "preview") {
       window.print();
       return;
@@ -598,12 +660,15 @@ export default function PublishedArticlesPage() {
     return () => window.clearTimeout(timer);
   }, [pane]);
 
-  async function onPublish(e: FormEvent) {
-    e.preventDefault();
+  async function onPublish(
+    mode: "uploaded" | "generated",
+    readyPdfUrl?: string,
+  ) {
     if (!selected) return;
     if (draftDirty) await persistDraft();
     setPublishing(true);
-    setPublishPhase("pdf");
+    setPublishMode(mode);
+    setPublishPhase(mode === "uploaded" ? "publish" : "pdf");
     setError("");
     setSuccess("");
 
@@ -614,33 +679,49 @@ export default function PublishedArticlesPage() {
     if (!authors.length) {
       setPublishing(false);
       setPublishPhase("idle");
+      setPublishMode(null);
       setError("Add at least one author name.");
       return;
     }
     if (htmlToPlainText(form.abstract).trim().length < 10) {
       setPublishing(false);
       setPublishPhase("idle");
+      setPublishMode(null);
       setError("Add an abstract before publishing.");
       return;
     }
 
-    let pdfUrl = form.pdfUrl;
-    try {
-      await new Promise((resolve) => window.setTimeout(resolve, 120));
-      const uploaded = await generateAndUploadPdf();
-      pdfUrl = uploaded.url;
-      setForm((f) => ({ ...f, pdfUrl }));
-      setPublishPhase("upload");
-    } catch (err) {
-      setPublishing(false);
-      setPublishPhase("idle");
-      setError(
-        pdfErrorMessage(
-          err,
-          "Could not generate the Nahda-styled PDF. Stay on this page and try Publish again.",
-        ),
-      );
-      return;
+    let pdfUrl = readyPdfUrl || form.pdfUrl;
+    if (mode === "uploaded") {
+      if (!pdfUrl) {
+        setPublishing(false);
+        setPublishPhase("idle");
+        setPublishMode(null);
+        setError(
+          "Upload the cleaned Print PDF first, then click Publish uploaded PDF.",
+        );
+        return;
+      }
+    } else {
+      try {
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
+        const uploaded = await generateAndUploadPdf();
+        pdfUrl = uploaded.url;
+        setForm((f) => ({ ...f, pdfUrl }));
+        setPdfKind("generated");
+        setPublishPhase("upload");
+      } catch (err) {
+        setPublishing(false);
+        setPublishPhase("idle");
+        setPublishMode(null);
+        setError(
+          pdfErrorMessage(
+            err,
+            "Could not generate the Nahda-styled PDF. Stay on this page and try Publish again.",
+          ),
+        );
+        return;
+      }
     }
 
     setPublishPhase("publish");
@@ -681,12 +762,14 @@ export default function PublishedArticlesPage() {
     if (!contentType.includes("application/json")) {
       setPublishing(false);
       setPublishPhase("idle");
+      setPublishMode(null);
       setError("Publish failed: server returned an unexpected response.");
       return;
     }
     const data = await res.json();
     setPublishing(false);
     setPublishPhase("idle");
+    setPublishMode(null);
 
     if (!res.ok) {
       setError(data.error ?? "Publish failed");
@@ -695,11 +778,13 @@ export default function PublishedArticlesPage() {
 
     setSuccess(
       data.emailSent
-        ? `Published${data.doi ? ` with DOI ${data.doi}` : ""}. Congratulations email sent to ${selected.author.email}.`
+        ? `Published${data.doi ? ` with DOI ${data.doi}` : ""}. The ${mode === "uploaded" ? "uploaded Print PDF" : "generated Nahda PDF"} is bound to the article page. Congratulations email sent to ${selected.author.email}.`
         : `Published at ${data.articleUrl}${data.doi ? ` · DOI ${data.doi}` : ""}. Email was not sent — check SMTP settings.`,
     );
     setSelectedId(null);
     setForm(emptyForm());
+    setPdfKind("none");
+    setUploadedPdfName("");
     await load();
   }
 
@@ -753,11 +838,18 @@ export default function PublishedArticlesPage() {
     }
   }
 
-  const publishButtonLabel = !publishing
-    ? "Publish and email author"
-    : publishPhase === "pdf" || publishPhase === "upload"
-      ? "Generating Nahda PDF…"
-      : "Publishing…";
+  const uploadedPublishLabel =
+    publishing && publishMode === "uploaded"
+      ? "Publishing uploaded PDF…"
+      : pdfKind === "uploaded" && form.pdfUrl
+        ? "Publish uploaded PDF"
+        : "Upload cleaned PDF & publish";
+  const generatedPublishLabel =
+    publishing && publishMode === "generated"
+      ? publishPhase === "pdf" || publishPhase === "upload"
+        ? "Generating Nahda PDF…"
+        : "Publishing…"
+      : "Generate PDF & publish";
 
   const captureTemplate =
     selected ? (
@@ -1085,7 +1177,10 @@ export default function PublishedArticlesPage() {
               </div>
 
               {pane === "edit" ? (
-                <form onSubmit={onPublish} className="mt-5 print:hidden">
+                <form
+                  onSubmit={(e) => e.preventDefault()}
+                  className="mt-5 print:hidden"
+                >
                   <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
                     <div className="order-2 min-w-0 space-y-3 lg:order-1">
                   <div className="rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 p-4">
@@ -1391,24 +1486,29 @@ export default function PublishedArticlesPage() {
                     <aside className="order-1 space-y-3 lg:sticky lg:top-4 lg:order-2 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto">
                       <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 p-4">
                         <p className="text-xs font-semibold text-[var(--ink)]">
-                          Nahda-styled PDF
+                          PDF for authors
                         </p>
                         <p className="mt-1 text-[11px] text-[var(--muted)]">
-                          Same A4 layout as Print preview: margins, two-column
-                          body, Nahda logo, DOI, and page numbers. Readers
-                          download this file, not Word.
+                          The published file is bound to the article page.
+                          Authors get the site article link and PDF download in
+                          email — not a raw Cloudinary URL.
                         </p>
                         <div className="mt-3 flex flex-col gap-2">
-                          <button
-                            type="button"
-                            className="btn-primary !px-3 !py-2 text-xs"
-                            disabled={uploadingPdf || publishing}
-                            onClick={() => void onGeneratePdf()}
-                          >
-                            {uploadingPdf
-                              ? "Generating PDF…"
-                              : "Generate Nahda PDF"}
-                          </button>
+                          <label className="btn-primary cursor-pointer !px-3 !py-2 text-center text-xs">
+                            {uploadingPdf && pdfKind !== "generated"
+                              ? "Uploading…"
+                              : "Upload cleaned Print PDF"}
+                            <input
+                              type="file"
+                              accept="application/pdf,.pdf"
+                              className="hidden"
+                              disabled={uploadingPdf || publishing}
+                              onChange={(e) => {
+                                const input = e.currentTarget;
+                                void onPdfUpload(input.files?.[0] ?? null);
+                              }}
+                            />
+                          </label>
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
@@ -1417,33 +1517,33 @@ export default function PublishedArticlesPage() {
                             >
                               Print preview
                             </button>
-                            <label className="btn-secondary cursor-pointer !px-3 !py-2 text-xs">
-                              {uploadingPdf ? "Uploading…" : "Replace PDF"}
-                              <input
-                                type="file"
-                                accept="application/pdf,.pdf"
-                                className="hidden"
-                                disabled={uploadingPdf || publishing}
-                                onChange={(e) =>
-                                  void onPdfUpload(e.target.files?.[0] ?? null)
-                                }
-                              />
-                            </label>
+                            <button
+                              type="button"
+                              className="btn-secondary !px-3 !py-2 text-xs"
+                              disabled={uploadingPdf || publishing}
+                              onClick={() => void onGeneratePdf()}
+                            >
+                              {uploadingPdf && pdfKind === "generated"
+                                ? "Generating PDF…"
+                                : "Proof generated PDF"}
+                            </button>
                           </div>
                         </div>
-                        {form.pdfUrl && (
+                        {form.pdfUrl ? (
                           <p className="mt-2 text-[11px] text-emerald-800">
-                            PDF ready:{" "}
+                            {pdfKind === "uploaded"
+                              ? `Uploaded${uploadedPdfName ? ` (${uploadedPdfName})` : ""} ready: `
+                              : "Generated PDF ready: "}
                             <a
                               href={form.pdfUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="font-semibold underline"
                             >
-                              open generated file
+                              open file
                             </a>
                           </p>
-                        )}
+                        ) : null}
                       </div>
 
                       <div className="space-y-3 rounded-xl border border-[var(--line)] bg-white p-4">
@@ -1720,12 +1820,47 @@ export default function PublishedArticlesPage() {
                         >
                           Preview template
                         </button>
+                        {pdfKind === "uploaded" && form.pdfUrl ? (
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            disabled={publishing || uploadingPdf}
+                            onClick={() => void onPublish("uploaded")}
+                          >
+                            {uploadedPublishLabel}
+                          </button>
+                        ) : (
+                          <label
+                            className={`btn-primary cursor-pointer text-center ${
+                              publishing || uploadingPdf
+                                ? "pointer-events-none opacity-60"
+                                : ""
+                            }`}
+                          >
+                            {uploadingPdf && pdfKind !== "generated"
+                              ? "Uploading PDF…"
+                              : uploadedPublishLabel}
+                            <input
+                              ref={cleanedPdfInputRef}
+                              type="file"
+                              accept="application/pdf,.pdf"
+                              className="hidden"
+                              disabled={publishing || uploadingPdf}
+                              onChange={(e) =>
+                                void onUploadAndPublish(
+                                  e.currentTarget.files?.[0] ?? null,
+                                )
+                              }
+                            />
+                          </label>
+                        )}
                         <button
-                          type="submit"
-                          className="btn-primary"
+                          type="button"
+                          className="btn-secondary"
                           disabled={publishing || uploadingPdf}
+                          onClick={() => void onPublish("generated")}
                         >
-                          {publishButtonLabel}
+                          {generatedPublishLabel}
                         </button>
                       </div>
                     </aside>
@@ -1738,7 +1873,7 @@ export default function PublishedArticlesPage() {
                       Live preview updates from your edits. Switch back to Edit
                       details anytime.
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         className="btn-secondary !px-3 !py-2 text-xs"
@@ -1746,16 +1881,46 @@ export default function PublishedArticlesPage() {
                       >
                         Back to edit
                       </button>
+                      {pdfKind === "uploaded" && form.pdfUrl ? (
+                        <button
+                          type="button"
+                          className="btn-primary !px-3 !py-2 text-xs"
+                          disabled={publishing || uploadingPdf}
+                          onClick={() => void onPublish("uploaded")}
+                        >
+                          {uploadedPublishLabel}
+                        </button>
+                      ) : (
+                        <label
+                          className={`btn-primary cursor-pointer !px-3 !py-2 text-center text-xs ${
+                            publishing || uploadingPdf
+                              ? "pointer-events-none opacity-60"
+                              : ""
+                          }`}
+                        >
+                          {uploadingPdf && pdfKind !== "generated"
+                            ? "Uploading PDF…"
+                            : uploadedPublishLabel}
+                          <input
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            className="hidden"
+                            disabled={publishing || uploadingPdf}
+                            onChange={(e) =>
+                              void onUploadAndPublish(
+                                e.currentTarget.files?.[0] ?? null,
+                              )
+                            }
+                          />
+                        </label>
+                      )}
                       <button
                         type="button"
-                        className="btn-primary !px-3 !py-2 text-xs"
+                        className="btn-secondary !px-3 !py-2 text-xs"
                         disabled={publishing || uploadingPdf}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          void onPublish(e as unknown as FormEvent);
-                        }}
+                        onClick={() => void onPublish("generated")}
                       >
-                        {publishButtonLabel}
+                        {generatedPublishLabel}
                       </button>
                     </div>
                   </div>

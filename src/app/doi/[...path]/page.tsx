@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { atlasDoiPath, findArticleByDoi, normalizeDoi } from "@/lib/doi";
-import { articleDownloadPath } from "@/lib/submission-utils";
+import {
+  articleDownloadPath,
+  articleViewPath,
+} from "@/lib/submission-utils";
 import { formatMetric } from "@/components/article-metrics";
 import { JsonLd } from "@/components/json-ld";
 import { scholarlyArticleJsonLd } from "@/lib/seo/jsonld";
@@ -65,8 +68,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 /**
  * Hosted Nahda DOI record.
- * /doi/10.58000/... → metadata landing for the bound paper
- * /doi/...?download=1 → PDF download
+ * /doi/10.58000/... → published PDF (uploaded print file or generated Nahda PDF)
+ * /doi/...?download=1 → PDF download attachment
  */
 export default async function DoiRecordPage({ params, searchParams }: Props) {
   const { path } = await params;
@@ -81,14 +84,16 @@ export default async function DoiRecordPage({ params, searchParams }: Props) {
     console.error("[doi-page]", err);
   }
 
-  if (article && download === "1") {
-    if (article.manuscriptUrl) {
-      redirect(articleDownloadPath(article.slug));
-    }
-  }
-
   if (!article) {
     return <DoiNotFound doi={doi || raw} />;
+  }
+
+  if (article.manuscriptUrl) {
+    redirect(
+      download === "1"
+        ? articleDownloadPath(article.slug)
+        : articleViewPath(article.slug),
+    );
   }
 
   const published = article.publishedAt.toLocaleDateString(undefined, {

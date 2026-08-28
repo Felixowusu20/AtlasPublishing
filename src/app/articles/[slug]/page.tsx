@@ -503,6 +503,8 @@ function ArticleView({
                 {doiLocal ? (
                   <Link
                     href={doiLocal}
+                    target="_blank"
+                    rel="noreferrer"
                     className="max-w-full break-all rounded-lg bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] ring-1 ring-[var(--accent)]/20 transition hover:bg-[var(--accent)] hover:text-white"
                   >
                     {normalizeDoi(article.doi)}

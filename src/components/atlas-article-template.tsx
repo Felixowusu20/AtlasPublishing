@@ -170,9 +170,7 @@ export function NahdaArticleTemplate({
   const citeLine = `${journalShortTitle || "Journal"} ${citeBits.join(", ")}`;
 
   const doiHref = doi
-    ? doi.startsWith("http")
-      ? doi
-      : `https://doi.org/${doi}`
+    ? `/doi/${doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "")}`
     : "#";
   const doiLabel = doi
     ? doi.startsWith("http")
@@ -412,6 +410,8 @@ export function NahdaArticleTemplate({
           {" · "}
           <a
             href={doiHref}
+            target="_blank"
+            rel="noreferrer"
             className="hover:underline"
             style={{ color: "var(--j-link)" }}
           >

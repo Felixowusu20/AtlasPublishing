@@ -119,8 +119,10 @@ export function ArticleListingCard({
             {doi ? (
               <Link
                 href={`/doi/${doi}`}
+                target="_blank"
+                rel="noreferrer"
                 className="min-w-0 max-w-full break-all font-semibold text-[var(--accent)] hover:underline"
-                title="Open via Nahda DOI"
+                title="Open the published PDF"
               >
                 DOI {doi}
               </Link>
