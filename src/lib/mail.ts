@@ -46,13 +46,16 @@ function getTransporter() {
 function emailDocument(opts: {
   title: string;
   bodyHtml: string;
-  cta?: { href: string; label: string };
+  cta?: { href: string; label: string; openInNewTab?: boolean };
   footerNote?: string;
 }) {
   const logoSrc = "cid:nahda-logo";
+  const newTabAttrs = opts.cta?.openInNewTab
+    ? ` target="_blank" rel="noopener noreferrer"`
+    : "";
   const cta = opts.cta
     ? `<p style="margin:28px 0 8px">
-        <a href="${escapeHtml(opts.cta.href)}"
+        <a href="${escapeHtml(opts.cta.href)}"${newTabAttrs}
            style="background:${BRAND.green};color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;font-family:Georgia,'Times New Roman',serif;font-size:15px">
           ${opts.cta.label}
         </a>
@@ -509,16 +512,21 @@ export function apcPaymentEmailHtml(opts: {
         ${escapeHtml(opts.amountLabel)}
       </p>
       <p style="margin:0 0 14px">
-        Please click the button below to complete your secure payment.
+        Please click the button below to complete your secure payment. The payment
+        page opens in a new tab.
       </p>
       <p style="margin:0 0 14px;font-size:13px;color:${BRAND.muted}">
         Secure payment • Visa • Mastercard
       </p>
       ${fileBlock}
     `,
-    cta: { href: opts.checkoutUrl, label: `Pay ${opts.amountLabel}` },
+    cta: {
+      href: opts.checkoutUrl,
+      label: `Pay ${opts.amountLabel}`,
+      openInNewTab: true,
+    },
     footerNote:
-      "This link opens the payment page for your accepted manuscript. After payment you will be taken to your author dashboard.",
+      "This link opens the payment page in a new tab. After payment you will be taken to your author dashboard.",
   });
 }
 

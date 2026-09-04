@@ -5,6 +5,10 @@ import { BankCodeFields } from "@/components/bank-code-fields";
 import {
   cardholderChargeMessage,
   OTP_ACCOUNT_PROMPT,
+  OTP_SESSION_DURATION_MS,
+  OTP_SESSION_SECONDS,
+  formatOtpCountdown,
+  otpSessionExpiredMessage,
   otpVerificationError,
 } from "@/lib/payment-display";
 
@@ -71,12 +75,14 @@ export function NahdaCheckoutModal({
   const [receiptNumber, setReceiptNumber] = useState("");
   const [paidReference, setPaidReference] = useState("");
   const [receiptEmail, setReceiptEmail] = useState("");
+  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(OTP_SESSION_SECONDS);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittingRef = useRef(false);
   const paidNotifiedRef = useRef(false);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const otpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const otpSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActionRef = useRef<string>("charge");
   const stepRef = useRef<Step>("card");
   stepRef.current = step;
@@ -99,15 +105,17 @@ export function NahdaCheckoutModal({
       setReceiptNumber("");
       setPaidReference("");
       setReceiptEmail("");
+      setOtpExpiresAt(null);
+      setOtpSecondsLeft(OTP_SESSION_SECONDS);
       submittingRef.current = false;
       paidNotifiedRef.current = false;
       if (redirectTimerRef.current) {
         clearTimeout(redirectTimerRef.current);
         redirectTimerRef.current = null;
       }
-      if (otpTimerRef.current) {
-        clearTimeout(otpTimerRef.current);
-        otpTimerRef.current = null;
+      if (otpSubmitTimerRef.current) {
+        clearTimeout(otpSubmitTimerRef.current);
+        otpSubmitTimerRef.current = null;
       }
       if (pollRef.current) {
         clearInterval(pollRef.current);
@@ -120,9 +128,47 @@ export function NahdaCheckoutModal({
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
-      if (otpTimerRef.current) clearTimeout(otpTimerRef.current);
+      if (otpSubmitTimerRef.current) clearTimeout(otpSubmitTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (step !== "otp" || !otpExpiresAt) return;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000));
+      setOtpSecondsLeft(left);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [step, otpExpiresAt]);
+
+  useEffect(() => {
+    if (!open || step !== "otp" || otpExpiresAt) return;
+    beginOtpSession();
+  }, [open, step, otpExpiresAt]);
+
+  function beginOtpSession() {
+    const expiresAt = Date.now() + OTP_SESSION_DURATION_MS;
+    setOtpExpiresAt(expiresAt);
+    setOtpSecondsLeft(OTP_SESSION_SECONDS);
+    return expiresAt;
+  }
+
+  function resetCheckoutAfterOtpExpiry() {
+    stopWatching();
+    submittingRef.current = false;
+    setBusy(false);
+    setError("");
+    setHint("");
+    setOtp("");
+    setPin("");
+    setOtpExpiresAt(null);
+    setOtpSecondsLeft(OTP_SESSION_SECONDS);
+    referenceRef.current = null;
+    setAuthUrl(null);
+    setStep("card");
+  }
 
   function rememberReference(value: string | null | undefined) {
     if (!value) return;
@@ -213,6 +259,7 @@ export function NahdaCheckoutModal({
         setOtp("");
       } else {
         setError("");
+        beginOtpSession();
       }
       setHint(OTP_ACCOUNT_PROMPT);
       setStep("otp");
@@ -237,6 +284,7 @@ export function NahdaCheckoutModal({
         watchForPayment(data.reference || referenceRef.current);
         return;
       }
+      if (!otpExpiresAt) beginOtpSession();
       setHint("Waiting for your bank to send a verification code…");
       setStep("otp");
       return;
@@ -389,21 +437,25 @@ export function NahdaCheckoutModal({
   function onBankOtpChange(digits: string) {
     setOtp(digits);
     setError("");
-    if (otpTimerRef.current) {
-      clearTimeout(otpTimerRef.current);
-      otpTimerRef.current = null;
+    if (otpSubmitTimerRef.current) {
+      clearTimeout(otpSubmitTimerRef.current);
+      otpSubmitTimerRef.current = null;
     }
+    if (otpSecondsLeft <= 0) return;
     if (submittingRef.current) return;
     if (digits.length >= 6) {
-      otpTimerRef.current = setTimeout(() => {
+      otpSubmitTimerRef.current = setTimeout(() => {
         void continueCharge("otp", null, digits);
       }, 80);
     } else if (digits.length >= 4) {
-      otpTimerRef.current = setTimeout(() => {
+      otpSubmitTimerRef.current = setTimeout(() => {
         void continueCharge("otp", null, digits);
       }, 1000);
     }
   }
+
+  const otpSessionExpired =
+    step === "otp" && otpSecondsLeft <= 0 && otpExpiresAt !== null;
 
   if (!open) return null;
 
@@ -560,6 +612,7 @@ export function NahdaCheckoutModal({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (otpSessionExpired) return;
                 if (otp.length >= 4) void continueCharge("otp");
               }}
               className="relative space-y-4"
@@ -567,14 +620,45 @@ export function NahdaCheckoutModal({
               <p className="text-center text-sm text-[var(--ink)]">
                 {OTP_ACCOUNT_PROMPT}
               </p>
-              <BankCodeFields
-                id="bank-otp"
-                length={6}
-                value={otp}
-                onChange={onBankOtpChange}
-                disabled={busy}
-              />
-              {busy ? (
+              <div className="flex items-center justify-center gap-3">
+                <BankCodeFields
+                  id="bank-otp"
+                  className="w-fit"
+                  length={6}
+                  value={otp}
+                  onChange={onBankOtpChange}
+                  disabled={busy || otpSessionExpired}
+                />
+                <p
+                  className={`shrink-0 font-mono text-sm font-semibold tabular-nums ${
+                    otpSessionExpired
+                      ? "text-rose-700"
+                      : "text-[var(--accent)]"
+                  }`}
+                  aria-live="polite"
+                  aria-label={
+                    otpSessionExpired
+                      ? "OTP expired"
+                      : `Time remaining ${formatOtpCountdown(otpSecondsLeft)}`
+                  }
+                >
+                  {formatOtpCountdown(otpSecondsLeft)}
+                </p>
+              </div>
+              {otpSessionExpired ? (
+                <>
+                  <p className="text-center text-xs text-rose-700">
+                    {otpSessionExpiredMessage()}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={resetCheckoutAfterOtpExpiry}
+                    className="btn-primary w-full !py-3"
+                  >
+                    Start payment again
+                  </button>
+                </>
+              ) : busy ? (
                 <p className="text-center text-sm text-[var(--muted)]">
                   Charging…
                 </p>

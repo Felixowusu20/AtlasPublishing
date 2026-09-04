@@ -141,7 +141,7 @@ export function ManuscriptViewer({ url, publicId, title, className }: Props) {
         </div>
       </div>
 
-      <div className="relative min-h-[320px] bg-[#e8edf2]">
+      <div className="relative min-h-[320px] bg-white">
         {mode === "native" && (
           <>
             {loading && (

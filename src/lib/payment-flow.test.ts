@@ -7,7 +7,7 @@ import {
   customerPayloadHasInternalLeak,
   usdToGhsRate,
 } from "@/lib/payment-currency";
-import { cardholderChargeMessage, otpVerificationFailedMessage } from "@/lib/payment-display";
+import { cardholderChargeMessage, otpVerificationFailedMessage, formatOtpCountdown, otpSessionExpiryHint } from "@/lib/payment-display";
 import {
   customerCheckoutRequestSchema,
   livePendingApcCents,
@@ -202,6 +202,9 @@ test("customer payment message shows \"$50 USD\"", () => {
   assert.match(html, /\$50 USD/);
   assert.match(html, /Pay \$50 USD/);
   assert.match(html, /https:\/\/example.com\/pay\/pay_1/);
+  assert.match(html, /target="_blank"/);
+  assert.match(html, /rel="noopener noreferrer"/);
+  assert.match(html, /opens in a new tab/i);
   assert.doesNotMatch(html, /opens Nahda checkout/i);
   assert.doesNotMatch(html, /not your manuscript file/i);
   assert.doesNotMatch(html, /\/submissions\//);
@@ -295,6 +298,15 @@ test("OTP verification shows the actual bank error", () => {
   assert.equal(
     otpVerificationFailedMessage(null),
     "Enter the OTP sent to your account.",
+  );
+});
+
+test("OTP expiry hint shows 2 min countdown", () => {
+  assert.equal(formatOtpCountdown(125), "2:05");
+  assert.equal(formatOtpCountdown(0), "0:00");
+  assert.equal(
+    otpSessionExpiryHint(120),
+    "Enter the code before it expires — 2:00 remaining.",
   );
 });
 

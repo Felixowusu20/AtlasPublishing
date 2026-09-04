@@ -16,6 +16,7 @@ type Props = {
   disabled?: boolean;
   autoComplete?: string;
   mask?: boolean;
+  className?: string;
 };
 
 export function BankCodeFields({
@@ -28,6 +29,7 @@ export function BankCodeFields({
   disabled,
   autoComplete = "one-time-code",
   mask = false,
+  className,
 }: Props) {
   const boxes = Array.from({ length }, (_, i) => value[i] ?? "");
   const refs = useRef<Array<HTMLInputElement | null>>([]);
@@ -74,7 +76,7 @@ export function BankCodeFields({
   const accessibleLabel = label || "OTP";
 
   return (
-    <fieldset className="block" disabled={disabled}>
+    <fieldset className={className || "block"} disabled={disabled}>
       {label ? (
         <legend className="mb-1.5 text-sm font-medium text-[var(--ink)]">
           {label}
@@ -102,7 +104,7 @@ export function BankCodeFields({
             disabled={disabled}
             onChange={(e) => setAt(index, e.target.value)}
             onKeyDown={(e) => onKeyDown(index, e.key)}
-            className="h-12 w-10 rounded-xl border border-[var(--surface)] bg-[var(--paper)] text-center text-lg font-semibold tracking-widest text-[var(--ink)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30 disabled:opacity-60 sm:h-14 sm:w-11"
+            className="h-12 w-10 rounded-xl border-2 border-stone-300 bg-white text-center text-lg font-semibold tracking-widest text-[var(--ink)] shadow-sm focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30 disabled:opacity-60 sm:h-14 sm:w-11"
           />
         ))}
       </div>

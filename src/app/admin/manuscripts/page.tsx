@@ -406,7 +406,8 @@ function ManuscriptsPageInner() {
                 </div>
               </div>
 
-              <div className="overflow-visible rounded-xl border border-[var(--line)] bg-[#e8edf2] p-3 sm:p-5">
+              <div className="overflow-hidden rounded-xl border border-[var(--line)] bg-[#e8edf2] p-3 sm:p-5">
+                <div className="mx-auto w-full max-w-[960px] overflow-hidden bg-white shadow-sm">
                 <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                   Journal template · header through abstract
                 </p>
@@ -435,6 +436,7 @@ function ManuscriptsPageInner() {
                   funding={selected.funding}
                   conflictOfInterest={selected.conflictOfInterest}
                 />
+                </div>
               </div>
 
               <details className="rounded-xl border border-[var(--line)] bg-white p-4">
