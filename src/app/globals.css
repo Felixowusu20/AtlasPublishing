@@ -574,9 +574,14 @@ input[type="search"]::-webkit-search-results-decoration {
   line-height: 1.7;
   text-align: justify;
   text-align-last: left;
-  hyphens: auto;
-  -webkit-hyphens: auto;
+  hyphens: none;
+  -webkit-hyphens: none;
+  -ms-hyphens: none;
   overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: normal;
+  max-width: 100%;
+  min-width: 0;
   color: #0b1f33;
 }
 
@@ -605,9 +610,10 @@ input[type="search"]::-webkit-search-results-decoration {
   margin: 0.15em 0;
   text-align: justify;
   text-align-last: left;
-  hyphens: auto;
-  -webkit-hyphens: auto;
+  hyphens: none;
+  -webkit-hyphens: none;
   overflow-wrap: break-word;
+  word-break: normal;
   color: #0b1f33;
 }
 
@@ -690,7 +696,8 @@ input[type="search"]::-webkit-search-results-decoration {
   max-width: 100%;
   overflow-wrap: break-word;
   word-break: normal;
-  hyphens: auto;
+  hyphens: none;
+  -webkit-hyphens: none;
 }
 
 .nahda-article-body thead th {
@@ -785,7 +792,10 @@ input[type="search"]::-webkit-search-results-decoration {
   line-height: 1.45;
   text-align: left;
   text-align-last: left;
-  hyphens: auto;
+  hyphens: none;
+  -webkit-hyphens: none;
+  overflow-wrap: break-word;
+  word-break: normal;
   max-width: 100%;
   color: #0b1f33;
 }
@@ -829,17 +839,31 @@ input[type="search"]::-webkit-search-results-decoration {
   display: block;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   margin: 0.55em 0 0;
   font-size: 14px;
   line-height: 1.75;
   text-align: justify;
   text-align-last: left;
-  hyphens: auto;
-  -webkit-hyphens: auto;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  /* Never auto-insert hyphenation marks — Word soft hyphens already break layout. */
+  hyphens: none;
+  -webkit-hyphens: none;
+  -ms-hyphens: none;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: normal;
   white-space: normal;
   color: #0b1f33;
+}
+
+.nahda-abstract-html,
+.nahda-abstract-html * {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  hyphens: none;
+  -webkit-hyphens: none;
 }
 
 .nahda-abstract-html p[style*="text-align: left"],
@@ -1012,8 +1036,10 @@ input[type="search"]::-webkit-search-results-decoration {
   line-height: 1.7;
   text-align: justify;
   text-align-last: left;
-  hyphens: auto;
-  -webkit-hyphens: auto;
+  hyphens: none;
+  -webkit-hyphens: none;
+  overflow-wrap: break-word;
+  word-break: normal;
   color: #0b1f33;
 }
 
@@ -1030,9 +1056,14 @@ input[type="search"]::-webkit-search-results-decoration {
 .nahda-article-body:not(.manuscript-wysiwyg) {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   column-count: 2;
   column-gap: 1.15rem;
   column-fill: balance;
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+  -webkit-hyphens: none;
 }
 
 .nahda-article-full {
@@ -1598,9 +1629,15 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .nahda-pdf-print .nahda-article-flow p,
 .nahda-pdf-print .nahda-article-flow li,
-.nahda-pdf-print .nahda-article-abstract p {
+.nahda-pdf-print .nahda-article-abstract p,
+.nahda-pdf-print .nahda-abstract-html,
+.nahda-pdf-print .nahda-abstract-html p {
   orphans: 3;
   widows: 3;
+  hyphens: none !important;
+  -webkit-hyphens: none !important;
+  overflow-wrap: break-word !important;
+  word-break: normal !important;
 }
 
 @media print {

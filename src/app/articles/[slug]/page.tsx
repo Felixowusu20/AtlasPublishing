@@ -402,7 +402,7 @@ function ArticleView({
                   <div className="h-px flex-1 bg-[var(--line)]" />
                 </div>
                 <div
-                  className="nahda-abstract-html mt-4 text-justify text-[15px] leading-[1.75] text-[var(--ink)] [text-align-last:left] hyphens-auto sm:text-[16px] sm:leading-[1.8]"
+                  className="nahda-abstract-html mt-4 text-justify text-[15px] leading-[1.75] text-[var(--ink)] [text-align-last:left] [hyphens:none] sm:text-[16px] sm:leading-[1.8]"
                   dangerouslySetInnerHTML={{
                     __html:
                       ensureManuscriptHtml(article.abstract) ||
@@ -440,7 +440,7 @@ function ArticleView({
                         <h2 className="font-[family-name:var(--font-display)] text-[1.35rem] font-semibold tracking-tight text-[var(--ink)] sm:text-[1.5rem]">
                           {section.heading}
                         </h2>
-                        <p className="mt-3 text-justify text-[15px] leading-[1.85] text-[var(--ink)]/85 [text-align-last:left] hyphens-auto">
+                        <p className="mt-3 text-justify text-[15px] leading-[1.85] text-[var(--ink)]/85 [text-align-last:left] [hyphens:none]">
                           {section.body}
                         </p>
                       </section>
