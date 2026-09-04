@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f5f7fa;
-  --surface: #eef2f6;
+  --paper: #ffffff;
+  --surface: #f3f5f8;
   --ink: #0b1f33;
   --muted: #5b6b7c;
   --line: #d7dee7;
@@ -235,6 +235,136 @@ input[type="search"]::-webkit-search-results-decoration {
   pointer-events: none;
 }
 
+.nahda-template-editable {
+  caret-color: var(--j-primary, #1d4e89);
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.nahda-template-editable[data-empty="true"]:before {
+  content: attr(data-placeholder);
+  color: #8a97a6;
+  pointer-events: none;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.nahda-article-front-editable a[href] {
+  pointer-events: none;
+}
+
+.manuscript-wysiwyg figure {
+  position: relative;
+}
+
+.manuscript-wysiwyg figure.nahda-fig-selected {
+  outline: 2px solid var(--j-primary, #1d4e89);
+  outline-offset: 3px;
+  z-index: 2;
+}
+
+.manuscript-wysiwyg .nahda-fig-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.manuscript-wysiwyg .nahda-fig-toolbar {
+  position: absolute;
+  top: -2.15rem;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  pointer-events: auto;
+  border-radius: 0.5rem;
+  background: #0b1f33;
+  padding: 0.25rem 0.4rem;
+  box-shadow: 0 6px 18px rgba(11, 31, 51, 0.18);
+}
+
+.manuscript-wysiwyg .nahda-fig-toolbar button {
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+}
+
+.manuscript-wysiwyg .nahda-fig-toolbar button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.manuscript-wysiwyg .nahda-fig-toolbar [data-fig-hint] {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 9px;
+  font-weight: 600;
+  padding-inline: 0.25rem;
+}
+
+.manuscript-wysiwyg .nahda-fig-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-radius: 2px;
+  background: var(--j-primary, #1d4e89);
+  box-shadow: 0 0 0 1px rgba(11, 31, 51, 0.25);
+  pointer-events: auto;
+  z-index: 4;
+}
+
+.manuscript-wysiwyg .nahda-fig-handle-nw {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+.manuscript-wysiwyg .nahda-fig-handle-ne {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+.manuscript-wysiwyg .nahda-fig-handle-sw {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+.manuscript-wysiwyg .nahda-fig-handle-se {
+  bottom: -5px;
+  right: -5px;
+  cursor: nwse-resize;
+}
+.manuscript-wysiwyg .nahda-fig-handle-e {
+  top: 50%;
+  right: -5px;
+  margin-top: -5px;
+  cursor: ew-resize;
+}
+.manuscript-wysiwyg .nahda-fig-handle-w {
+  top: 50%;
+  left: -5px;
+  margin-top: -5px;
+  cursor: ew-resize;
+}
+
+@media print {
+  .nahda-fig-chrome,
+  .nahda-fig-selected {
+    outline: none !important;
+  }
+  .nahda-fig-chrome {
+    display: none !important;
+  }
+}
+
 .manuscript-wysiwyg figure.figure-full:not(:has(img)):not(:has(table)),
 .manuscript-wysiwyg figure.table-full:not(:has(img)):not(:has(table)) {
   min-height: 5.25rem;
@@ -283,6 +413,8 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .nahda-print-frame {
   width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   border: none;
 }
@@ -292,6 +424,10 @@ input[type="search"]::-webkit-search-results-decoration {
   border: none;
   padding: 0;
   vertical-align: top;
+  width: 100%;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .nahda-print-frame > tfoot > tr > td {
@@ -445,13 +581,15 @@ input[type="search"]::-webkit-search-results-decoration {
   max-width: 100% !important;
   margin: 0.7em 0;
   border-collapse: collapse;
+  border-spacing: 0;
   table-layout: fixed;
   font-size: 10.5px;
+  border: 1px solid #0b1f33;
 }
 
 .nahda-article-body th,
 .nahda-article-body td {
-  border-bottom: 1px solid #e8edf2;
+  border: 1px solid #0b1f33;
   padding: 0.35em 0.45em;
   text-align: left;
   vertical-align: top;
@@ -463,14 +601,14 @@ input[type="search"]::-webkit-search-results-decoration {
 }
 
 .nahda-article-body thead th {
-  border-top: 1px solid var(--j-primary, #0b1f33);
-  border-bottom: 1px solid var(--j-primary, #0b1f33);
+  border: 1px solid #0b1f33;
   font-weight: 600;
   color: #0b1f33;
+  background: #f7f9fb;
 }
 
 .nahda-article-body tbody tr:last-child td {
-  border-bottom: 1px solid var(--j-primary, #0b1f33);
+  border-bottom: 1px solid #0b1f33;
 }
 
 .nahda-article-body figure {
@@ -561,26 +699,40 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .nahda-article {
   position: relative;
-  overflow: visible;
+  overflow: hidden;
   border-radius: 0;
+  width: 100%;
+  max-width: 100%;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.nahda-article *,
+.nahda-article *::before,
+.nahda-article *::after {
+  box-sizing: border-box;
 }
 
 .nahda-article-inner {
-  overflow: visible;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
 }
 
 .nahda-article-abstract {
   position: relative;
   z-index: 2;
-  overflow: visible;
+  overflow: hidden;
   display: block;
   width: 100%;
+  max-width: 100%;
   margin: 1.15em 0 0;
 }
 
 .nahda-article-abstract p,
 .nahda-abstract-html,
-.nahda-abstract-html p {
+.nahda-abstract-html p,
+.nahda-article-abstract .nahda-template-editable {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -591,8 +743,8 @@ input[type="search"]::-webkit-search-results-decoration {
   text-align-last: left;
   hyphens: auto;
   -webkit-hyphens: auto;
-  overflow-wrap: break-word;
-  word-break: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   white-space: normal;
   color: #0b1f33;
 }
@@ -659,15 +811,20 @@ input[type="search"]::-webkit-search-results-decoration {
 .nahda-article-front {
   display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .nahda-article-flow {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   margin-top: 0.7rem;
   column-count: 2;
   column-gap: 1.15rem;
   column-fill: balance;
+  overflow: hidden;
 }
 
 .nahda-span-all,
@@ -680,12 +837,48 @@ input[type="search"]::-webkit-search-results-decoration {
 .nahda-article-flow .nahda-workflow {
   column-span: all;
   break-inside: auto;
+  max-width: 100%;
 }
 
 .nahda-article-flow .nahda-article-body {
   display: contents;
   column-count: auto;
   column-width: auto;
+}
+
+/* In-place body editing needs a real box so the caret can focus (display:contents breaks that). */
+.nahda-article-flow .nahda-article-body.nahda-body-inplace,
+.nahda-article-flow .nahda-article-body.manuscript-wysiwyg.nahda-body-inplace {
+  display: block;
+  column-span: all;
+  min-height: 16rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  outline: none;
+  caret-color: var(--j-primary, #1d4e89);
+  cursor: text;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow: hidden;
+}
+
+.nahda-article-flow .nahda-body-inplace p,
+.nahda-article-flow .nahda-body-inplace li,
+.nahda-article-flow .nahda-body-inplace h1,
+.nahda-article-flow .nahda-body-inplace h2,
+.nahda-article-flow .nahda-body-inplace h3,
+.nahda-article-flow .nahda-body-inplace h4 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.nahda-article-flow .nahda-body-inplace[data-empty="true"]:before {
+  content: attr(data-placeholder);
+  color: #8a97a6;
+  font-style: italic;
+  pointer-events: none;
 }
 
 .nahda-article-flow .nahda-article-body > :first-child {
@@ -696,12 +889,23 @@ input[type="search"]::-webkit-search-results-decoration {
   display: none;
 }
 
+.nahda-article-flow .nahda-body-inplace > p:empty:first-child,
+.nahda-article-flow .nahda-body-inplace > p:first-child:has(br:only-child) {
+  display: block;
+  min-height: 1.5em;
+}
+
 .nahda-keywords {
   margin: 0.9em 0 0;
   padding: 0.65em 0.9em;
   border-left: none;
   break-after: avoid;
   page-break-after: avoid;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .nahda-end-matter {
@@ -1024,6 +1228,13 @@ input[type="search"]::-webkit-search-results-decoration {
     font-size: 9.5px;
     break-inside: auto;
     page-break-inside: auto;
+    border: 1px solid #0b1f33 !important;
+    border-collapse: collapse !important;
+  }
+
+  .nahda-article-body th,
+  .nahda-article-body td {
+    border: 1px solid #0b1f33 !important;
   }
 
   .nahda-article-body thead {
@@ -1272,6 +1483,13 @@ input[type="search"]::-webkit-search-results-decoration {
   max-height: 220mm !important;
   table-layout: auto !important;
   overflow: visible !important;
+  border: 1px solid #0b1f33 !important;
+  border-collapse: collapse !important;
+}
+
+.nahda-pdf-print th,
+.nahda-pdf-print td {
+  border: 1px solid #0b1f33 !important;
 }
 
 .nahda-pdf-print figcaption {

@@ -6,10 +6,7 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { NahdaArticleTemplate } from "@/components/atlas-article-template";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import {
-  ManuscriptEditor,
-  type ManuscriptFigure,
-} from "@/components/manuscript-editor";
+import { type ManuscriptFigure } from "@/components/manuscript-editor";
 import { ManuscriptImportPanel } from "@/components/manuscript-import";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { AuthorOrcidLine, OrcidIdIcon } from "@/components/orcid-id";
@@ -31,6 +28,7 @@ import {
 import { htmlToPlainText } from "@/lib/import-manuscript";
 import { slugify } from "@/lib/submission-utils";
 import { RichTextField } from "@/components/rich-text-field";
+import { TemplateFormatToolbar } from "@/components/template-format-toolbar";
 import { journalArticlePalette } from "@/lib/journal-colors";
 import { formatArticleDate, toDateInputValue } from "@/lib/article-dates";
 import {
@@ -122,8 +120,6 @@ type TemplateForm = {
   figures: ManuscriptFigure[];
   pdfUrl: string;
 };
-
-type Pane = "edit" | "preview";
 
 function authorEntriesFromSubmission(sub: QueueItem): AuthorEntry[] {
   if (Array.isArray(sub.authorsJson) && sub.authorsJson.length > 0) {
@@ -217,7 +213,7 @@ export default function PublishedArticlesPage() {
   const [journalIssues, setJournalIssues] = useState<IssueRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<TemplateForm>(emptyForm());
-  const [pane, setPane] = useState<Pane>("edit");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -234,6 +230,7 @@ export default function PublishedArticlesPage() {
   >(null);
   const pdfSourceRef = useRef<HTMLDivElement>(null);
   const cleanedPdfInputRef = useRef<HTMLInputElement>(null);
+  const templateScopeRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [draftDirty, setDraftDirty] = useState(false);
@@ -381,7 +378,7 @@ export default function PublishedArticlesPage() {
     setSelectedId(sub.id);
     setError("");
     setSuccess("");
-    setPane("edit");
+    setDetailsOpen(false);
     const savedBody = sub.productionBody?.trim()
       ? sub.productionBody
       : emptyForm().body;
@@ -636,29 +633,45 @@ export default function PublishedArticlesPage() {
     }
   }
 
-  const printAfterPreview = useRef(false);
-
   function printPreview() {
+    setDetailsOpen(false);
     beginArticlePrint(form.title || selected?.title || "Article");
     const restore = () => {
       endArticlePrint();
       window.removeEventListener("afterprint", restore);
     };
     window.addEventListener("afterprint", restore);
-    if (pane === "preview") {
-      window.print();
-      return;
-    }
-    printAfterPreview.current = true;
-    setPane("preview");
+    window.setTimeout(() => window.print(), 450);
   }
 
+  const closeWorkspace = useCallback(async () => {
+    if (publishing || uploadingPdf) return;
+    if (draftDirty) await persistDraft();
+    setSelectedId(null);
+    setForm(emptyForm());
+    setDetailsOpen(false);
+    setPdfKind("none");
+    setUploadedPdfName("");
+  }, [publishing, uploadingPdf, draftDirty, persistDraft]);
+
   useEffect(() => {
-    if (pane !== "preview" || !printAfterPreview.current) return;
-    printAfterPreview.current = false;
-    const timer = window.setTimeout(() => window.print(), 450);
-    return () => window.clearTimeout(timer);
-  }, [pane]);
+    if (!selected) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (detailsOpen) {
+        setDetailsOpen(false);
+        return;
+      }
+      void closeWorkspace();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [selected, detailsOpen, closeWorkspace]);
 
   async function onPublish(
     mode: "uploaded" | "generated",
@@ -851,8 +864,9 @@ export default function PublishedArticlesPage() {
         : "Publishing…"
       : "Generate PDF & publish";
 
-  const captureTemplate =
-    selected ? (
+  function renderArticleTemplate() {
+    if (!selected) return null;
+    return (
       <NahdaArticleTemplate
         journalTitle={selected.journal.title}
         journalShortTitle={selected.journal.shortTitle}
@@ -881,7 +895,8 @@ export default function PublishedArticlesPage() {
         conflictOfInterest={selected.conflictOfInterest}
         body={form.body}
       />
-    ) : null;
+    );
+  }
 
   return (
     <div>
@@ -955,6 +970,17 @@ export default function PublishedArticlesPage() {
             background: white !important;
           }
 
+          html.nahda-print-article .publish-workspace-overlay {
+            position: static !important;
+            inset: auto !important;
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+          }
+          html.nahda-print-article .publish-workspace-chrome {
+            display: none !important;
+          }
+
           #nahda-article-template {
             position: static !important;
             width: 100% !important;
@@ -976,10 +1002,11 @@ export default function PublishedArticlesPage() {
             Publish accepted papers
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Edit metadata on this journal’s template, import Word or Google
-            Docs only to fill the body, then publish. Nahda generates a
-            styled PDF from the reviewed template — readers never download
-            the original Word file.
+            Click a paper to open the journal template editor. Import Word or
+            Google Docs, edit the body in place, then use Article details for
+            dates, volume, PDF, and publish. Print preview uses the browser
+            print dialog. Nahda generates a styled PDF from this layout —
+            readers never download the original Word file.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1002,17 +1029,15 @@ export default function PublishedArticlesPage() {
         </p>
       )}
 
-      <div
-        className={`mt-8 grid gap-6 print:block ${
-          selected
-            ? "lg:grid-cols-[220px_minmax(0,1fr)]"
-            : "lg:grid-cols-[300px_1fr]"
-        }`}
-      >
-        <section className="print:hidden">
+      <div className="mt-8">
+        <section>
           <h2 className="text-sm font-semibold text-[var(--ink)]">
             Accepted queue
           </h2>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Click a paper to open a wide journal-template editor. Import Word
+            docs, edit inside the template, then print-preview and publish.
+          </p>
           {loading && (
             <NahdaLoader variant="inline" label="Loading accepted queue…" />
           )}
@@ -1022,7 +1047,7 @@ export default function PublishedArticlesPage() {
               inbox first.
             </p>
           )}
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {queue.map((sub) => {
               const active = sub.id === selectedId;
               return (
@@ -1044,6 +1069,9 @@ export default function PublishedArticlesPage() {
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
                       {sub.author.name} · {sub.journal.shortTitle}
+                    </p>
+                    <p className="mt-2 text-[11px] font-semibold text-[var(--accent)]">
+                      Open editor →
                     </p>
                   </button>
                 </li>
@@ -1100,89 +1128,277 @@ export default function PublishedArticlesPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm sm:p-6 print:border-0 print:p-0 print:shadow-none">
-          {!selected ? (
-            <div className="flex min-h-[320px] flex-col items-center justify-center text-center print:hidden">
-              <p className="text-sm font-medium text-[var(--ink)]">
-                Select an accepted paper
-              </p>
-              <p className="mt-1 max-w-sm text-xs text-[var(--muted)]">
-                Load it into the Nahda article template to edit authors, logo,
-                and metadata, then preview and publish.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line)] pb-4 print:hidden">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
-                    Nahda article template
-                  </p>
-                  <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
-                    {selected.manuscriptId}
-                  </h2>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {selected.journal.title} · {selected.author.email}
-                    {draftDirty
-                      ? " · Unsaved"
-                      : autosaveNote
-                        ? ` · ${autosaveNote}`
-                        : " · Autosaves as you edit"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {selected.manuscriptUrl && (
-                    <a
-                      href={selected.manuscriptUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary !px-3 !py-2 text-xs"
+        {!selected && success && (
+          <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            {success}
+          </p>
+        )}
+      </div>
+
+      {selected
+        ? createPortal(
+            <div
+              className="publish-workspace-overlay fixed inset-0 z-[200] flex flex-col bg-[var(--ink)]/55 p-0 sm:p-3 print:static print:bg-white print:p-0"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="publish-workspace-title"
+            >
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-none bg-white shadow-2xl sm:rounded-2xl print:h-auto print:overflow-visible print:rounded-none print:shadow-none">
+                <div className="publish-workspace-chrome flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line)] bg-white px-4 py-4 sm:px-6">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
+                      Nahda article template
+                    </p>
+                    <h2
+                      id="publish-workspace-title"
+                      className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]"
                     >
-                      Manuscript file
-                    </a>
-                  )}
-                  <button
-                    type="button"
-                    className="btn-secondary !px-3 !py-2 text-xs"
-                    onClick={printPreview}
-                  >
-                    Print preview
-                  </button>
+                      {selected.manuscriptId}
+                    </h2>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {selected.journal.title} · {selected.author.email}
+                      {draftDirty
+                        ? " · Unsaved"
+                        : autosaveNote
+                          ? ` · ${autosaveNote}`
+                          : " · Autosaves as you edit"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {selected.manuscriptUrl && (
+                      <a
+                        href={selected.manuscriptUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-secondary !px-3 !py-2 text-xs"
+                      >
+                        Manuscript file
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      className="btn-secondary !px-3 !py-2 text-xs"
+                      onClick={() => setDetailsOpen(true)}
+                    >
+                      Article details
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary !px-3 !py-2 text-xs"
+                      onClick={printPreview}
+                    >
+                      Print preview
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary !px-3 !py-2 text-xs"
+                      disabled={publishing || uploadingPdf}
+                      onClick={() => void closeWorkspace()}
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
+
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6 print:overflow-visible print:px-0 print:py-0">
+                  {error && (
+                    <p className="mb-4 shrink-0 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 print:hidden">
+                      {error}
+                    </p>
+                  )}
+                  {success && (
+                    <p className="mb-4 shrink-0 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 print:hidden">
+                      {success}
+                    </p>
+                  )}
+
+              <form
+                onSubmit={(e) => e.preventDefault()}
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden print:hidden"
+              >
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <div className="mx-auto max-w-[1040px] space-y-4 pb-6">
+                    <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[#e8edf2] p-3 shadow-sm sm:p-5">
+                      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 print:hidden">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                            Live journal page · click any text to edit
+                          </p>
+                          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[var(--muted)]">
+                            Click in the abstract or body, then use the format
+                            toolbar (bold, lists, table, image). Image opens
+                            files from your computer. Use Article details for
+                            PDF and publish.
+                            {selected.manuscriptReadyAt
+                              ? " A draft is already loaded from Full manuscripts."
+                              : selected.productionBody?.trim()
+                                ? " A saved body is loaded."
+                                : ""}
+                          </p>
+                        </div>
+                        <Link
+                          href={`/admin/manuscripts?id=${selected.id}`}
+                          className="btn-secondary !px-3 !py-2 text-xs"
+                        >
+                          Open Full manuscripts
+                        </Link>
+                      </div>
+                      <div className="mb-4 print:hidden">
+                        <ManuscriptImportPanel
+                          hasExistingBody={Boolean(htmlToPlainText(form.body))}
+                          onError={setError}
+                          onImported={(result) =>
+                            setForm((f) => ({
+                              ...f,
+                              body: result.body,
+                              figures: result.figures,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="mb-2 print:hidden">
+                        <TemplateFormatToolbar
+                          scopeRef={templateScopeRef}
+                          onError={setError}
+                          journalPrimary={
+                            journalArticlePalette(
+                              selected.journal.coverColor,
+                              selected.journal.slug ||
+                                selected.journal.shortTitle,
+                            ).primary
+                          }
+                          onFigureAdded={(figure) =>
+                            setForm((f) => ({
+                              ...f,
+                              figures: [...f.figures, figure],
+                            }))
+                          }
+                        />
+                      </div>
+                      <div
+                        ref={templateScopeRef}
+                        className="mx-auto w-full max-w-[960px] overflow-hidden bg-white shadow-sm"
+                      >
+                      <NahdaArticleTemplate
+                        wide
+                        editable
+                        onEditableChange={(patch) => {
+                          setForm((f) => {
+                            const next = { ...f };
+                            if (patch.title != null) next.title = patch.title;
+                            if (patch.abstract != null) {
+                              next.abstract = patch.abstract;
+                            }
+                            if (patch.body != null) next.body = patch.body;
+                            if (patch.articleType != null) {
+                              next.articleType = patch.articleType;
+                            }
+                            if (patch.volume != null) next.volume = patch.volume;
+                            if (patch.issue != null) next.issue = patch.issue;
+                            if (patch.pages != null) next.pages = patch.pages;
+                            if (patch.doi != null) next.doi = patch.doi;
+                            if (patch.keywordsText != null) {
+                              next.keywords = patch.keywordsText;
+                            }
+                            if (patch.affiliationsText != null) {
+                              next.affiliations = patch.affiliationsText;
+                            }
+                            if (patch.authorsText != null) {
+                              const names = patch.authorsText
+                                .split(/,| & | and /i)
+                                .map((s) => s.trim())
+                                .filter(Boolean);
+                              next.authorEntries = (
+                                names.length ? names : [""]
+                              ).map((name, i) => ({
+                                name,
+                                orcid: f.authorEntries[i]?.orcid ?? "",
+                              }));
+                            }
+                            return next;
+                          });
+                        }}
+                        journalTitle={selected.journal.title}
+                        journalShortTitle={selected.journal.shortTitle}
+                        journalSlug={selected.journal.slug}
+                        coverColor={selected.journal.coverColor}
+                        journalUrl={`/journals/${selected.journal.slug}`}
+                        articleUrl={`/articles/${slugify(form.title)}`}
+                        manuscriptId={selected.manuscriptId}
+                        title={form.title}
+                        authors={previewAuthors}
+                        affiliations={previewAffiliations}
+                        abstract={form.abstract}
+                        body={form.body}
+                        keywords={previewKeywords}
+                        articleType={form.articleType}
+                        doi={form.doi}
+                        volume={form.volume}
+                        issue={form.issue}
+                        pages={form.pages}
+                        receivedAt={previewDates.receivedAt}
+                        acceptedAt={previewDates.acceptedAt}
+                        publishedAt={previewDates.publishedAt}
+                        license={form.license}
+                        openAccess={form.openAccess}
+                        logoUrl={
+                          form.logoUrl ||
+                          selected.journal.coverImageUrl ||
+                          null
+                        }
+                        funding={selected.funding}
+                        conflictOfInterest={selected.conflictOfInterest}
+                      />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </form>
+
+              <div className="hidden print:block" aria-hidden>
+                {renderArticleTemplate()}
               </div>
 
-              <div className="mt-4 flex gap-1 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-1 print:hidden">
-                <button
-                  type="button"
-                  onClick={() => setPane("edit")}
-                  className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${
-                    pane === "edit"
-                      ? "bg-white text-[var(--ink)] shadow-sm"
-                      : "text-[var(--muted)]"
-                  }`}
-                >
-                  Edit details
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPane("preview")}
-                  className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${
-                    pane === "preview"
-                      ? "bg-white text-[var(--ink)] shadow-sm"
-                      : "text-[var(--muted)]"
-                  }`}
-                >
-                  Live preview
-                </button>
-              </div>
-
-              {pane === "edit" ? (
-                <form
-                  onSubmit={(e) => e.preventDefault()}
-                  className="mt-5 print:hidden"
-                >
-                  <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
-                    <div className="order-2 min-w-0 space-y-3 lg:order-1">
+              {detailsOpen
+                ? createPortal(
+                    <div
+                      className="fixed inset-0 z-[220] flex items-end justify-center bg-[var(--ink)]/60 p-0 sm:items-center sm:p-4 print:hidden"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="publish-details-title"
+                    >
+                      <button
+                        type="button"
+                        className="absolute inset-0 cursor-default"
+                        aria-label="Close article details"
+                        onClick={() => setDetailsOpen(false)}
+                      />
+                      <div className="relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+                        <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                              Publishing details
+                            </p>
+                            <h3
+                              id="publish-details-title"
+                              className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]"
+                            >
+                              {selected.manuscriptId}
+                            </h3>
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              Title, authors, dates, volume, issue, PDF, and
+                              publish
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="rounded-full bg-[var(--surface)] px-3 py-1.5 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--line)]"
+                            onClick={() => setDetailsOpen(false)}
+                          >
+                            Done
+                          </button>
+                        </div>
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
                   <div className="rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 p-4">
                     <p className="text-xs font-semibold text-[var(--ink)]">
                       Journal logo
@@ -1381,109 +1597,7 @@ export default function PublishedArticlesPage() {
                       }
                     />
                   </label>
-
-                      <div className="overflow-visible rounded-xl border border-[var(--line)] bg-[#e8edf2] p-3 sm:p-4">
-                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                          Journal template · header through abstract
-                        </p>
-                        <NahdaArticleTemplate
-                          journalTitle={selected.journal.title}
-                          journalShortTitle={selected.journal.shortTitle}
-                          journalSlug={selected.journal.slug}
-                          coverColor={selected.journal.coverColor}
-                          journalUrl={`/journals/${selected.journal.slug}`}
-                          articleUrl={`/articles/${slugify(form.title)}`}
-                          manuscriptId={selected.manuscriptId}
-                          title={form.title}
-                          authors={previewAuthors}
-                          affiliations={previewAffiliations}
-                          abstract={form.abstract}
-                          keywords={previewKeywords}
-                          articleType={form.articleType}
-                          doi={form.doi}
-                          volume={form.volume}
-                          issue={form.issue}
-                          pages={form.pages}
-                          receivedAt={previewDates.receivedAt}
-                          acceptedAt={previewDates.acceptedAt}
-                          publishedAt={previewDates.publishedAt}
-                          license={form.license}
-                          openAccess={form.openAccess}
-                          logoUrl={
-                            form.logoUrl ||
-                            selected.journal.coverImageUrl ||
-                            null
-                          }
-                          funding={selected.funding}
-                          conflictOfInterest={selected.conflictOfInterest}
-                          body={undefined}
-                        />
-                      </div>
-
-                      <div className="space-y-3 rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 p-4">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="text-xs font-semibold text-[var(--ink)]">
-                              Introduction to References
-                            </p>
-                            <p className="mt-1 text-[11px] text-[var(--muted)]">
-                              Import Word or Google Docs into the body only.
-                              Title, authors, abstract, and keywords stay on
-                              this journal&apos;s template. The public download
-                              is a Nahda PDF generated from this layout — never
-                              the original file.
-                              {selected.manuscriptReadyAt
-                                ? " A draft is already loaded from Full manuscripts."
-                                : selected.productionBody?.trim()
-                                  ? " A saved body is loaded."
-                                  : ""}
-                            </p>
-                          </div>
-                          <Link
-                            href={`/admin/manuscripts?id=${selected.id}`}
-                            className="btn-secondary !px-3 !py-2 text-xs"
-                          >
-                            Open Full manuscripts
-                          </Link>
-                        </div>
-                        <ManuscriptImportPanel
-                          hasExistingBody={Boolean(htmlToPlainText(form.body))}
-                          onError={setError}
-                          onImported={(result) =>
-                            setForm((f) => ({
-                              ...f,
-                              body: result.body,
-                              figures: result.figures,
-                            }))
-                          }
-                        />
-                        <ManuscriptEditor
-                          key={selected.id}
-                          value={form.body}
-                          onChange={(body) =>
-                            setForm((f) => ({ ...f, body }))
-                          }
-                          figures={form.figures}
-                          onFiguresChange={(figures) =>
-                            setForm((f) => ({ ...f, figures }))
-                          }
-                          onError={setError}
-                          rows={12}
-                          showImport={false}
-                          journalPrimary={
-                            journalArticlePalette(
-                              selected.journal.coverColor,
-                              selected.journal.slug ||
-                                selected.journal.shortTitle,
-                            ).primary
-                          }
-                          label="Imported body"
-                          hint="Select a heading, then pick a color. The first swatch restores the journal color. The journal template above stays bound to this paper."
-                        />
-                      </div>
-                    </div>
-
-                    <aside className="order-1 space-y-3 lg:sticky lg:top-4 lg:order-2 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto">
+<div className="space-y-3">
                       <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 p-4">
                         <p className="text-xs font-semibold text-[var(--ink)]">
                           PDF for authors
@@ -1816,9 +1930,9 @@ export default function PublishedArticlesPage() {
                         <button
                           type="button"
                           className="btn-secondary"
-                          onClick={() => setPane("preview")}
+                          onClick={printPreview}
                         >
-                          Preview template
+                          Print preview
                         </button>
                         {pdfKind === "uploaded" && form.pdfUrl ? (
                           <button
@@ -1863,124 +1977,28 @@ export default function PublishedArticlesPage() {
                           {generatedPublishLabel}
                         </button>
                       </div>
-                    </aside>
-                  </div>
-                </form>
-              ) : (
-                <div className="mt-5">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden">
-                    <p className="text-xs text-[var(--muted)]">
-                      Live preview updates from your edits. Switch back to Edit
-                      details anytime.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="btn-secondary !px-3 !py-2 text-xs"
-                        onClick={() => setPane("edit")}
-                      >
-                        Back to edit
-                      </button>
-                      {pdfKind === "uploaded" && form.pdfUrl ? (
-                        <button
-                          type="button"
-                          className="btn-primary !px-3 !py-2 text-xs"
-                          disabled={publishing || uploadingPdf}
-                          onClick={() => void onPublish("uploaded")}
-                        >
-                          {uploadedPublishLabel}
-                        </button>
-                      ) : (
-                        <label
-                          className={`btn-primary cursor-pointer !px-3 !py-2 text-center text-xs ${
-                            publishing || uploadingPdf
-                              ? "pointer-events-none opacity-60"
-                              : ""
-                          }`}
-                        >
-                          {uploadingPdf && pdfKind !== "generated"
-                            ? "Uploading PDF…"
-                            : uploadedPublishLabel}
-                          <input
-                            type="file"
-                            accept="application/pdf,.pdf"
-                            className="hidden"
-                            disabled={publishing || uploadingPdf}
-                            onChange={(e) =>
-                              void onUploadAndPublish(
-                                e.currentTarget.files?.[0] ?? null,
-                              )
-                            }
-                          />
-                        </label>
-                      )}
-                      <button
-                        type="button"
-                        className="btn-secondary !px-3 !py-2 text-xs"
-                        disabled={publishing || uploadingPdf}
-                        onClick={() => void onPublish("generated")}
-                      >
-                        {generatedPublishLabel}
-                      </button>
                     </div>
-                  </div>
-                  <div className="overflow-visible rounded-xl border border-[var(--line)] bg-[#e8edf2] p-4 sm:p-6 print:rounded-none print:border-0 print:bg-white print:p-0">
-                    <NahdaArticleTemplate
-                      journalTitle={selected.journal.title}
-                      journalShortTitle={selected.journal.shortTitle}
-                      journalSlug={selected.journal.slug}
-                      coverColor={selected.journal.coverColor}
-                      journalUrl={`/journals/${selected.journal.slug}`}
-                      articleUrl={`/articles/${slugify(form.title)}`}
-                      manuscriptId={selected.manuscriptId}
-                      title={form.title}
-                      authors={previewAuthors}
-                      affiliations={previewAffiliations}
-                      abstract={form.abstract}
-                      keywords={previewKeywords}
-                      articleType={form.articleType}
-                      doi={form.doi}
-                      volume={form.volume}
-                      issue={form.issue}
-                      pages={form.pages}
-                      receivedAt={previewDates.receivedAt}
-                      acceptedAt={previewDates.acceptedAt}
-                      publishedAt={previewDates.publishedAt}
-                      license={form.license}
-                      openAccess={form.openAccess}
-                      logoUrl={
-                        form.logoUrl || selected.journal.coverImageUrl || null
-                      }
-                      funding={selected.funding}
-                      conflictOfInterest={selected.conflictOfInterest}
-                      body={form.body}
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+                        </div>
+                      </div>
+                    </div>,
+                    document.body,
+                  )
+                : null}
 
-          {!selected && success && (
-            <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 print:hidden">
-              {success}
-            </p>
-          )}
-          {selected && success && (
-            <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 print:hidden">
-              {success}
-            </p>
-          )}
-        </section>
-      </div>
-      {selected && captureTemplate
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+      {selected
         ? createPortal(
             <div
               ref={pdfSourceRef}
               className="nahda-pdf-source nahda-pdf-print"
               aria-hidden
             >
-              {captureTemplate}
+              {renderArticleTemplate()}
             </div>,
             document.body,
           )

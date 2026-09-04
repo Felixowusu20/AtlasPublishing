@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { NahdaLoader } from "@/components/nahda-loader";
+import { formatArticleDate } from "@/lib/article-dates";
 import { uiStatus } from "@/lib/submission-utils";
 
 type Submission = {
@@ -12,6 +13,7 @@ type Submission = {
   title: string;
   status: Parameters<typeof uiStatus>[0];
   progress: number;
+  submittedAt: string;
   updatedAt: string;
   author: { name: string; email: string };
   journal: { id: string; title: string; shortTitle?: string | null };
@@ -298,6 +300,12 @@ export default function AdminSubmissionsPage() {
                             </h2>
                             <p className="mt-1 text-xs text-[var(--muted)]">
                               {sub.author.name} · {sub.author.email}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              Submitted{" "}
+                              <span className="font-medium text-[var(--ink)]">
+                                {formatArticleDate(sub.submittedAt) || "—"}
+                              </span>
                             </p>
                             <div className="mt-3">
                               <div className="mb-1 flex justify-between text-[10px] uppercase tracking-wider text-[var(--muted)]">

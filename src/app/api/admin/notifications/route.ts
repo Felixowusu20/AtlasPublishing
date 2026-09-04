@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { prisma } from "@/lib/db";
+import { prisma, withDbRetry } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
 
@@ -24,26 +24,28 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [notifications, unreadCount] = await Promise.all([
-      prisma.notification.findMany({
-        where,
-        include: {
-          submission: {
-            select: {
-              id: true,
-              manuscriptId: true,
-              title: true,
-              status: true,
+    const [notifications, unreadCount] = await withDbRetry(() =>
+      Promise.all([
+        prisma.notification.findMany({
+          where,
+          include: {
+            submission: {
+              select: {
+                id: true,
+                manuscriptId: true,
+                title: true,
+                status: true,
+              },
             },
           },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 40,
-      }),
-      prisma.notification.count({
-        where: { userId: admin.sub, unread: true },
-      }),
-    ]);
+          orderBy: { createdAt: "desc" },
+          take: 40,
+        }),
+        prisma.notification.count({
+          where: { userId: admin.sub, unread: true },
+        }),
+      ]),
+    );
 
     return jsonOk({ notifications, unreadCount });
   } catch (err) {

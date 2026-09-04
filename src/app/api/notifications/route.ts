@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma, withDbRetry } from "@/lib/db";
 import { jsonOk, unauthorized } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 
@@ -6,33 +6,40 @@ export async function GET() {
   const session = await requireUser(["AUTHOR"]);
   if (!session) return unauthorized();
 
-  const [notifications, unreadCount] = await Promise.all([
-    prisma.notification.findMany({
-      where: { userId: session.sub },
-      include: {
-        submission: {
-          select: {
-            id: true,
-            manuscriptId: true,
-            status: true,
-            publishedArticle: {
+  try {
+    const [notifications, unreadCount] = await withDbRetry(() =>
+      Promise.all([
+        prisma.notification.findMany({
+          where: { userId: session.sub },
+          include: {
+            submission: {
               select: {
-                slug: true,
-                manuscriptUrl: true,
+                id: true,
+                manuscriptId: true,
+                status: true,
+                publishedArticle: {
+                  select: {
+                    slug: true,
+                    manuscriptUrl: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
-    prisma.notification.count({
-      where: { userId: session.sub, unread: true },
-    }),
-  ]);
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        }),
+        prisma.notification.count({
+          where: { userId: session.sub, unread: true },
+        }),
+      ]),
+    );
 
-  return jsonOk({ notifications, unreadCount });
+    return jsonOk({ notifications, unreadCount });
+  } catch (err) {
+    console.error("[author notifications GET]", err);
+    return jsonOk({ notifications: [], unreadCount: 0, degraded: true });
+  }
 }
 
 export async function PATCH(request: Request) {

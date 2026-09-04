@@ -44,6 +44,10 @@ type Props = {
   showImport?: boolean;
   /** Journal heading color. Headings use this until you pick another. */
   journalPrimary?: string;
+  /**
+   * Seamlessly embeds inside the journal template page — no outer card chrome.
+   */
+  variant?: "card" | "template";
 };
 
 type ToolBtnProps = {
@@ -222,6 +226,64 @@ function closestFigure(node: Node | null, root: HTMLElement): HTMLElement | null
   return el.closest("figure");
 }
 
+const FIGURE_HANDLES = ["nw", "ne", "sw", "se", "e", "w"] as const;
+type FigureHandle = (typeof FIGURE_HANDLES)[number];
+
+function clearFigureSelection(root: HTMLElement | null) {
+  root
+    ?.querySelectorAll("figure.nahda-fig-selected")
+    .forEach((fig) => {
+      fig.classList.remove("nahda-fig-selected");
+      fig.querySelectorAll(".nahda-fig-chrome").forEach((n) => n.remove());
+    });
+}
+
+function selectFigure(figure: HTMLElement, root: HTMLElement) {
+  clearFigureSelection(root);
+  figure.classList.add("nahda-fig-selected");
+  if (figure.querySelector(":scope > .nahda-fig-chrome")) return;
+
+  const chrome = document.createElement("div");
+  chrome.className = "nahda-fig-chrome";
+  chrome.contentEditable = "false";
+  chrome.setAttribute("data-nahda-ui", "1");
+
+  const bar = document.createElement("div");
+  bar.className = "nahda-fig-toolbar";
+  bar.innerHTML =
+    '<button type="button" data-fig-action="replace">Replace</button>' +
+    '<button type="button" data-fig-action="full">Full / column</button>' +
+    '<span className="hint">Drag corners to stretch</span>';
+  // fix: use text in span properly without className attribute in HTML
+  bar.innerHTML =
+    '<button type="button" data-fig-action="replace">Replace image</button>' +
+    '<button type="button" data-fig-action="full">Full / column</button>' +
+    '<span data-fig-hint="1">Drag corners to stretch</span>';
+  chrome.appendChild(bar);
+
+  for (const pos of FIGURE_HANDLES) {
+    const handle = document.createElement("span");
+    handle.className = `nahda-fig-handle nahda-fig-handle-${pos}`;
+    handle.dataset.handle = pos;
+    chrome.appendChild(handle);
+  }
+  figure.appendChild(chrome);
+}
+
+function setFigureWidthPct(figure: HTMLElement, pct: number) {
+  const clamped = Math.min(100, Math.max(18, Math.round(pct)));
+  figure.style.width = `${clamped}%`;
+  figure.style.maxWidth = "100%";
+  figure.style.marginInline = clamped >= 96 ? "0" : "auto";
+  figure.classList.toggle("figure-full", clamped >= 96);
+  const img = figure.querySelector(":scope > img");
+  if (img instanceof HTMLImageElement) {
+    img.style.width = "100%";
+    img.style.height = "auto";
+    img.style.maxWidth = "100%";
+  }
+}
+
 function insertFragmentAtRange(html: string, range: Range) {
   range.deleteContents();
   const frag = range.createContextualFragment(html);
@@ -289,6 +351,7 @@ export function ManuscriptEditor({
   onError,
   showImport = true,
   journalPrimary,
+  variant = "card",
 }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -309,9 +372,20 @@ export function ManuscriptEditor({
   const [linkUrl, setLinkUrl] = useState("https://");
   const [linkLabel, setLinkLabel] = useState("");
   const dragDepth = useRef(0);
+  const resizingRef = useRef(false);
 
   const emit = useCallback(() => {
-    const html = editorRef.current?.innerHTML ?? "";
+    const root = editorRef.current;
+    if (!root) return;
+    // Don't persist selection chrome into the manuscript HTML.
+    const clone = root.cloneNode(true) as HTMLElement;
+    clone
+      .querySelectorAll(".nahda-fig-chrome, .nahda-fig-selected")
+      .forEach((n) => {
+        if (n.classList.contains("nahda-fig-chrome")) n.remove();
+        else n.classList.remove("nahda-fig-selected");
+      });
+    const html = clone.innerHTML;
     lastEmitted.current = html;
     onChange(html);
   }, [onChange]);
@@ -322,9 +396,15 @@ export function ManuscriptEditor({
     if (!seeded.current) {
       const html = ensureManuscriptHtml(value);
       el.innerHTML = html;
-      lastEmitted.current = html;
+      // Always leave a trailing empty paragraph so there is a place to click and type.
+      if (!el.querySelector("p:last-of-type") || el.lastElementChild?.tagName === "FIGURE") {
+        const spacer = document.createElement("p");
+        spacer.innerHTML = "<br>";
+        el.appendChild(spacer);
+      }
+      lastEmitted.current = el.innerHTML;
       seeded.current = true;
-      if (html !== value) onChange(html);
+      if (el.innerHTML !== value) onChange(el.innerHTML);
       return;
     }
     if (value === lastEmitted.current) return;
@@ -332,6 +412,21 @@ export function ManuscriptEditor({
     el.innerHTML = html;
     lastEmitted.current = html;
   }, [value, onChange]);
+
+  useEffect(() => {
+    function onDocMouseDown(e: globalThis.MouseEvent) {
+      const root = editorRef.current;
+      if (!root || resizingRef.current) return;
+      const t = e.target as Node | null;
+      if (t && root.contains(t) && (t as HTMLElement).closest?.("figure.nahda-fig-selected")) {
+        return;
+      }
+      if (t && root.contains(t) && (t as HTMLElement).closest?.("figure")) return;
+      clearFigureSelection(root);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
 
   const captureInsertPoint = useCallback(
     (e?: { target?: EventTarget | null }) => {
@@ -666,6 +761,23 @@ export function ManuscriptEditor({
     const root = editorRef.current;
     if (!root) return;
 
+    if (target.closest(".nahda-fig-chrome")) {
+      const action = target.closest("[data-fig-action]")?.getAttribute("data-fig-action");
+      const fig = target.closest("figure");
+      if (!fig || !root.contains(fig)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (action === "replace") {
+        targetFigureRef.current = fig;
+        fileInputRef.current?.click();
+      } else if (action === "full") {
+        const nextFull = !fig.classList.contains("figure-full");
+        setFigureWidthPct(fig, nextFull ? 100 : 62);
+        emit();
+      }
+      return;
+    }
+
     const tableTarget = closestTableTarget(target, root);
     if (tableTarget) {
       e.preventDefault();
@@ -673,12 +785,73 @@ export function ManuscriptEditor({
       return;
     }
 
-    if (target.closest("figcaption")) return;
+    if (target.closest("figcaption")) {
+      clearFigureSelection(root);
+      return;
+    }
+
+    const fig = target.closest("figure");
+    if (isEditableFigure(fig) && root.contains(fig)) {
+      e.preventDefault();
+      targetFigureRef.current = fig;
+      // Empty “Select image to insert” slot → open the OS file picker.
+      if (!fig.querySelector("img")) {
+        fileInputRef.current?.click();
+        return;
+      }
+      selectFigure(fig, root);
+      return;
+    }
+
+    clearFigureSelection(root);
+  }
+
+  function onEditorDoubleClick(e: MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    const root = editorRef.current;
+    if (!root) return;
+    if (target.closest("figcaption, .nahda-fig-chrome")) return;
     const fig = target.closest("figure");
     if (!isEditableFigure(fig) || !root.contains(fig)) return;
     e.preventDefault();
     targetFigureRef.current = fig;
     fileInputRef.current?.click();
+  }
+
+  function onEditorMouseDown(e: MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    const root = editorRef.current;
+    if (!root) return;
+    const handle = target.closest(".nahda-fig-handle") as HTMLElement | null;
+    if (!handle) return;
+    const fig = handle.closest("figure");
+    if (!fig || !root.contains(fig)) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const pos = (handle.dataset.handle || "e") as FigureHandle;
+    const startX = e.clientX;
+    const parentW = fig.parentElement?.clientWidth || fig.offsetWidth;
+    const startW = fig.offsetWidth;
+    const startPct = (startW / parentW) * 100;
+    resizingRef.current = true;
+
+    function onMove(ev: globalThis.MouseEvent) {
+      const dx = ev.clientX - startX;
+      const signed =
+        pos === "w" || pos === "nw" || pos === "sw" ? -dx : dx;
+      setFigureWidthPct(fig!, startPct + (signed / parentW) * 100);
+    }
+
+    function onUp() {
+      resizingRef.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      emit();
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   function removeFigure(id: string) {
@@ -736,10 +909,11 @@ export function ManuscriptEditor({
 
   const wordCount = htmlToPlainText(value).split(/\s+/).filter(Boolean).length;
   const minHeight = Math.max(12, rows) * 22;
+  const isTemplate = variant === "template";
 
   return (
-    <div className="space-y-3">
-      {label ? (
+    <div className={isTemplate ? "space-y-2" : "space-y-3"}>
+      {!isTemplate && label ? (
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-sm font-medium text-[var(--ink)]">{label}</span>
           <span className="text-[10px] text-[var(--muted)]">
@@ -749,7 +923,7 @@ export function ManuscriptEditor({
         </div>
       ) : null}
 
-      {hint ? (
+      {!isTemplate && hint ? (
         <p className="text-[11px] leading-relaxed text-[var(--muted)]">{hint}</p>
       ) : null}
 
@@ -765,10 +939,14 @@ export function ManuscriptEditor({
       ) : null}
 
       <div
-        className={`relative overflow-hidden rounded-xl border bg-white shadow-sm transition ${
-          dragOver
-            ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30"
-            : "border-[var(--line)]"
+        className={`relative overflow-hidden bg-white transition ${
+          isTemplate
+            ? dragOver
+              ? "rounded-lg ring-2 ring-[var(--accent)]/35"
+              : "rounded-none"
+            : dragOver
+              ? "rounded-xl border border-[var(--accent)] shadow-sm ring-2 ring-[var(--accent)]/30"
+              : "rounded-xl border border-[var(--line)] shadow-sm"
         }`}
         style={
           journalPrimary
@@ -790,7 +968,24 @@ export function ManuscriptEditor({
           </div>
         )}
 
-        <div className="space-y-1.5 border-b border-[var(--line)] bg-gradient-to-b from-[#f7f9fb] to-[var(--surface)] px-2 py-2">
+        <div
+          className={`sticky top-0 z-[5] space-y-1.5 border-b border-[var(--line)] px-2 py-2 ${
+            isTemplate
+              ? "bg-white/95 backdrop-blur-sm"
+              : "bg-gradient-to-b from-[#f7f9fb] to-[var(--surface)]"
+          }`}
+        >
+          {isTemplate ? (
+            <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                Article body · click to place cursor
+              </p>
+              <span className="text-[10px] text-[var(--muted)]">
+                {wordCount.toLocaleString()} words · {figures.length} figure
+                {figures.length === 1 ? "" : "s"}
+              </span>
+            </div>
+          ) : null}
           <div
             className="-mx-1 flex flex-nowrap items-center gap-y-1.5 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
             onMouseDownCapture={(e) => {
@@ -1124,16 +1319,21 @@ export function ManuscriptEditor({
           suppressContentEditableWarning
           role="textbox"
           aria-multiline="true"
-          data-placeholder="Import a Word or Google Doc, or start typing from Introduction…"
-          className="manuscript-wysiwyg nahda-article-body block w-full resize-y overflow-auto bg-white px-4 py-4 text-[15px] leading-[1.7] text-[var(--ink)] outline-none"
+          data-placeholder="Click here to place the cursor and type — or import a Word / Google Doc"
+          className={`manuscript-wysiwyg nahda-article-body block w-full overflow-auto bg-white text-[15px] leading-[1.7] text-[var(--ink)] outline-none ${
+            isTemplate ? "min-h-[28rem] px-0 py-3" : "resize-y px-4 py-4"
+          }`}
           style={{
             minHeight,
+            caretColor: journalPrimary || "var(--accent, #1d4e89)",
             fontFamily: "Georgia, 'Times New Roman', 'Liberation Serif', serif",
           }}
           onInput={emit}
+          onMouseDown={onEditorMouseDown}
           onMouseUp={captureInsertPoint}
           onKeyUp={captureInsertPoint}
           onClick={onEditorClick}
+          onDoubleClick={onEditorDoubleClick}
           onPaste={(e) => {
             const html = e.clipboardData.getData("text/html");
             if (!html) return;
@@ -1142,19 +1342,23 @@ export function ManuscriptEditor({
           }}
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-[var(--line)] bg-[var(--surface)]/50 px-3 py-2 text-[11px] text-[var(--muted)]">
+        <div
+          className={`flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-[var(--line)] px-3 py-2 text-[11px] text-[var(--muted)] ${
+            isTemplate ? "bg-transparent" : "bg-[var(--surface)]/50"
+          }`}
+        >
           <span>
             {uploading
               ? "Uploading image…"
-              : "Click a figure to replace its image · drag images onto a figure or into the text"}
+              : "Click a figure to select · drag corners to stretch · double-click to replace"}
           </span>
           <span className="font-medium text-[var(--ink)]/70">
-            Word / Google Docs import · in-place editing
+            Blinking cursor marks the insert point
           </span>
         </div>
       </div>
 
-      {figures.length > 0 && (
+      {!isTemplate && figures.length > 0 && (
         <div className="space-y-4">
           <p className="text-xs font-semibold text-[var(--ink)]">
             Figures in manuscript

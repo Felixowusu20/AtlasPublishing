@@ -1,10 +1,26 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { AuthorOrcidLine } from "@/components/orcid-id";
+import { TemplateEditable } from "@/components/template-editable";
 import { journalArticlePalette } from "@/lib/journal-colors";
 import { ensureManuscriptHtml } from "@/lib/import-manuscript";
 import { buildApaCitation } from "@/lib/apa-citation";
+import { authorDisplayName } from "@/lib/orcid";
+
+export type TemplateEditableFields = {
+  title?: string;
+  authorsText?: string;
+  affiliationsText?: string;
+  abstract?: string;
+  body?: string;
+  keywordsText?: string;
+  articleType?: string;
+  volume?: string;
+  issue?: string;
+  pages?: string;
+  doi?: string;
+};
 
 type Props = {
   journalTitle: string;
@@ -27,12 +43,22 @@ type Props = {
   receivedAt?: string;
   acceptedAt?: string;
   body?: string;
+  /** When set, replaces the static body — used for in-template editing. */
+  bodySlot?: ReactNode;
   funding?: string | null;
   conflictOfInterest?: string | null;
   journalSlug?: string;
   coverColor?: string;
   articleUrl?: string;
   journalUrl?: string;
+  /** Wider page for the publish workspace canvas. */
+  wide?: boolean;
+  /**
+   * Click-to-type on the live journal page (title, authors, abstract, …).
+   * Body editing still uses `bodySlot` / ManuscriptEditor.
+   */
+  editable?: boolean;
+  onEditableChange?: (patch: TemplateEditableFields) => void;
 };
 
 function AbstractHtml({ abstract }: { abstract: string }) {
@@ -142,12 +168,16 @@ export function NahdaArticleTemplate({
   receivedAt,
   acceptedAt,
   body,
+  bodySlot,
   funding,
   conflictOfInterest,
   journalSlug,
   coverColor,
   articleUrl,
   journalUrl,
+  wide = false,
+  editable = false,
+  onEditableChange,
 }: Props) {
   const palette = journalArticlePalette(
     coverColor,
@@ -155,6 +185,16 @@ export function NahdaArticleTemplate({
   );
   const typeLabel =
     (articleType || "Article").replace(/\s+Article$/i, "") || "Article";
+  const authorsPlain = authors
+    .map(authorDisplayName)
+    .filter(Boolean)
+    .join(", ");
+  const affiliationsText = affiliations.join("\n");
+  const keywordsText = keywords.join(", ");
+
+  const patch = (fields: TemplateEditableFields) => {
+    onEditableChange?.(fields);
+  };
 
   const yearMatch = publishedAt?.match(/\b(19|20)\d{2}\b/);
   const parsedPublish = publishedAt ? new Date(publishedAt) : null;
@@ -211,7 +251,9 @@ export function NahdaArticleTemplate({
     <article
       id="nahda-article-template"
       lang="en"
-      className="nahda-article mx-auto max-w-[820px] bg-white text-[#0b1f33]"
+      className={`nahda-article mx-auto w-full bg-white text-[#0b1f33] ${
+        wide ? "max-w-[960px]" : "max-w-[820px]"
+      }`}
       style={
         {
           fontFamily: "Georgia, 'Times New Roman', serif",
@@ -229,9 +271,9 @@ export function NahdaArticleTemplate({
         <tbody>
           <tr>
             <td>
-      <header className="px-8 pt-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
+      <header className="box-border w-full max-w-full overflow-hidden px-6 pt-6 sm:px-8">
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -247,7 +289,7 @@ export function NahdaArticleTemplate({
               {journalShortTitle || journalTitle || "Journal"}
             </p>
           </div>
-          <div className="shrink-0 text-right">
+          <div className="max-w-[42%] shrink-0 text-right sm:max-w-none">
             {openAccess ? (
               <span
                 className="inline-block rounded px-2.5 py-1 text-[10px] font-bold text-white"
@@ -283,7 +325,20 @@ export function NahdaArticleTemplate({
             className="px-3 py-1.5 text-[11px] font-bold text-white"
             style={{ background: "var(--j-primary)" }}
           >
-            {typeLabel.length > 22 ? "Article" : typeLabel}
+            {editable ? (
+              <TemplateEditable
+                as="span"
+                value={typeLabel.length > 22 ? "Article" : typeLabel}
+                onChange={(articleType) => patch({ articleType })}
+                placeholder="Article type"
+                className="inline-block min-w-[4rem] text-center text-white"
+                showFocusRing={false}
+              />
+            ) : typeLabel.length > 22 ? (
+              "Article"
+            ) : (
+              typeLabel
+            )}
           </span>
         </div>
         <div
@@ -292,38 +347,72 @@ export function NahdaArticleTemplate({
         />
       </header>
 
-      <div className="nahda-article-inner px-8 pb-8 pt-5">
-        <div className="nahda-article-front">
-        <h1
-          className="text-[1.45rem] font-bold leading-snug tracking-tight text-[#0b1f33] sm:text-[1.65rem]"
-          style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+      <div className="nahda-article-inner box-border w-full max-w-full overflow-hidden px-6 pb-8 pt-5 sm:px-8">
+        <div
+          className={`nahda-article-front ${editable ? "nahda-article-front-editable" : ""}`}
         >
-          {title || "Article title"}
-        </h1>
-
-        <p className="mt-3.5 text-[13.5px] leading-relaxed text-[#0b1f33]">
-          <AuthorOrcidLine
-            authors={authors}
-            correspondingColor={palette.link}
+        {editable ? (
+          <TemplateEditable
+            as="h1"
+            value={title}
+            onChange={(next) => patch({ title: next })}
+            placeholder="Article title — click to type"
+            className="text-[1.45rem] font-bold leading-snug tracking-tight text-[#0b1f33] sm:text-[1.65rem]"
+            style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
           />
-        </p>
-
-        {affiliations.length > 0 && (
-          <ul className="mt-2 space-y-0.5 text-[11px] leading-relaxed text-[#5b6b7c]">
-            {affiliations.map((aff, i) => (
-              <li key={`${aff}-${i}`}>
-                <sup className="mr-1" style={{ color: "var(--j-link)" }}>
-                  {i + 1}
-                </sup>
-                {aff}
-              </li>
-            ))}
-          </ul>
+        ) : (
+          <h1
+            className="text-[1.45rem] font-bold leading-snug tracking-tight text-[#0b1f33] sm:text-[1.65rem]"
+            style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+          >
+            {title || "Article title"}
+          </h1>
         )}
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-[1.45fr_1fr] print:block print:gap-2">
-          <div>
-            <div className="flex items-center gap-2">
+        {editable ? (
+          <TemplateEditable
+            as="p"
+            value={authorsPlain}
+            onChange={(authorsText) => patch({ authorsText })}
+            placeholder="Author names, comma-separated — click to type"
+            className="mt-3.5 text-[13.5px] leading-relaxed text-[#0b1f33]"
+          />
+        ) : (
+          <p className="mt-3.5 text-[13.5px] leading-relaxed text-[#0b1f33]">
+            <AuthorOrcidLine
+              authors={authors}
+              correspondingColor={palette.link}
+            />
+          </p>
+        )}
+
+        {editable ? (
+          <TemplateEditable
+            as="div"
+            multiline
+            value={affiliationsText}
+            onChange={(affiliationsText) => patch({ affiliationsText })}
+            placeholder="Affiliations — one per line"
+            className="mt-2 whitespace-pre-wrap text-[11px] leading-relaxed text-[#5b6b7c]"
+          />
+        ) : (
+          affiliations.length > 0 && (
+            <ul className="mt-2 space-y-0.5 text-[11px] leading-relaxed text-[#5b6b7c]">
+              {affiliations.map((aff, i) => (
+                <li key={`${aff}-${i}`}>
+                  <sup className="mr-1" style={{ color: "var(--j-link)" }}>
+                    {i + 1}
+                  </sup>
+                  {aff}
+                </li>
+              ))}
+            </ul>
+          )
+        )}
+
+        <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] print:block print:gap-2">
+          <div className="min-w-0 overflow-hidden">
+            <div className="flex min-w-0 items-center gap-2">
               <span
                 className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[2px] text-[9px] font-bold text-white"
                 style={{ background: "var(--j-cite)" }}
@@ -331,7 +420,10 @@ export function NahdaArticleTemplate({
               >
                 ✓
               </span>
-              <p className="text-[12px]" style={{ fontFamily: "Helvetica, Arial, sans-serif" }}>
+              <p
+                className="min-w-0 overflow-hidden text-[12px] break-words"
+                style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+              >
                 <span className="font-bold text-[#0b1f33]">Cite This: </span>
                 <a
                   href={doiHref}
@@ -353,7 +445,7 @@ export function NahdaArticleTemplate({
             href={readUrl}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 px-3 py-2 text-[12px] font-bold text-white transition hover:opacity-90"
+            className="flex min-w-0 items-center gap-2 px-3 py-2 text-[12px] font-bold text-white transition hover:opacity-90"
             style={{
               background: "var(--j-primary)",
               fontFamily: "Helvetica, Arial, sans-serif",
@@ -397,8 +489,36 @@ export function NahdaArticleTemplate({
             >
               Article Recommendations
             </a>
-            <span className="ml-auto text-[10px] text-[#5b6b7c]">
-              {[journalShortTitle, year, volume, pages].filter(Boolean).join(", ")}
+            <span className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 text-[10px] text-[#5b6b7c] sm:max-w-[45%]">
+              <span>{journalShortTitle}</span>
+              {year ? <span>, {year}</span> : null}
+              {editable ? (
+                <>
+                  <span>, Vol </span>
+                  <TemplateEditable
+                    as="span"
+                    value={volume || ""}
+                    onChange={(volume) => patch({ volume })}
+                    placeholder="vol"
+                    className="inline-block min-w-[1.5rem] text-center"
+                    showFocusRing={false}
+                  />
+                  <span>, pp </span>
+                  <TemplateEditable
+                    as="span"
+                    value={pages || ""}
+                    onChange={(pages) => patch({ pages })}
+                    placeholder="pages"
+                    className="inline-block min-w-[2rem] text-center"
+                    showFocusRing={false}
+                  />
+                </>
+              ) : (
+                <>
+                  {volume ? <span>, {volume}</span> : null}
+                  {pages ? <span>, {pages}</span> : null}
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -408,16 +528,41 @@ export function NahdaArticleTemplate({
           {" · "}Accepted {acceptedAt || "—"}
           {" · "}Published {publishedAt || "—"}
           {" · "}
-          <a
-            href={doiHref}
-            target="_blank"
-            rel="noreferrer"
-            className="hover:underline"
-            style={{ color: "var(--j-link)" }}
-          >
-            DOI: {doi || "Pending"}
-          </a>
-          {issue ? ` · ${issue}` : ""}
+          {editable ? (
+            <>
+              DOI:{" "}
+              <TemplateEditable
+                as="span"
+                value={doi || ""}
+                onChange={(doi) => patch({ doi })}
+                placeholder="10.58000/…"
+                className="inline-block min-w-[8rem]"
+                showFocusRing={false}
+              />
+              {" · "}Issue{" "}
+              <TemplateEditable
+                as="span"
+                value={issue || ""}
+                onChange={(issue) => patch({ issue })}
+                placeholder="1"
+                className="inline-block min-w-[1.25rem] text-center"
+                showFocusRing={false}
+              />
+            </>
+          ) : (
+            <>
+              <a
+                href={doiHref}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:underline"
+                style={{ color: "var(--j-link)" }}
+              >
+                DOI: {doi || "Pending"}
+              </a>
+              {issue ? ` · ${issue}` : ""}
+            </>
+          )}
           {" · "}
           <span className="text-[#5b6b7c]">{manuscriptId}</span>
         </p>
@@ -432,10 +577,20 @@ export function NahdaArticleTemplate({
           >
             Abstract
           </h2>
-          <AbstractHtml abstract={abstract} />
+          {editable ? (
+            <TemplateEditable
+              mode="html"
+              value={abstract}
+              onChange={(next) => patch({ abstract: next })}
+              placeholder="Abstract — click here and type"
+              className="nahda-abstract-html min-h-[4.5rem] text-[12.5px] leading-relaxed"
+            />
+          ) : (
+            <AbstractHtml abstract={abstract} />
+          )}
         </section>
 
-        {keywords.length > 0 && (
+        {editable || keywords.length > 0 ? (
           <section
             className="nahda-keywords"
             style={{ background: "var(--j-soft)" }}
@@ -449,15 +604,39 @@ export function NahdaArticleTemplate({
             >
               Keywords
             </span>
-            <span className="ml-2 text-[12px] text-[#0b1f33]">
-              {keywords.join(", ")}
-            </span>
+            {editable ? (
+              <TemplateEditable
+                as="span"
+                value={keywordsText}
+                onChange={(keywordsText) => patch({ keywordsText })}
+                placeholder="keyword one, keyword two"
+                className="ml-2 inline-block min-w-[12rem] text-[12px] text-[#0b1f33]"
+                showFocusRing={false}
+              />
+            ) : (
+              <span className="ml-2 text-[12px] text-[#0b1f33]">
+                {keywords.join(", ")}
+              </span>
+            )}
           </section>
-        )}
+        ) : null}
         </div>
 
         <div className="nahda-article-flow">
-        {body?.trim() ? <ArticleBodyHtml body={body} /> : null}
+        {editable ? (
+          <TemplateEditable
+            mode="html"
+            value={body || ""}
+            onChange={(next) => patch({ body: next })}
+            placeholder="Click here to place the cursor and type the article body…"
+            showFocusRing={false}
+            className="nahda-article-body manuscript-wysiwyg nahda-body-inplace"
+          />
+        ) : bodySlot != null ? (
+          bodySlot
+        ) : body?.trim() ? (
+          <ArticleBodyHtml body={body} />
+        ) : null}
 
         {funding?.trim() || conflictOfInterest?.trim() ? (
           <section className="nahda-end-matter nahda-span-all">

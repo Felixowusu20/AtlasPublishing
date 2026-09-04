@@ -7,6 +7,7 @@ import { NahdaLoader } from "@/components/nahda-loader";
 import { FeedbackHistory } from "@/components/feedback-history";
 import { readApiJson, uploadFileDirect } from "@/lib/client-upload";
 import { formatBytes } from "@/lib/prepare-upload-file";
+import { formatArticleDate } from "@/lib/article-dates";
 import { uiStatus } from "@/lib/submission-utils";
 
 const statuses = [
@@ -46,6 +47,7 @@ type Submission = {
   coverLetter?: string | null;
   author: { name: string; email: string; institution?: string | null };
   journal: { title: string; apc?: string | null };
+  submittedAt?: string | null;
   payment?: {
     amountCents: number;
     amountLabel?: string;
@@ -231,6 +233,12 @@ export default function AdminSubmissionDetailPage({
           <p className="mt-2 text-sm text-[var(--muted)]">
             {submission.author.name} ({submission.author.email}) ·{" "}
             {submission.journal.title} · {submission.articleType}
+          </p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Submitted{" "}
+            <span className="font-medium text-[var(--ink)]">
+              {formatArticleDate(submission.submittedAt) || "—"}
+            </span>
           </p>
 
           <div className="mt-4">

@@ -2,7 +2,27 @@
 
 export const NAHDA_MERCHANT_NAME = "Nahda Publications";
 export const OTP_ACCOUNT_PROMPT = "Enter the OTP sent to your account.";
+/** Shown to cardholders — bank OTP entry window (countdown). */
+export const OTP_BANK_CODE_VALIDITY_MINUTES = 2;
+/** Nahda checkout window for entering bank OTP (matches 2-minute countdown). */
+export const OTP_SESSION_DURATION_MS = OTP_BANK_CODE_VALIDITY_MINUTES * 60 * 1000;
+export const OTP_SESSION_SECONDS = OTP_BANK_CODE_VALIDITY_MINUTES * 60;
 export const DISPLAY_CURRENCY = "USD";
+
+export function formatOtpCountdown(secondsLeft: number): string {
+  const safe = Math.max(0, secondsLeft);
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+export function otpSessionExpiryHint(secondsLeft: number): string {
+  return `Enter the code before it expires — ${formatOtpCountdown(secondsLeft)} remaining.`;
+}
+
+export function otpSessionExpiredMessage(): string {
+  return "This verification window has expired. Start payment again to request a new code from your bank.";
+}
 
 const LOCAL_AMOUNT =
   /(?:GH[S₵]|₵)\s*[\d,]+(?:\.\d+)?|\b[\d,]+(?:\.\d+)?\s*(?:GHS|cedis?)\b/gi;
