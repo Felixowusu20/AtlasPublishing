@@ -167,6 +167,10 @@ function sanitizeAttrs(tag: string, raw: string): string {
 export function sanitizeManuscriptHtml(html: string): string {
   let s = html
     .replace(/<!--[\s\S]*?-->/g, "")
+    // Soft hyphens / shy marks from Word destroy wrap + justify.
+    .replace(/\u00ad|&shy;|&#173;|&#xad;/gi, "")
+    // Zero-width and word-join junk that blocks wrapping.
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, "")
     .replace(
       /<(script|style|iframe|object|embed|link|meta|form|textarea|button|svg)[\s\S]*?<\/\1>/gi,
       "",
