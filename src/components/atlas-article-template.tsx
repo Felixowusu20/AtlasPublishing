@@ -381,6 +381,7 @@ export function NahdaArticleTemplate({
           <p className="mt-3.5 text-[13.5px] leading-relaxed text-[#0b1f33]">
             <AuthorOrcidLine
               authors={authors}
+              affiliations={affiliations}
               correspondingColor={palette.link}
             />
           </p>

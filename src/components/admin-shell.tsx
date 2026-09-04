@@ -14,6 +14,7 @@ type NavIcon =
   | "inbox"
   | "manuscripts"
   | "publish"
+  | "ai"
   | "finances"
   | "hero"
   | "articles"
@@ -56,6 +57,13 @@ const nav: {
     label: "Publish papers",
     short: "Publish",
     icon: "publish",
+    roles: ["SUPER_ADMIN", "REVIEWER"],
+  },
+  {
+    href: "/admin/ai",
+    label: "AI assist",
+    short: "AI",
+    icon: "ai",
     roles: ["SUPER_ADMIN", "REVIEWER"],
   },
   {
@@ -117,6 +125,43 @@ const nav: {
 ];
 
 const SIDEBAR_KEY = "atlas-admin-sidebar-collapsed";
+const THEME_KEY = "atlas-admin-theme";
+
+type AdminTheme = "light" | "dark";
+
+function ThemeGlyph({ theme }: { theme: AdminTheme }) {
+  if (theme === "dark") {
+    return (
+      <svg
+        className="h-4 w-4"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21 14.5A8.5 8.5 0 1 1 12.5 3a7 7 0 0 0 8.5 11.5z" />
+    </svg>
+  );
+}
 
 function NavGlyph({
   name,
@@ -167,6 +212,20 @@ function NavGlyph({
         <svg {...common}>
           <path d="M12 19V5" />
           <polyline points="5 12 12 5 19 12" />
+        </svg>
+      );
+    case "ai":
+      return (
+        <svg {...common}>
+          <path d="M12 3v3" />
+          <path d="M12 18v3" />
+          <path d="M3 12h3" />
+          <path d="M18 12h3" />
+          <circle cx="12" cy="12" r="4.5" />
+          <path d="M5.6 5.6 7.8 7.8" />
+          <path d="M16.2 16.2 18.4 18.4" />
+          <path d="M18.4 5.6 16.2 7.8" />
+          <path d="M7.8 16.2 5.6 18.4" />
         </svg>
       );
     case "finances":
@@ -274,6 +333,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [theme, setTheme] = useState<AdminTheme>("light");
 
   const isAuthPage =
     pathname === "/admin/login" || pathname === "/admin/register";
@@ -286,6 +346,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       setCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved === "dark" || saved === "light") setTheme(saved);
     } catch {
       /* ignore */
     }
@@ -296,6 +358,18 @@ export function AdminShell({ children }: { children: ReactNode }) {
       const next = !prev;
       try {
         localStorage.setItem(SIDEBAR_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  function toggleTheme() {
+    setTheme((prev) => {
+      const next: AdminTheme = prev === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem(THEME_KEY, next);
       } catch {
         /* ignore */
       }
@@ -316,7 +390,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const links = nav.filter((item) => item.roles.includes(user.role));
 
   return (
-    <div className="flex min-h-screen bg-[#f3f6f9] text-[var(--ink)] print:block print:min-h-0 print:bg-white">
+    <div
+      data-admin-theme={theme}
+      className="admin-theme-root flex h-dvh max-h-dvh overflow-hidden bg-[var(--admin-soft-bg,#f3f6f9)] text-[var(--ink)] print:block print:h-auto print:max-h-none print:min-h-0 print:overflow-visible print:bg-white"
+    >
       <aside
         className={`hidden shrink-0 border-r border-[var(--line)] bg-[#0b1f33] text-white transition-[width] duration-200 print:hidden lg:flex lg:flex-col ${
           collapsed ? "w-[72px]" : "w-64"
@@ -437,8 +514,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-[var(--line)] bg-white px-4 py-3 print:hidden lg:px-8">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--admin-chrome,#fff)] px-4 py-3 print:hidden lg:px-8">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -456,13 +533,25 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-2 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface)]"
+              title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+              aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            >
+              <ThemeGlyph theme={theme} />
+              <span className="hidden sm:inline">
+                {theme === "dark" ? "Light" : "Dark"}
+              </span>
+            </button>
             <AdminNotifications />
             <Link href="/" className="text-xs font-semibold text-[var(--accent)]">
               View site →
             </Link>
           </div>
         </header>
-        <div className="flex gap-2 overflow-x-auto border-b border-[var(--line)] bg-white px-3 py-2 print:hidden lg:hidden">
+        <div className="flex gap-2 overflow-x-auto border-b border-[var(--line)] bg-[var(--admin-chrome,#fff)] px-3 py-2 print:hidden lg:hidden">
           {links.map((item) => {
             const active =
               item.href === "/admin"
@@ -474,7 +563,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 href={item.href}
                 className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${
                   active
-                    ? "bg-[#0b1f33] text-white"
+                    ? "bg-[var(--ink)] text-[var(--paper)]"
                     : "bg-[var(--surface)] text-[var(--ink)]"
                 }`}
               >
@@ -484,7 +573,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
             );
           })}
         </div>
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 print:h-auto print:min-h-0 print:flex-none print:p-0">{children}</main>
+        <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 print:h-auto print:min-h-0 print:flex-none print:overflow-visible print:p-0">
+          {children}
+        </main>
       </div>
     </div>
   );

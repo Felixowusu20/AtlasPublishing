@@ -89,7 +89,12 @@ type PublishedItem = {
   slug: string;
   title: string;
   publishedAt: string;
-  journal: { title: string };
+  journal: {
+    title: string;
+    shortTitle?: string;
+    slug?: string;
+    coverColor?: string | null;
+  };
   submission?: {
     id: string;
     manuscriptId: string;
@@ -996,30 +1001,44 @@ export default function PublishedArticlesPage() {
         }
       `}</style>
 
-      <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
-        <div>
-          <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl text-[var(--ink)]">
-            Publish accepted papers
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Click a paper to open the journal template editor. Import Word or
-            Google Docs, edit the body in place, then use Article details for
-            dates, volume, PDF, and publish. Print preview uses the browser
-            print dialog. Nahda generates a styled PDF from this layout —
-            readers never download the original Word file.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="btn-secondary !px-3 !py-2 text-xs"
-            onClick={() => void load()}
-          >
-            Refresh queue
-          </button>
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
-            {queue.length} ready
-          </span>
+      <div className="print:hidden">
+        <div className="relative overflow-hidden rounded-2xl border border-[var(--accent)]/15 bg-[linear-gradient(135deg,var(--accent-soft)_0%,#fff_55%,#fff8f4_100%)] px-5 py-6 sm:px-7 sm:py-7">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-[var(--accent)]/10 blur-2xl"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-12 left-1/3 h-28 w-28 rounded-full bg-[var(--brand-orange)]/10 blur-2xl"
+          />
+          <div className="relative flex flex-wrap items-end justify-between gap-4">
+            <div className="min-w-0 max-w-2xl">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
+                Nahda editorial
+              </p>
+              <h1 className="mt-1.5 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)] sm:text-3xl">
+                Publish accepted papers
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
+                Click a paper to open the journal template editor. Import Word or
+                Google Docs, edit in place, then publish. Nahda generates the
+                styled PDF — readers never get the original Word file.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="btn-secondary !px-3 !py-2 text-xs"
+                onClick={() => void load()}
+              >
+                Refresh queue
+              </button>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-orange)]" />
+                {queue.length} ready
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1031,48 +1050,85 @@ export default function PublishedArticlesPage() {
 
       <div className="mt-8">
         <section>
-          <h2 className="text-sm font-semibold text-[var(--ink)]">
-            Accepted queue
-          </h2>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            Click a paper to open a wide journal-template editor. Import Word
-            docs, edit inside the template, then print-preview and publish.
-          </p>
+          <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[var(--line)] pb-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--ink)]">
+                Accepted queue
+              </h2>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Each card opens the journal template for that manuscript.
+              </p>
+            </div>
+          </div>
           {loading && (
             <NahdaLoader variant="inline" label="Loading accepted queue…" />
           )}
           {!loading && queue.length === 0 && (
-            <p className="mt-3 rounded-xl border border-dashed border-[var(--line)] bg-white p-4 text-sm text-[var(--muted)]">
+            <p className="mt-4 rounded-2xl border border-dashed border-[var(--accent)]/30 bg-[var(--accent-soft)]/50 px-5 py-8 text-center text-sm text-[var(--muted)]">
               No accepted papers waiting. Mark a submission as Accepted in the
               inbox first.
             </p>
           )}
-          <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <ul className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {queue.map((sub) => {
               const active = sub.id === selectedId;
+              const spine = sub.journal.coverColor || "var(--accent)";
+              const progress = Math.max(0, Math.min(100, sub.progress ?? 0));
               return (
-                <li key={sub.id}>
+                <li key={sub.id} className="min-w-0">
                   <button
                     type="button"
                     onClick={() => selectSubmission(sub)}
-                    className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+                    className={`group flex h-full w-full overflow-hidden rounded-2xl text-left shadow-sm ring-1 transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${
                       active
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                        : "border-[var(--line)] bg-white hover:border-[var(--accent)]/40"
+                        ? "bg-[var(--accent-soft)] ring-[var(--accent)] ring-2"
+                        : "bg-white ring-[var(--line)] hover:ring-[var(--accent)]/35"
                     }`}
                   >
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
-                      {sub.manuscriptId} · {sub.progress}%
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-[var(--ink)]">
-                      {sub.title}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {sub.author.name} · {sub.journal.shortTitle}
-                    </p>
-                    <p className="mt-2 text-[11px] font-semibold text-[var(--accent)]">
-                      Open editor →
-                    </p>
+                    <span
+                      aria-hidden
+                      className="w-1.5 shrink-0 self-stretch"
+                      style={{ background: spine }}
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col p-4">
+                      <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="truncate rounded-md bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          {sub.manuscriptId}
+                        </span>
+                        <span className="rounded-md bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                          {sub.journal.shortTitle}
+                        </span>
+                        {active ? (
+                          <span className="rounded-md bg-[var(--brand-orange)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                            Open
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="mt-3 line-clamp-3 font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug text-[var(--ink)] transition group-hover:text-[var(--accent)]">
+                        {sub.title}
+                      </span>
+                      <span className="mt-2 truncate text-xs text-[var(--muted)]">
+                        {sub.author.name}
+                      </span>
+                      <span className="mt-4 block">
+                        <span className="mb-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                          <span>Production</span>
+                          <span className="text-[var(--accent)]">{progress}%</span>
+                        </span>
+                        <span className="block h-1.5 overflow-hidden rounded-full bg-[var(--accent-soft)]">
+                          <span
+                            className="block h-full rounded-full bg-[var(--accent)] transition-[width]"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </span>
+                      </span>
+                      <span className="mt-4 inline-flex items-center gap-1 text-[11px] font-bold text-[var(--accent)]">
+                        Open editor
+                        <span aria-hidden className="transition group-hover:translate-x-0.5">
+                          →
+                        </span>
+                      </span>
+                    </span>
                   </button>
                 </li>
               );
@@ -1080,56 +1136,94 @@ export default function PublishedArticlesPage() {
           </ul>
 
           {recent.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-sm font-semibold text-[var(--ink)]">
-                Recently published
-              </h2>
-              <ul className="mt-3 space-y-2">
-                {recent.map((a) => (
-                  <li
-                    key={a.id}
-                    className="rounded-xl border border-[var(--line)] bg-white px-4 py-3"
-                  >
-                    <p className="text-sm font-semibold text-[var(--ink)]">
-                      {a.title}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {a.submission?.manuscriptId ?? "Manual"} · {a.journal.title}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-3">
-                      <Link
-                        href={`/articles/${a.slug}`}
-                        target="_blank"
-                        className="text-xs font-semibold text-[var(--accent)]"
-                      >
-                        Open article →
-                      </Link>
-                      {a.submission?.id && (
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-[var(--ink)] hover:text-[var(--accent)]"
-                          onClick={() => askDeleteArticle(a, true)}
-                        >
-                          Edit manuscript
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-rose-700"
-                        onClick={() => askDeleteArticle(a, false)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
+            <div className="mt-10">
+              <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[var(--line)] pb-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-[var(--ink)]">
+                    Recently published
+                  </h2>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Live on the site — open, revise, or move to the bin.
+                  </p>
+                </div>
+              </div>
+              <ul className="mt-4 grid gap-4 sm:grid-cols-2">
+                {recent.map((a) => {
+                  const spine =
+                    a.journal.coverColor || "var(--accent)";
+                  const publishedLabel = a.publishedAt
+                    ? new Date(a.publishedAt).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })
+                    : null;
+                  return (
+                    <li
+                      key={a.id}
+                      className="flex min-w-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--line)] transition hover:shadow-md hover:ring-[var(--accent)]/30"
+                    >
+                      <span
+                        aria-hidden
+                        className="w-1.5 shrink-0 self-stretch"
+                        style={{ background: spine }}
+                      />
+                      <div className="min-w-0 flex-1 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-md bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--accent)]">
+                            {a.submission?.manuscriptId ?? "Manual"}
+                          </span>
+                          {publishedLabel ? (
+                            <span className="text-[10px] font-medium text-[var(--muted)]">
+                              {publishedLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-2.5 line-clamp-2 font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug text-[var(--ink)]">
+                          {a.title}
+                        </p>
+                        <p className="mt-1.5 truncate text-xs text-[var(--muted)]">
+                          {a.journal.title}
+                          {a.submission?.author?.name
+                            ? ` · ${a.submission.author.name}`
+                            : ""}
+                        </p>
+                        <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--line)] pt-3">
+                          <Link
+                            href={`/articles/${a.slug}`}
+                            target="_blank"
+                            className="text-xs font-bold text-[var(--accent)] hover:underline"
+                          >
+                            Open article →
+                          </Link>
+                          {a.submission?.id && (
+                            <button
+                              type="button"
+                              className="text-xs font-semibold text-[var(--ink)] hover:text-[var(--accent)]"
+                              onClick={() => askDeleteArticle(a, true)}
+                            >
+                              Edit manuscript
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-rose-700 hover:underline"
+                            onClick={() => askDeleteArticle(a, false)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
         </section>
 
         {!selected && success && (
-          <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          <p className="mt-4 rounded-lg border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-3 py-2 text-sm text-[var(--accent)]">
             {success}
           </p>
         )}
@@ -1562,7 +1656,13 @@ export default function PublishedArticlesPage() {
                           Name line preview
                         </p>
                         <p className="mt-1.5 text-[13.5px] leading-relaxed">
-                          <AuthorOrcidLine authors={previewAuthors} />
+                          <AuthorOrcidLine
+                            authors={previewAuthors}
+                            affiliations={form.affiliations
+                              .split("\n")
+                              .map((s) => s.trim())
+                              .filter(Boolean)}
+                          />
                         </p>
                       </div>
                     ) : null}

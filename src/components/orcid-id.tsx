@@ -45,8 +45,9 @@ type AuthorLineProps = {
 
 function joinSep(index: number, total: number): string {
   if (index === 0) return "";
-  if (total === 2) return " & ";
-  if (index === total - 1) return ", and ";
+  // Two authors: "Alice and Bob" (never "&")
+  if (total === 2) return " and ";
+  // Three or more: comma-separated ("Alice, Bob, Carol")
   return ", ";
 }
 
@@ -54,7 +55,6 @@ function AuthorChip({
   raw,
   index,
   total,
-  affiliations,
   correspondingLast,
   correspondingColor,
   nameStyle,
@@ -62,7 +62,6 @@ function AuthorChip({
   raw: string;
   index: number;
   total: number;
-  affiliations?: string[];
   correspondingLast: boolean;
   correspondingColor?: string;
   nameStyle?: CSSProperties;
@@ -70,14 +69,8 @@ function AuthorChip({
   const { name, orcid } = parseAuthorOrcid(raw);
   const label = name || "Author";
   const isLast = index === total - 1;
-  const affN =
-    affiliations && affiliations.length > 0
-      ? affiliations.length === 1
-        ? 1
-        : affiliations[index]
-          ? index + 1
-          : null
-      : null;
+  // Match affiliation numbering: 1st author → ¹, 2nd → ², …
+  const affN = total >= 2 ? index + 1 : null;
 
   const nameNode = (
     <span
@@ -118,14 +111,17 @@ function AuthorChip({
     <span>
       {joinSep(index, total)}
       {linked}
-      {affN ? (
-        <sup className="ml-[1px] text-[9px] font-semibold text-[var(--j-link,var(--accent))]">
+      {affN != null ? (
+        <sup
+          className="ml-[1px] inline-block align-super text-[0.65em] font-semibold leading-none"
+          style={{ color: "var(--j-link, var(--accent))" }}
+        >
           {affN}
         </sup>
       ) : null}
       {correspondingLast && isLast ? (
         <span
-          className="ml-[1px] font-bold"
+          className="ml-[1px] align-super text-[0.75em] font-bold leading-none"
           style={{ color: correspondingColor || "var(--j-link, #3d6f8f)" }}
         >
           *
@@ -141,7 +137,6 @@ function AuthorChip({
  */
 export function AuthorOrcidLine({
   authors,
-  affiliations,
   correspondingLast = true,
   correspondingColor,
   className,
@@ -159,7 +154,6 @@ export function AuthorOrcidLine({
           raw={raw}
           index={i}
           total={authors.length}
-          affiliations={affiliations}
           correspondingLast={correspondingLast}
           correspondingColor={correspondingColor}
           nameStyle={nameStyle}

@@ -261,6 +261,13 @@ export default function AdminHomePage() {
             hint="Ready to publish"
             icon={<PublishIcon />}
           />
+          <Stat
+            label="AI assist"
+            value="Desk"
+            href="/admin/ai"
+            hint="Editorial AI checks"
+            icon={<AiIcon />}
+          />
           {user.role === "SUPER_ADMIN" && (
             <>
               <Stat
@@ -451,6 +458,21 @@ function PublishIcon() {
     <svg {...svgProps()}>
       <path d="M12 19V5" />
       <polyline points="5 12 12 5 19 12" />
+    </svg>
+  );
+}
+function AiIcon() {
+  return (
+    <svg {...svgProps()}>
+      <path d="M12 3v3" />
+      <path d="M12 18v3" />
+      <path d="M3 12h3" />
+      <path d="M18 12h3" />
+      <circle cx="12" cy="12" r="4.5" />
+      <path d="M5.6 5.6 7.8 7.8" />
+      <path d="M16.2 16.2 18.4 18.4" />
+      <path d="M18.4 5.6 16.2 7.8" />
+      <path d="M7.8 16.2 5.6 18.4" />
     </svg>
   );
 }
