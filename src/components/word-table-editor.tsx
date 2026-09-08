@@ -13,6 +13,8 @@ export type WordTableModel = {
   rows: string[][];
   caption: string;
   fullWidth: boolean;
+  orientation: "normal" | "landscape" | "rotated";
+  supplementary: boolean;
 };
 
 type Props = {
@@ -57,7 +59,12 @@ export function tableModelToHtml(model: WordTableModel): string {
     })
     .join("");
   const caption = tableCaptionHtml(model.caption);
-  return `<figure class="table-full">${caption}<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></figure>`;
+  const classes = [
+    model.fullWidth ? "table-full" : "",
+    model.orientation !== "normal" ? `table-${model.orientation}` : "",
+    model.supplementary ? "nahda-supplementary" : "",
+  ].filter(Boolean).join(" ");
+  return `<figure class="${classes}">${caption}<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></figure>`;
 }
 
 function cellText(el: Element): string {
@@ -87,6 +94,8 @@ export function htmlToTableModel(
       ],
       caption,
       fullWidth: true,
+      orientation: "normal",
+      supplementary: false,
     };
   }
 
@@ -111,6 +120,12 @@ export function htmlToTableModel(
     rows: rows.length ? rows : [headers.map(() => "")],
     caption,
     fullWidth: true,
+    orientation: figure?.classList.contains("table-landscape")
+      ? "landscape"
+      : figure?.classList.contains("table-rotated")
+        ? "rotated"
+        : "normal",
+    supplementary: figure?.classList.contains("nahda-supplementary") ?? false,
   };
 }
 
@@ -122,6 +137,8 @@ function emptyGrid(rows: number, cols: number): WordTableModel {
     ),
     caption: "",
     fullWidth: true,
+    orientation: "normal",
+    supplementary: false,
   };
 }
 
@@ -179,7 +196,14 @@ export function parseMarkdownTable(block: string): WordTableModel | null {
   if (rows.length === 0) {
     rows.push(Array.from({ length: headers.length }, () => ""));
   }
-  return { headers, rows, caption, fullWidth };
+  return {
+    headers,
+    rows,
+    caption,
+    fullWidth,
+    orientation: "normal",
+    supplementary: false,
+  };
 }
 
 /**
@@ -341,6 +365,15 @@ export function WordTableEditor({
     });
   };
 
+  const clearSelectedCell = () => {
+    if (!selected) return;
+    if (selected.r < 0) setHeader(selected.c, "");
+    else setCell(selected.r, selected.c, "");
+  };
+
+  const selectedRow = selected && selected.r >= 0 ? selected.r : rows;
+  const selectedColumn = selected?.c ?? cols;
+
   return (
     <div className="space-y-3 rounded-xl border border-[var(--line)] bg-white p-3 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -394,6 +427,33 @@ export function WordTableEditor({
             }
           />
           Span full page
+        </label>
+        <label className="text-[11px] text-[var(--muted)]">
+          Orientation
+          <select
+            value={model.orientation}
+            onChange={(e) =>
+              setModel((m) => ({
+                ...m,
+                orientation: e.target.value as WordTableModel["orientation"],
+              }))
+            }
+            className="mt-0.5 block rounded border border-[var(--line)] bg-white px-2 py-1.5 text-xs text-[var(--ink)]"
+          >
+            <option value="normal">Normal</option>
+            <option value="landscape">Landscape</option>
+            <option value="rotated">Rotate 90°</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 pb-1.5 text-[11px] font-semibold text-[var(--ink)]">
+          <input
+            type="checkbox"
+            checked={model.supplementary}
+            onChange={(e) =>
+              setModel((m) => ({ ...m, supplementary: e.target.checked }))
+            }
+          />
+          Supplementary material
         </label>
       </div>
 
@@ -464,6 +524,28 @@ export function WordTableEditor({
             onClick={() => removeRow(rows - 1)}
           >
             − Row
+          </button>
+          <button
+            type="button"
+            className="btn-secondary !px-2.5 !py-1.5 text-[11px]"
+            onClick={clearSelectedCell}
+            disabled={!selected}
+          >
+            Clear cell
+          </button>
+          <button
+            type="button"
+            className="btn-secondary !px-2.5 !py-1.5 text-[11px]"
+            onClick={() => addColumn(selectedColumn)}
+          >
+            + Column here
+          </button>
+          <button
+            type="button"
+            className="btn-secondary !px-2.5 !py-1.5 text-[11px]"
+            onClick={() => addRow(selectedRow)}
+          >
+            + Row here
           </button>
         </div>
       </div>

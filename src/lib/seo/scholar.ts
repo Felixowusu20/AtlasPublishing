@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { getAppBaseUrlOptional } from "@/lib/app-url";
-import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import {
+  nidPath,
+  isCrossrefDoi,
+  normalizeDoi,
+} from "@/lib/doi";
 import { authorDisplayName } from "@/lib/orcid";
 import { articleDownloadPath } from "@/lib/submission-utils";
 import { htmlToPlainText } from "@/lib/import-manuscript";
@@ -95,6 +99,7 @@ export function buildArticleMetadata(article: ScholarArticleInput): Metadata {
   const other: Record<string, string | string[]> = {
     citation_title: article.title,
     citation_journal_title: article.journal.title,
+    citation_publisher: "Nahda Publications",
     citation_abstract_html_url: canonical,
     citation_fulltext_html_url: canonical,
   };
@@ -115,8 +120,14 @@ export function buildArticleMetadata(article: ScholarArticleInput): Metadata {
   if (last) other.citation_lastpage = last;
   if (pdfUrl) other.citation_pdf_url = pdfUrl;
   if (doi) {
-    other.citation_doi = doi;
     other.citation_fulltext_world_readable = pdfUrl ?? canonical;
+    // citation_doi is reserved for real Crossref/DOI Agency DOIs only.
+    if (isCrossrefDoi(doi)) {
+      other.citation_doi = doi;
+    } else {
+      other["DC.identifier"] = `nid:${doi}`;
+    }
+    other["DC.relation.ispartof"] = absoluteUrl(nidPath(doi));
   }
   const issns = [article.journal.issn, article.journal.eIssn].filter(
     (v): v is string => Boolean(v),
@@ -171,7 +182,11 @@ export function buildArticleMetadata(article: ScholarArticleInput): Metadata {
       "DC.creator": authorsLine,
       "DC.publisher": "Nahda Publications",
       "DC.date": date.replace(/\//g, "-"),
-      "DC.identifier": doi ? `doi:${doi}` : canonical,
+      "DC.identifier": doi
+        ? isCrossrefDoi(doi)
+          ? `doi:${doi}`
+          : `nid:${doi}`
+        : canonical,
       "DC.language": "en",
       "DC.rights": article.license ?? "CC BY 4.0",
     },
@@ -214,5 +229,5 @@ export function buildJournalMetadata(input: {
 }
 
 export function doiLandingUrl(doi: string) {
-  return absoluteUrl(atlasDoiPath(doi));
+  return absoluteUrl(nidPath(doi));
 }

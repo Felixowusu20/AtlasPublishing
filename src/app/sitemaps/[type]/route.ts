@@ -115,6 +115,30 @@ export async function GET(
         ),
       );
     }
+
+    if (type === "dois.xml" || type === "dois" || type === "nids.xml" || type === "nids") {
+      const { normalizeNid, nidPath } = await import("@/lib/doi");
+      const articles = await prisma.publishedArticle.findMany({
+        where: {
+          isActive: true,
+          deletedAt: null,
+          doi: { not: null },
+        },
+        select: { doi: true, updatedAt: true, publishedAt: true },
+        orderBy: { publishedAt: "desc" },
+      });
+      return xmlResponse(
+        urlset(
+          articles
+            .filter((a) => a.doi && a.doi.trim())
+            .map((a) => ({
+              loc: absoluteUrl(nidPath(normalizeNid(a.doi!))),
+              lastmod: (a.updatedAt || a.publishedAt).toISOString(),
+              priority: "0.85",
+            })),
+        ),
+      );
+    }
   } catch (err) {
     console.error("[sitemaps]", err);
   }

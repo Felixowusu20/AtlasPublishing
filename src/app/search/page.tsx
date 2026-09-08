@@ -152,7 +152,7 @@ function SearchPageInner() {
           </p>
           <h1 className="page-title mt-1">Search</h1>
           <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
-            Find papers by title, author, keyword, or DOI. Use the journal
+            Find papers by title, author, keyword, or NID. Use the journal
             dropdown to read only from a specific Nahda title.
           </p>
         </div>
@@ -183,7 +183,7 @@ function SearchPageInner() {
               </select>
               <input
                 className="flex-1 rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
-                placeholder="Search title, author, DOI, keyword…"
+                placeholder="Search title, author, NID, keyword…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 autoFocus
@@ -216,11 +216,11 @@ function SearchPageInner() {
                 .{" "}
               </>
             ) : null}
-            Tip: paste a DOI like{" "}
+            Tip: paste an NID like{" "}
             <code className="break-all rounded bg-[var(--surface)] px-1.5 py-0.5 text-[var(--accent)]">
-              10.58000/ajs.2026.0142
+              nid/ajs.2026.0142
             </code>{" "}
-            — or use the DOI box in the navbar.
+            — or use the search box in the navbar.
           </p>
         </form>
 
@@ -306,11 +306,11 @@ function SearchPageInner() {
           {!q.trim() && !journal.trim() && !loading ? (
             <div className="rounded-2xl bg-[var(--accent-soft)]/60 p-6 ring-1 ring-[var(--line)]">
               <p className="text-sm font-semibold text-[var(--ink)]">
-                Start with a journal, DOI, or keyword
+                Start with a journal, NID, or keyword
               </p>
               <p className="mt-1 text-sm text-[var(--muted)]">
                 Pick a journal from the dropdown to browse its papers, or search
-                across all Nahda titles. DOI lookup is also on the top navbar.
+                across all Nahda titles. NID lookup is also on the top navbar.
               </p>
             </div>
           ) : null}

@@ -1,34 +1,81 @@
-import type { Prisma } from "@/generated/prisma/client";
-import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
+/**
+ * Nahda Identifier (NID) — pure helpers safe for client + server.
+ * Not a Crossref/DOI Agency DOI. Stored in PublishedArticle.doi for compatibility.
+ *
+ * DB operations live in `@/lib/doi-db` so browser bundles never pull in `pg`.
+ */
 
-/** Nahda house DOI prefix (replace with your Crossref prefix when registered). */
-export const ATLAS_DOI_PREFIX = "10.58000";
+export const DEFAULT_NID_PREFIX = "nid";
 
-type JournalLike = {
+/** @deprecated Use DEFAULT_NID_PREFIX — kept for older imports. */
+export const ATLAS_DOI_PREFIX = DEFAULT_NID_PREFIX;
+
+export type DoiSettingsRow = {
   id: string;
-  doiPrefix?: string | null;
-  shortTitle: string;
+  prefix: string;
+  label: string;
+  publisherName: string;
+  notes: string | null;
 };
 
-/** Strip URL / doi: prefix and lowercase for consistent lookups. */
+/**
+ * Normalize an NID or legacy DOI string for lookup/storage.
+ * Strips doi.org / nid: / doi: wrappers and lowercases.
+ */
 export function normalizeDoi(input: string): string {
   return input
     .trim()
     .replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")
+    .replace(/^https?:\/\/[^/]+\/nid\//i, "")
+    .replace(/^nid:\s*/i, "")
     .replace(/^doi:\s*/i, "")
     .toLowerCase();
 }
 
-export function doiToUrl(doi: string): string {
-  return `https://doi.org/${normalizeDoi(doi)}`;
+export const normalizeNid = normalizeDoi;
+
+/** True Crossref-style DOI (10.xxxx/…). House NIDs are not this. */
+export function isCrossrefDoi(input: string): boolean {
+  return /^10\.\d{4,9}\/\S+$/i.test(normalizeDoi(input));
 }
 
-/** Public Nahda DOI path (opens the bound published PDF). */
+/** Valid house NID or legacy Crossref-shaped id. */
+export function isValidNidShape(input: string): boolean {
+  const id = normalizeDoi(input);
+  if (!id || id.length < 5 || !id.includes("/")) return false;
+  if (isCrossrefDoi(id)) return true;
+  return /^[a-z0-9][a-z0-9._-]{1,32}\/\S+$/i.test(id);
+}
+
+/** @deprecated Use isValidNidShape */
+export function isValidDoiShape(input: string): boolean {
+  return isValidNidShape(input);
+}
+
+/** Public Nahda NID path. */
+export function nidPath(id: string): string {
+  return `/nid/${normalizeDoi(id)}`;
+}
+
+/** @deprecated Use nidPath */
 export function atlasDoiPath(doi: string): string {
-  return `/doi/${normalizeDoi(doi)}`;
+  return nidPath(doi);
 }
 
-/** Journal suffix code, e.g. `10.58000/ajs` → `ajs`. */
+/** doi.org URL only for real Crossref DOIs; otherwise site NID path. */
+export function doiToUrl(doi: string): string {
+  const id = normalizeDoi(doi);
+  if (isCrossrefDoi(id)) return `https://doi.org/${id}`;
+  return nidPath(id);
+}
+
+/** Human label for citations / UI. */
+export function identifierLabel(id?: string | null): "NID" | "DOI" {
+  if (id && isCrossrefDoi(id)) return "DOI";
+  return "NID";
+}
+
+/** Journal suffix code, e.g. journal doiPrefix `nid/ajs` → `ajs`. */
 export function journalDoiCode(journal: {
   doiPrefix?: string | null;
   shortTitle: string;
@@ -41,187 +88,41 @@ export function journalDoiCode(journal: {
   }
   return (
     journal.shortTitle.replace(/[^A-Za-z0-9]/g, "").toLowerCase().slice(0, 6) ||
-    "atl"
+    "nah"
   );
 }
 
-/** `10.58000/ajs.2026.0142` */
+/** `nid/ajs.2026.0142` */
+export function formatNid(
+  journalCode: string,
+  year: number,
+  serial: number,
+  prefix = DEFAULT_NID_PREFIX,
+): string {
+  return `${prefix}/${journalCode}.${year}.${String(serial).padStart(4, "0")}`;
+}
+
+/** @deprecated Use formatNid */
 export function formatAtlasDoi(
   journalCode: string,
   year: number,
   serial: number,
+  prefix = DEFAULT_NID_PREFIX,
 ): string {
-  return `${ATLAS_DOI_PREFIX}/${journalCode}.${year}.${String(serial).padStart(4, "0")}`;
+  return formatNid(journalCode, year, serial, prefix);
 }
 
-function serialFromDoi(doi: string, journalCode: string, year: number): number {
+/** Extract serial from `prefix/code.year.####`. */
+export function serialFromNid(
+  id: string,
+  journalCode: string,
+  year: number,
+  prefix: string,
+): number {
   const re = new RegExp(
-    `^${ATLAS_DOI_PREFIX.replace(".", "\\.")}/${journalCode}\\.${year}\\.(\\d+)$`,
+    `^${prefix.replace(/\./g, "\\.")}/${journalCode}\\.${year}\\.(\\d+)$`,
     "i",
   );
-  const m = normalizeDoi(doi).match(re);
+  const m = normalizeDoi(id).match(re);
   return m ? Number.parseInt(m[1], 10) : 0;
-}
-
-/** Next Nahda DOI for a journal in the given publication year. */
-export async function allocateNextAtlasDoi(
-  db: Prisma.TransactionClient | typeof import("@/lib/db").prisma,
-  journal: JournalLike,
-  year = new Date().getFullYear(),
-): Promise<string> {
-  const code = journalDoiCode(journal);
-  const prefix = `${ATLAS_DOI_PREFIX}/${code}.${year}.`;
-
-  const existing = await db.publishedArticle.findMany({
-    where: {
-      journalId: journal.id,
-      doi: { startsWith: prefix },
-    },
-    select: { doi: true },
-  });
-
-  let maxSerial = 0;
-  for (const row of existing) {
-    if (!row.doi) continue;
-    maxSerial = Math.max(maxSerial, serialFromDoi(row.doi, code, year));
-  }
-
-  return formatAtlasDoi(code, year, maxSerial + 1);
-}
-
-/** Resolve a DOI string to a published article, if any. */
-export async function findArticleByDoi(
-  db: Prisma.TransactionClient | typeof import("@/lib/db").prisma,
-  rawDoi: string,
-) {
-  const doi = normalizeDoi(rawDoi);
-  if (!doi) return null;
-
-  // Exact / case-insensitive match first
-  const exact = await db.publishedArticle.findFirst({
-    where: {
-      isActive: true,
-      deletedAt: null,
-      OR: [
-        { doi: { equals: doi, mode: "insensitive" } },
-        { doi: { equals: rawDoi.trim(), mode: "insensitive" } },
-      ],
-    },
-    select: {
-      id: true,
-      slug: true,
-      title: true,
-      doi: true,
-      manuscriptUrl: true,
-      authors: true,
-      affiliations: true,
-      keywords: true,
-      abstract: true,
-      articleType: true,
-      publishedAt: true,
-      volume: true,
-      issue: true,
-      pages: true,
-      views: true,
-      downloads: true,
-      citations: true,
-      openAccess: true,
-      license: true,
-      submission: { select: { manuscriptUrl: true } },
-      journal: {
-        select: {
-          title: true,
-          shortTitle: true,
-          slug: true,
-          issn: true,
-          eIssn: true,
-        },
-      },
-    },
-  });
-  if (exact) {
-    return {
-      ...exact,
-      manuscriptUrl: resolvePublishedPdfUrl(
-        exact.manuscriptUrl,
-        exact.submission?.manuscriptUrl,
-      ),
-    };
-  }
-
-  // Fallback: DOI stored with or without https://doi.org/ prefix
-  const candidates = await db.publishedArticle.findMany({
-    where: {
-      isActive: true,
-      deletedAt: null,
-      doi: { not: null },
-    },
-    select: {
-      id: true,
-      slug: true,
-      title: true,
-      doi: true,
-      manuscriptUrl: true,
-      authors: true,
-      affiliations: true,
-      keywords: true,
-      abstract: true,
-      articleType: true,
-      publishedAt: true,
-      volume: true,
-      issue: true,
-      pages: true,
-      views: true,
-      downloads: true,
-      citations: true,
-      openAccess: true,
-      license: true,
-      submission: { select: { manuscriptUrl: true } },
-      journal: {
-        select: {
-          title: true,
-          shortTitle: true,
-          slug: true,
-          issn: true,
-          eIssn: true,
-        },
-      },
-    },
-    take: 500,
-  });
-
-  const match =
-    candidates.find((row) => row.doi && normalizeDoi(row.doi) === doi) ?? null;
-  if (!match) return null;
-  return {
-    ...match,
-    manuscriptUrl: resolvePublishedPdfUrl(
-      match.manuscriptUrl,
-      match.submission?.manuscriptUrl,
-    ),
-  };
-}
-
-/** Assign Nahda DOIs to published articles that do not have one yet. */
-export async function backfillMissingDois(
-  db: Prisma.TransactionClient | typeof import("@/lib/db").prisma,
-) {
-  const missing = await db.publishedArticle.findMany({
-    where: { isActive: true, OR: [{ doi: null }, { doi: "" }] },
-    include: { journal: true },
-    orderBy: { publishedAt: "asc" },
-  });
-
-  let updated = 0;
-  for (const article of missing) {
-    const year = article.publishedAt.getFullYear();
-    const doi = await allocateNextAtlasDoi(db, article.journal, year);
-    await db.publishedArticle.update({
-      where: { id: article.id },
-      data: { doi },
-    });
-    updated += 1;
-  }
-
-  return updated;
 }

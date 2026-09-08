@@ -210,13 +210,13 @@ export function NahdaArticleTemplate({
   const citeLine = `${journalShortTitle || "Journal"} ${citeBits.join(", ")}`;
 
   const doiHref = doi
-    ? `/doi/${doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "")}`
+    ? `/nid/${doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "").replace(/^nid:\s*/i, "")}`
     : "#";
   const doiLabel = doi
     ? doi.startsWith("http")
       ? doi
-      : `https://doi.org/${doi}`
-    : "DOI pending";
+      : doi
+    : "NID pending";
   const jUrl =
     journalUrl ||
     (journalSlug ? `/journals/${journalSlug}` : "/journals");
@@ -531,7 +531,7 @@ export function NahdaArticleTemplate({
           {" · "}
           {editable ? (
             <>
-              DOI:{" "}
+              NID:{" "}
               <TemplateEditable
                 as="span"
                 value={doi || ""}
@@ -559,7 +559,7 @@ export function NahdaArticleTemplate({
                 className="hover:underline"
                 style={{ color: "var(--j-link)" }}
               >
-                DOI: {doi || "Pending"}
+                NID: {doi || "Pending"}
               </a>
               {issue ? ` · ${issue}` : ""}
             </>
@@ -589,38 +589,37 @@ export function NahdaArticleTemplate({
           ) : (
             <AbstractHtml abstract={abstract} />
           )}
-        </section>
-
-        {editable || keywords.length > 0 ? (
-          <section
-            className="nahda-keywords"
-            style={{ background: "var(--j-soft)" }}
-          >
-            <span
-              className="text-[10px] font-bold uppercase tracking-[0.12em]"
-              style={{
-                color: "var(--j-primary)",
-                fontFamily: "Helvetica, Arial, sans-serif",
-              }}
+          {editable || keywords.length > 0 ? (
+            <section
+              className="nahda-keywords"
+              style={{ background: "var(--j-soft)" }}
             >
-              Keywords
-            </span>
-            {editable ? (
-              <TemplateEditable
-                as="span"
-                value={keywordsText}
-                onChange={(keywordsText) => patch({ keywordsText })}
-                placeholder="keyword one, keyword two"
-                className="ml-2 inline-block min-w-[12rem] text-[12px] text-[#0b1f33]"
-                showFocusRing={false}
-              />
-            ) : (
-              <span className="ml-2 text-[12px] text-[#0b1f33]">
-                {keywords.join(", ")}
+              <span
+                className="text-[10px] font-bold uppercase tracking-[0.12em]"
+                style={{
+                  color: "var(--j-primary)",
+                  fontFamily: "Helvetica, Arial, sans-serif",
+                }}
+              >
+                Keywords
               </span>
-            )}
-          </section>
-        ) : null}
+              {editable ? (
+                <TemplateEditable
+                  as="span"
+                  value={keywordsText}
+                  onChange={(keywordsText) => patch({ keywordsText })}
+                  placeholder="keyword one, keyword two"
+                  className="ml-2 inline-block min-w-[12rem] text-[12px] text-[#0b1f33]"
+                  showFocusRing={false}
+                />
+              ) : (
+                <span className="ml-2 text-[12px] text-[#0b1f33]">
+                  {keywords.join(", ")}
+                </span>
+              )}
+            </section>
+          ) : null}
+        </section>
         </div>
 
         <div className="nahda-article-flow">

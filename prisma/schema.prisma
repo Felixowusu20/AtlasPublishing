@@ -94,6 +94,29 @@ model HeroSlide {
   @@index([sortOrder])
 }
 
+/// Homepage research-area / partner advert cards (CMS-managed).
+model ResearchSpotlight {
+  id            String   @id @default(cuid())
+  title         String
+  summary       String?
+  logoUrl       String?
+  logoPublicId  String?
+  imageUrl      String?
+  imagePublicId String?
+  articleId     String?
+  article       PublishedArticle? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  externalHref  String?
+  ctaLabel      String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([sortOrder])
+  @@index([isActive])
+  @@index([articleId])
+}
+
 model Announcement {
   id        String   @id @default(cuid())
   title     String
@@ -177,6 +200,7 @@ model PublishedArticle {
   /// Soft-delete: set when moved to the recycle bin (hidden from public site).
   deletedAt     DateTime?
   deletedById   String?
+  researchSpotlights ResearchSpotlight[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -345,4 +369,16 @@ model FaqItem {
 
   @@index([sortOrder])
   @@index([isActive])
+}
+
+/// House NID (Nahda Identifier) configuration — free IDs minted on publish.
+model DoiSettings {
+  id            String   @id @default("default")
+  /// Prefix only, e.g. "nid" (no trailing slash). Not a Crossref DOI prefix.
+  prefix        String   @default("nid")
+  label         String   @default("Nahda Identifier (NID)")
+  publisherName String   @default("Nahda Publications")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

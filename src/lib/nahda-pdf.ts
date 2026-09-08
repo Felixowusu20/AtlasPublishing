@@ -57,23 +57,60 @@ const PAGED_CSS = `
 }
 
 .nahda-paged-article {
-  display: contents;
   font-family: Georgia, "Times New Roman", serif;
   color: #0b1f33;
 }
 
+.nahda-paged-article .nahda-article-inner,
+.nahda-paged-article .nahda-article-flow,
+.nahda-paged-article .nahda-article-body {
+  display: contents !important;
+}
+
 .nahda-paged-article > header,
-.nahda-paged-article > .nahda-article-front,
-.nahda-paged-article > .nahda-keywords,
-.nahda-paged-article > figure,
-.nahda-paged-article > .nahda-end-matter,
-.nahda-paged-article > .nahda-span-all,
-.nahda-paged-article > .nahda-workflow,
-.nahda-paged-article > .nahda-table-wrap {
+.nahda-paged-article .nahda-article-front,
+.nahda-paged-article .nahda-article-abstract,
+.nahda-paged-article .nahda-keywords,
+.nahda-paged-article figure,
+.nahda-paged-article .nahda-end-matter,
+.nahda-paged-article .nahda-span-all,
+.nahda-paged-article .nahda-workflow,
+.nahda-paged-article .nahda-table-wrap {
   column-span: all;
   break-inside: avoid;
   page-break-inside: avoid;
   -webkit-column-break-inside: avoid;
+}
+
+.nahda-paged-article .nahda-article-body > figure,
+.nahda-paged-article .nahda-article-body > .nahda-table-wrap,
+.nahda-paged-article .nahda-article-body > .nahda-workflow,
+.nahda-paged-article .nahda-article-body > .nahda-supplementary {
+  column-span: all;
+  width: 100%;
+  max-width: 100%;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.nahda-paged-article .nahda-references ~ figure:has(img),
+.nahda-paged-article .nahda-references ~ figure:has(table),
+.nahda-paged-article .nahda-references ~ .nahda-table-wrap,
+.nahda-paged-article .nahda-references ~ .nahda-workflow {
+  column-span: all;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  width: 100%;
+  max-width: 100%;
+}
+
+.nahda-paged-article .nahda-supplementary {
+  column-span: all;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .nahda-paged-article h1,
@@ -667,13 +704,6 @@ async function captureWindow(
   });
 }
 
-function hoistElement(el: HTMLElement) {
-  const parent = el.parentElement;
-  if (!parent) return;
-  while (el.firstChild) parent.insertBefore(el.firstChild, el);
-  el.remove();
-}
-
 function preparePagedArticle(article: HTMLElement): HTMLElement {
   const clone = article.cloneNode(true) as HTMLElement;
   clone.removeAttribute("id");
@@ -687,12 +717,6 @@ function preparePagedArticle(article: HTMLElement): HTMLElement {
     while (cell.firstChild) table.parentElement.insertBefore(cell.firstChild, table);
     table.remove();
   }
-
-  [".nahda-article-body", ".nahda-article-flow", ".nahda-article-inner"].forEach(
-    (sel) => {
-      clone.querySelectorAll(sel).forEach((el) => hoistElement(el as HTMLElement));
-    },
-  );
 
   clone.style.margin = "0";
   clone.style.maxWidth = "none";
@@ -764,7 +788,15 @@ async function capturePagedPages(
     fitUnbreakableBlocks(prepared, Math.floor(pageCssPx * 0.92));
 
     previewer = new Previewer();
-    const sheets = [{ [`${window.location.origin}/nahda-paged.css`]: PAGED_CSS }];
+    const previewStyles = Array.from(
+      document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
+    )
+      .map((link) => link.href)
+      .filter(Boolean);
+    const sheets = [
+      ...previewStyles,
+      { [`${window.location.origin}/nahda-paged.css`]: PAGED_CSS },
+    ];
     await withTimeout(
       previewer.preview(prepared, sheets, mount),
       PAGED_TIMEOUT_MS,

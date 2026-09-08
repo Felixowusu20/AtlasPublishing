@@ -14,7 +14,7 @@ import {
 } from "@/components/article-citation";
 import { CiteActions } from "@/components/cite-actions";
 import { JsonLd } from "@/components/json-ld";
-import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import { nidPath, normalizeDoi } from "@/lib/doi";
 import { formatArticleDate } from "@/lib/article-dates";
 import { displayIssn } from "@/lib/issn";
 import {
@@ -64,7 +64,7 @@ function doiLinks(doi: string) {
     return { local: null as string | null };
   }
   return {
-    local: atlasDoiPath(normalized),
+    local: nidPath(normalized),
   };
 }
 
@@ -461,7 +461,7 @@ function ArticleView({
                     </h2>
                     <p className="mt-3 max-w-xl text-sm leading-relaxed text-[var(--muted)]">
                       This page presents the title, authors, affiliations,
-                      abstract, keywords, DOI, and publication history.
+                      abstract, keywords, NID, and publication history.
                       Open the Nahda-formatted PDF for figures, tables,
                       methods, and the full reference list.
                     </p>

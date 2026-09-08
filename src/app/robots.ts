@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/articles", "/articles/current-issues", "/articles/past-issues", "/journals", "/doi", "/search", "/about", "/help", "/terms", "/privacy", "/authors"],
+        allow: ["/", "/articles", "/articles/current-issues", "/articles/past-issues", "/journals", "/nid", "/doi", "/search", "/about", "/help", "/terms", "/privacy", "/authors"],
         disallow: [
           "/admin",
           "/admin/",
@@ -30,6 +30,7 @@ export default function robots(): MetadataRoute.Robots {
           "/",
           "/articles",
           "/journals",
+          "/nid",
           "/doi",
           "/api/articles/",
         ],
@@ -37,7 +38,7 @@ export default function robots(): MetadataRoute.Robots {
       },
       {
         userAgent: "Googlebot-News",
-        allow: ["/", "/articles", "/journals", "/doi", "/api/articles/"],
+        allow: ["/", "/articles", "/journals", "/nid", "/doi", "/api/articles/"],
       },
     ],
     sitemap: [
@@ -45,6 +46,8 @@ export default function robots(): MetadataRoute.Robots {
       `${base}/sitemaps/articles.xml`,
       `${base}/sitemaps/journals.xml`,
       `${base}/sitemaps/issues.xml`,
+      `${base}/sitemaps/nids.xml`,
+      `${base}/sitemaps/dois.xml`,
     ],
   };
 }

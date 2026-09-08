@@ -110,7 +110,7 @@ export function prismaFailureMessage(err: unknown, fallback: string) {
       ? String((err as { code?: string }).code)
       : "";
   if (code === "P2002") {
-    return "A record with this slug or DOI already exists.";
+    return "A record with this slug or NID already exists.";
   }
   if (code === "P2028" || code === "P2024") {
     return "Database transaction timed out. Please try again.";

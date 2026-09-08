@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import { isCrossrefDoi, nidPath, normalizeDoi } from "@/lib/doi";
 import {
   buildApaCitation,
   type ApaCitationInput,
@@ -34,10 +34,17 @@ function ApaCitationText({
   const hasLocator = Boolean(
     citation.volume || citation.issue || citation.pages,
   );
-  const doiHref = citation.doiUrl
-    ? atlasDoiPath(
-        normalizeDoi(citation.doiUrl.replace(/^https?:\/\/doi\.org\//i, "")),
+  const normalizedId = citation.doiUrl
+    ? normalizeDoi(
+        citation.doiUrl
+          .replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")
+          .replace(/^https?:\/\/[^/]+\/nid\//i, ""),
       )
+    : "";
+  const doiHref = normalizedId
+    ? isCrossrefDoi(normalizedId)
+      ? `https://doi.org/${normalizedId}`
+      : nidPath(normalizedId)
     : null;
 
   return (

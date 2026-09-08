@@ -258,6 +258,7 @@ function selectFigure(figure: HTMLElement, root: HTMLElement) {
   bar.innerHTML =
     '<button type="button" data-fig-action="replace">Replace image</button>' +
     '<button type="button" data-fig-action="full">Full / column</button>' +
+    '<button type="button" data-fig-action="supplementary">Supplementary</button>' +
     '<span data-fig-hint="1">Drag corners to stretch</span>';
   chrome.appendChild(bar);
 
@@ -774,6 +775,9 @@ export function ManuscriptEditor({
         const nextFull = !fig.classList.contains("figure-full");
         setFigureWidthPct(fig, nextFull ? 100 : 62);
         emit();
+      } else if (action === "supplementary") {
+        fig.classList.toggle("nahda-supplementary");
+        emit();
       }
       return;
     }
@@ -1224,6 +1228,8 @@ export function ManuscriptEditor({
                     ],
                     caption: "",
                     fullWidth: true,
+                    orientation: "normal",
+                    supplementary: false,
                   });
                   setTableEditorKey((k) => k + 1);
                   setTableOpen((o) => !o);
