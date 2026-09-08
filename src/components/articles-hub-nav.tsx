@@ -32,7 +32,7 @@ export function ArticlesHubNav({ active }: { active: HubId }) {
         href="/search"
         className="rounded-lg border border-[var(--line)] bg-white px-3.5 py-2 text-sm font-semibold text-[var(--ink)] transition hover:border-[var(--accent)]/40"
       >
-        Search by DOI
+        Search by NID
       </Link>
     </div>
   );

@@ -444,10 +444,6 @@ function HomeCatalogInner({
                 <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)] sm:text-2xl">
                   Latest articles
                 </h2>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  Same layout you see on the full article page — type, DOI, and
-                  metrics.
-                </p>
               </div>
               <Link
                 href="/articles"

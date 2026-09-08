@@ -262,7 +262,7 @@ export default async function JournalDetailPage({
                   ["Impact factor", journal.impactFactor ?? "N/A"],
                   ["APC", apcDisplay(journal)],
                   ["Frequency", journal.frequency ?? "—"],
-                  ["DOI prefix", journal.doiPrefix ?? "—"],
+                  ["NID journal code", journal.doiPrefix ?? "—"],
                   ["Editor-in-Chief", journal.editorInChief ?? "—"],
                   [
                     "ISSN",

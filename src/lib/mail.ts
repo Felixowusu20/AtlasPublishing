@@ -474,7 +474,7 @@ export function articlePublishedEmailHtml(opts: {
         : "View your published article",
     },
     footerNote:
-      "We look forward to your future submissions. If you have any questions about your article page, DOI, or PDF, simply reply to this email.",
+      "We look forward to your future submissions. If you have any questions about your article page, NID, or PDF, simply reply to this email.",
   });
 }
 

@@ -35,6 +35,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let journals: { slug: string; updatedAt: Date }[] = [];
   let articles: {
     slug: string;
+    doi: string | null;
     updatedAt: Date;
     publishedAt: Date;
     volume: string | null;
@@ -57,6 +58,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         where: { isActive: true, deletedAt: null },
         select: {
           slug: true,
+          doi: true,
           updatedAt: true,
           publishedAt: true,
           volume: true,
@@ -85,6 +87,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: "monthly",
     priority: 0.9,
   }));
+
+  const { nidPath, normalizeNid } = await import("@/lib/doi");
+  const doiEntries: MetadataRoute.Sitemap = articles
+    .filter((a) => a.doi)
+    .map((a) => ({
+      url: absoluteUrl(nidPath(normalizeNid(a.doi!))),
+      lastModified: a.updatedAt || a.publishedAt,
+      changeFrequency: "monthly" as const,
+      priority: 0.85,
+    }));
 
   const issueMap = new Map<
     string,
@@ -125,6 +137,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...staticRoutes,
     ...journalEntries,
     ...articleEntries,
+    ...doiEntries,
     ...issueEntries,
   ];
 }

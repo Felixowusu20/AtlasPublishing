@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { jsonCreated, jsonError, jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
 import { slugify } from "@/lib/submission-utils";
-import { allocateNextAtlasDoi, normalizeDoi } from "@/lib/doi";
+import { normalizeDoi } from "@/lib/doi";
+import { allocateNextAtlasDoi } from "@/lib/doi-db";
 import { trashPublishedArticle } from "@/lib/recycle-bin";
 import {
   isPlaceholderIssue,

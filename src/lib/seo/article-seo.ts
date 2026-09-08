@@ -106,7 +106,7 @@ export function validateScholarReadiness(input: {
     warnings.push("Journal has no ISSN/eISSN — required for DOAJ and helpful for Scholar");
   }
   if (!input.doi || input.doi === "Pending") {
-    warnings.push("DOI not assigned yet");
+    warnings.push("NID not assigned yet");
   }
   if (!input.manuscriptUrl) {
     warnings.push("PDF not attached — citation_pdf_url will be omitted");

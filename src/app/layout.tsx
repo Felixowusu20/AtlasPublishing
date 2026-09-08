@@ -23,14 +23,14 @@ export const metadata: Metadata = {
     template: "%s | Nahda Publications",
   },
   description:
-    "Peer-reviewed open-access journals. Submit manuscripts, track peer review, and discover scholarly articles with DOI-backed records.",
+    "Peer-reviewed open-access journals. Submit manuscripts, track peer review, and discover scholarly articles with NID-backed records.",
   applicationName: "Nahda Publications",
   keywords: [
     "Nahda Publications",
     "open access journals",
     "peer review",
     "scholarly publishing",
-    "DOI",
+    "NID",
   ],
   authors: [{ name: "Nahda Publications" }],
   openGraph: {

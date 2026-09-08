@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArticleMetricsPanel } from "@/components/article-metrics";
 import { AuthorOrcidLine } from "@/components/orcid-id";
-import { atlasDoiPath, normalizeDoi } from "@/lib/doi";
+import { nidPath, normalizeDoi } from "@/lib/doi";
 import { displayIssn } from "@/lib/issn";
 import { authorDisplayName } from "@/lib/orcid";
 
@@ -60,7 +60,7 @@ function NahdaMark() {
 
 function doiLink(doi: string) {
   if (!doi || doi === "Pending") return null;
-  return atlasDoiPath(normalizeDoi(doi));
+  return nidPath(normalizeDoi(doi));
 }
 
 function typeBadgeLabel(articleType: string) {
@@ -263,7 +263,7 @@ export function ArticleMasthead({
                     {normalizeDoi(doi)}
                   </a>
                 ) : (
-                  <span>DOI pending</span>
+                  <span>NID pending</span>
                 )}
               </p>
             </div>

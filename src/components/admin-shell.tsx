@@ -17,6 +17,8 @@ type NavIcon =
   | "ai"
   | "finances"
   | "hero"
+  | "research"
+  | "doi"
   | "articles"
   | "news"
   | "journals"
@@ -79,6 +81,20 @@ const nav: {
     short: "Hero",
     icon: "hero",
     roles: ["SUPER_ADMIN"],
+  },
+  {
+    href: "/admin/research-spotlights",
+    label: "Research areas",
+    short: "Research",
+    icon: "research",
+    roles: ["SUPER_ADMIN"],
+  },
+  {
+    href: "/admin/nids",
+    label: "NID registry",
+    short: "NIDs",
+    icon: "doi",
+    roles: ["SUPER_ADMIN", "REVIEWER"],
   },
   {
     href: "/admin/cms",
@@ -243,6 +259,21 @@ function NavGlyph({
           <rect x="3" y="3" width="18" height="18" rx="2" />
           <circle cx="8.5" cy="8.5" r="1.5" />
           <path d="M21 15l-5-5L5 21" />
+        </svg>
+      );
+    case "research":
+      return (
+        <svg {...common}>
+          <path d="M9 3h6v5l3 7a4 4 0 0 1-3.5 5.5h-5A4 4 0 0 1 6 15l3-7V3z" />
+          <path d="M9 3h6" />
+          <path d="M10 13h4" />
+        </svg>
+      );
+    case "doi":
+      return (
+        <svg {...common}>
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
       );
     case "articles":

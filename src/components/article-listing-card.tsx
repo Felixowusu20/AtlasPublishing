@@ -118,16 +118,16 @@ export function ArticleListingCard({
           <div className="flex min-w-0 flex-col gap-1.5 text-xs text-[var(--muted)] sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1 sm:text-[13px]">
             {doi ? (
               <Link
-                href={`/doi/${doi}`}
+                href={`/nid/${doi}`}
                 target="_blank"
                 rel="noreferrer"
                 className="min-w-0 max-w-full break-all font-semibold text-[var(--accent)] hover:underline"
-                title="Open the published PDF"
+                title="Open the Nahda Identifier record"
               >
-                DOI {doi}
+                NID {doi}
               </Link>
             ) : (
-              <span>DOI pending</span>
+              <span>NID pending</span>
             )}
             <span className="shrink-0 text-[var(--ink)]/70">{article.publishedAt}</span>
             {typeof article.views === "number" &&

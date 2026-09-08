@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { jsonError, jsonOk, unauthorized } from "@/lib/api";
-import { backfillMissingDois } from "@/lib/doi";
+import { backfillMissingDois } from "@/lib/doi-db";
 import { requireAdmin } from "@/lib/session";
 
 /** Assign Nahda DOIs to published articles that are missing one. */

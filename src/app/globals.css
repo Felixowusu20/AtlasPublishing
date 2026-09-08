@@ -230,6 +230,50 @@ input[type="search"]::-webkit-search-results-decoration {
   transform-origin: center center;
 }
 
+@keyframes research-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.research-spotlights-track {
+  overflow: hidden;
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 4%,
+    #000 96%,
+    transparent
+  );
+}
+
+.research-spotlights-marquee {
+  display: flex;
+  width: max-content;
+  gap: 1rem;
+  padding-inline: 1rem;
+  animation: research-marquee 42s linear infinite;
+  will-change: transform;
+}
+
+.research-spotlights-track:hover .research-spotlights-marquee {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .research-spotlights-marquee {
+    animation: none;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 72rem;
+    margin-inline: auto;
+    justify-content: center;
+  }
+}
+
 .page-wrap {
   margin-inline: auto;
   max-width: 72rem;
@@ -939,6 +983,7 @@ input[type="search"]::-webkit-search-results-decoration {
   min-width: 0;
   margin-top: 0.7rem;
   column-count: 2;
+  column-width: 0;
   column-gap: 1.15rem;
   column-fill: balance;
   overflow: hidden;
@@ -946,6 +991,7 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .nahda-span-all,
 .nahda-article-flow .nahda-end-matter,
+.nahda-article-flow .nahda-supplementary,
 .nahda-article-flow figure.figure-full,
 .nahda-article-flow figure.table-full,
 .nahda-article-flow figure:has(img),
@@ -961,6 +1007,50 @@ input[type="search"]::-webkit-search-results-decoration {
   display: contents;
   column-count: auto;
   column-width: auto;
+}
+
+.nahda-article-flow .nahda-article-body > figure,
+.nahda-article-flow .nahda-article-body > .nahda-table-wrap,
+.nahda-article-flow .nahda-article-body > .nahda-workflow,
+.nahda-article-flow .nahda-article-body > .nahda-supplementary {
+  column-span: all;
+  width: 100%;
+  max-width: 100%;
+}
+
+.nahda-article-flow .nahda-supplementary {
+  display: block;
+  column-span: all;
+  width: 100%;
+  max-width: 100%;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.nahda-article-flow .nahda-references ~ figure:has(img),
+.nahda-article-flow .nahda-references ~ figure:has(table),
+.nahda-article-flow .nahda-references ~ .nahda-table-wrap,
+.nahda-article-flow .nahda-references ~ .nahda-workflow {
+  column-span: all;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  width: 100%;
+  max-width: 100%;
+}
+
+.nahda-article-body figure.table-landscape {
+  min-width: 100%;
+}
+
+.nahda-article-body figure.table-rotated {
+  overflow: visible;
+}
+
+.nahda-article-body figure.table-rotated > table {
+  transform: rotate(90deg);
+  transform-origin: center center;
+  width: 100%;
+  margin-block: 5rem;
 }
 
 /* In-place body editing needs a real box so the caret can focus (display:contents breaks that). */
@@ -1013,7 +1103,7 @@ input[type="search"]::-webkit-search-results-decoration {
 }
 
 .nahda-keywords {
-  margin: 0.9em 0 0;
+  margin: 0.65em 0 0;
   padding: 0.65em 0.9em;
   border-left: none;
   break-after: avoid;

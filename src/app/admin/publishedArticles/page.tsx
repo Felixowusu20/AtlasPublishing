@@ -796,8 +796,8 @@ export default function PublishedArticlesPage() {
 
     setSuccess(
       data.emailSent
-        ? `Published${data.doi ? ` with DOI ${data.doi}` : ""}. The ${mode === "uploaded" ? "uploaded Print PDF" : "generated Nahda PDF"} is bound to the article page. Congratulations email sent to ${selected.author.email}.`
-        : `Published at ${data.articleUrl}${data.doi ? ` · DOI ${data.doi}` : ""}. Email was not sent — check SMTP settings.`,
+        ? `Published${data.doi ? ` with NID ${data.doi}` : ""}. The ${mode === "uploaded" ? "uploaded Print PDF" : "generated Nahda PDF"} is bound to the article page. Congratulations email sent to ${selected.author.email}.`
+        : `Published at ${data.articleUrl}${data.doi ? ` · NID ${data.doi}` : ""}. Email was not sent — check SMTP settings.`,
     );
     setSelectedId(null);
     setForm(emptyForm());
@@ -1775,7 +1775,7 @@ export default function PublishedArticlesPage() {
                           />
                         </label>
                         <label className="field">
-                          <span>DOI (auto-assigned)</span>
+                          <span>NID (auto-assigned)</span>
                           <input
                             value={form.doi}
                             onChange={(e) =>
@@ -1790,7 +1790,7 @@ export default function PublishedArticlesPage() {
                                 {" "}
                                 ·{" "}
                                 <code className="rounded bg-[var(--surface)] px-1">
-                                  /doi/{form.doi}
+                                  /nid/{form.doi}
                                 </code>
                               </>
                             ) : null}

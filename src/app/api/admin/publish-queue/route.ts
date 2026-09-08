@@ -10,12 +10,8 @@ import {
   articleDownloadPath,
   isTypesetPdfUrl,
 } from "@/lib/submission-utils";
-import {
-  allocateNextAtlasDoi,
-  atlasDoiPath,
-  doiToUrl,
-  normalizeDoi,
-} from "@/lib/doi";
+import { doiToUrl, nidPath, normalizeDoi } from "@/lib/doi";
+import { allocateNextAtlasDoi } from "@/lib/doi-db";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { validateScholarReadiness, issueKey } from "@/lib/seo/article-seo";
 import { deriveIssueRecords, isPlaceholderIssue, numberedIssuePlacement } from "@/lib/issues";
@@ -233,7 +229,7 @@ export async function POST(request: Request) {
       select: { id: true, deletedAt: true },
     });
     if (doiClash) {
-      return jsonError(`DOI already in use: ${doi}`, 400);
+      return jsonError(`NID already in use: ${doi}`, 400);
     }
 
     const publishedPdfUrl =
@@ -336,7 +332,7 @@ export async function POST(request: Request) {
 
     const base = getAppBaseUrl();
     const articleUrl = `${base}/articles/${result.slug}`;
-    const doiUrl = result.doi ? `${base}${atlasDoiPath(result.doi)}` : null;
+    const doiUrl = result.doi ? `${base}${nidPath(result.doi)}` : null;
     const pdfDownloadUrl = publishedPdfUrl
       ? `${base}${articleDownloadPath(result.slug)}`
       : null;
@@ -361,7 +357,7 @@ export async function POST(request: Request) {
       revalidatePath(
         `/journals/${result.journal.slug}/issues/${issueKey(result.volume, result.issue)}`,
       );
-      if (result.doi) revalidatePath(atlasDoiPath(result.doi));
+      if (result.doi) revalidatePath(nidPath(result.doi));
       revalidatePath("/articles");
       revalidatePath("/articles/current-issues");
       revalidatePath("/articles/past-issues");

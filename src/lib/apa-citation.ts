@@ -1,5 +1,6 @@
 import { authorDisplayName } from "@/lib/orcid";
-import { doiToUrl, normalizeDoi } from "@/lib/doi";
+import { doiToUrl, isCrossrefDoi, nidPath, normalizeDoi } from "@/lib/doi";
+import { absoluteUrl } from "@/lib/seo/scholar";
 
 export type ApaCitationInput = {
   authors: string[];
@@ -160,7 +161,11 @@ export function buildApaCitation(input: ApaCitationInput): ApaCitationParts {
   const pages = cleanField(input.pages) || null;
   const doi =
     input.doi && input.doi !== "Pending" ? normalizeDoi(input.doi) : "";
-  const doiUrl = doi ? doiToUrl(doi) : null;
+  const doiUrl = doi
+    ? isCrossrefDoi(doi)
+      ? doiToUrl(doi)
+      : absoluteUrl(nidPath(doi))
+    : null;
 
   const locator = sourceLocator(volume ?? "", issue ?? "", pages ?? "");
   const source = locator ? `${journal}, ${locator}` : journal;

@@ -59,7 +59,7 @@ function useNavItems(journals: NavJournal[]): NavItem[] {
           {
             label: "Search articles",
             href: "/search",
-            hint: "Title, author, DOI, keyword",
+            hint: "Title, author, NID, keyword",
           },
           { label: "Open access", href: "/articles?access=oa" },
         ],
