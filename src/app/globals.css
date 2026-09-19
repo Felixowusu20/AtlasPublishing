@@ -1801,6 +1801,30 @@ input[type="search"]::-webkit-search-results-decoration {
   word-break: normal !important;
 }
 
+/* Goal tab panel swap — keep interactive, no AOS opacity trap */
+@keyframes home-goal-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-goal-panel {
+  animation: home-goal-panel-in 0.28s ease-out;
+}
+
+/* AOS hides [data-aos] until .aos-animate — show content until boot completes */
+html:not(.aos-ready) [data-aos] {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+  pointer-events: auto !important;
+}
+
 @media print {
   .nahda-print-folio {
     display: block !important;

@@ -4,10 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import AOS from "aos";
 import { ArticleListingCard } from "@/components/article-listing-card";
 import { JournalImageCard } from "@/components/journal-image-card";
-import { useAosReady } from "@/components/aos-provider";
 import { publishingWorkflow } from "@/data/mock";
 import { matchesQuery } from "@/lib/page-search";
 import {
@@ -140,7 +138,6 @@ function HomeCatalogInner({
       ? goalTabsProp
       : DEFAULT_GOAL_TABS;
   const goalsHeading = goalsSection ?? DEFAULT_GOALS_SECTION;
-  const aosReady = useAosReady();
   const [q, setQ] = useState(initialQuery);
   const [remoteArticles, setRemoteArticles] = useState<RemoteArticle[]>([]);
   const [remoteJournals, setRemoteJournals] = useState<RemoteJournal[]>([]);
@@ -151,12 +148,6 @@ function HomeCatalogInner({
       setActiveGoal(goalTabs[0]?.key ?? "publish");
     }
   }, [goalTabs, activeGoal]);
-
-  useEffect(() => {
-    if (!aosReady) return;
-    const id = window.setTimeout(() => AOS.refresh(), 60);
-    return () => window.clearTimeout(id);
-  }, [activeGoal, aosReady]);
 
   const needle = q.trim();
   const activeTab =
@@ -283,10 +274,8 @@ function HomeCatalogInner({
               className="mt-8 flex gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-4 [&::-webkit-scrollbar]:hidden"
               role="tablist"
               aria-label="Author and reader goals"
-              data-aos="fade-up"
-              data-aos-delay="120"
             >
-              {goalTabs.map((tab, index) => {
+              {goalTabs.map((tab) => {
                 const selected = tab.key === activeGoal;
                 return (
                   <button
@@ -300,8 +289,6 @@ function HomeCatalogInner({
                         ? "ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-white shadow-md"
                         : "ring-1 ring-[var(--line)] hover:ring-[var(--accent)]/40"
                     }`}
-                    data-aos="fade-up"
-                    data-aos-delay={String(100 + index * 60)}
                   >
                     <Image
                       src={tab.imageUrl}
@@ -328,18 +315,13 @@ function HomeCatalogInner({
               })}
             </div>
 
+            {/* No data-aos here — AOS opacity:0 on remount blocked tab switches. */}
             <div
               role="tabpanel"
               key={activeTab.key}
-              className="mt-6 grid gap-0 overflow-hidden rounded-2xl bg-[var(--surface)]/80 sm:mt-8 sm:rounded-3xl lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch"
-              data-aos="fade-up"
-              data-aos-delay="80"
+              className="home-goal-panel mt-6 grid gap-0 overflow-hidden rounded-2xl bg-[var(--surface)]/80 sm:mt-8 sm:rounded-3xl lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch"
             >
-              <div
-                className="flex flex-col justify-center p-5 sm:p-8 lg:p-10"
-                data-aos="fade-right"
-                data-aos-delay="120"
-              >
+              <div className="flex flex-col justify-center p-5 sm:p-8 lg:p-10">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
                   {activeTab.story ?? ""}
                 </p>
@@ -350,12 +332,8 @@ function HomeCatalogInner({
                   {activeTab.body}
                 </p>
                 <ul className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
-                  {activeTab.links.map((link, i) => (
-                    <li
-                      key={link.href}
-                      data-aos="zoom-in"
-                      data-aos-delay={String(160 + i * 70)}
-                    >
+                  {activeTab.links.map((link) => (
+                    <li key={link.href}>
                       <Link
                         href={link.href}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[var(--accent)] ring-1 ring-[var(--line)] transition hover:ring-[var(--accent)]/40"
@@ -368,12 +346,7 @@ function HomeCatalogInner({
                 </ul>
               </div>
 
-              <div
-                className="relative min-h-[200px] overflow-hidden sm:min-h-[300px] lg:min-h-full"
-                data-aos="fade-left"
-                data-aos-delay="180"
-                data-aos-duration="900"
-              >
+              <div className="relative min-h-[200px] overflow-hidden sm:min-h-[300px] lg:min-h-full">
                 <Image
                   key={activeTab.imageUrl}
                   src={activeTab.imageUrl}
