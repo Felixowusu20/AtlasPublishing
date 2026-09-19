@@ -466,6 +466,21 @@ export function articlePublishedEmailHtml(opts: {
       </p>
       ${links}
       ${secondary}
+      <p style="margin:18px 0 14px;padding:14px 16px;background:#f4f7f6;border-left:3px solid ${BRAND.green};border-radius:4px">
+        <strong style="display:block;margin:0 0 8px;color:${BRAND.green}">
+          Help your paper appear on Google Scholar
+        </strong>
+        Kindly add the paper to your Google Scholar and ResearchGate accounts
+        for wider reach. Claiming your article there is the fastest way for
+        colleagues and readers to find, cite, and follow your work — and it
+        greatly improves your chances of appearing in Google Scholar search
+        results alongside your profile.
+      </p>
+      <p style="margin:0 0 14px;font-size:14px">
+        Use your public article page
+        (<a href="${escapeHtml(opts.articleUrl)}" style="color:${BRAND.green}">${escapeHtml(opts.articleUrl)}</a>)
+        when you add or claim the publication.
+      </p>
     `,
     cta: {
       href: opts.pdfUrl || opts.articleUrl,
@@ -474,7 +489,7 @@ export function articlePublishedEmailHtml(opts: {
         : "View your published article",
     },
     footerNote:
-      "We look forward to your future submissions. If you have any questions about your article page, NID, or PDF, simply reply to this email.",
+      "We look forward to your future submissions. If you have any questions about your article page, NID, Google Scholar, or PDF, simply reply to this email.",
   });
 }
 
@@ -483,50 +498,82 @@ export function apcPaymentEmailHtml(opts: {
   title: string;
   manuscriptId: string;
   journalTitle: string;
+  /** Journal short title / slug used as payment alias. */
+  journalAlias: string;
   amountLabel: string;
-  checkoutUrl: string;
+  /** Author dashboard (return here after PayPal). */
+  dashboardUrl: string;
+  /** Direct pay instructions page (optional). */
+  checkoutUrl?: string | null;
+  /** Memo to put in the PayPal payment note. */
+  paymentReference: string;
   submissionUrl?: string;
   reviewFile?: { name: string; href: string } | null;
 }) {
+  const WARN = "#b91c1c";
   const fileBlock = opts.reviewFile
-    ? `<p style="margin:18px 0 8px"><strong>Review file:</strong> ${escapeHtml(opts.reviewFile.name)}</p>
-      <p style="margin:0 0 14px">
+    ? `<p style="margin:16px 0 0;font-size:14px">
         <a href="${escapeHtml(opts.reviewFile.href)}"
-           style="color:${BRAND.green};font-weight:600">Download the review file</a>
+           style="color:${BRAND.green};font-weight:600">Download review file</a>
       </p>`
     : "";
+
   return emailDocument({
-    title: "Payment request",
+    title: "Manuscript accepted — APC payment",
     bodyHtml: `
-      <p style="margin:0 0 6px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;color:${BRAND.muted}">
-        Payment request
-      </p>
       <p style="margin:0 0 14px">Dear ${escapeHtml(opts.authorName)},</p>
-      <p style="margin:0 0 14px">
-        Thank you for your order. <strong>${escapeHtml(opts.title)}</strong>
-        (${escapeHtml(opts.manuscriptId)}) has been accepted for publication in
-        <em>${escapeHtml(opts.journalTitle)}</em>.
+      <p style="margin:0 0 18px">
+        Good news — <strong>${escapeHtml(opts.title)}</strong> has been accepted
+        in <em>${escapeHtml(opts.journalTitle)}</em>.
       </p>
-      <p style="margin:0 0 6px;font-size:13px;color:${BRAND.muted}">Amount due</p>
-      <p style="margin:0 0 14px;font-size:28px;line-height:1.2;font-weight:700;color:${BRAND.ink}">
-        ${escapeHtml(opts.amountLabel)}
+
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+        style="margin:0 0 18px;border-radius:12px;overflow:hidden;border:1px solid ${BRAND.line}">
+        <tr>
+          <td style="background:${BRAND.green};padding:20px 22px" align="center">
+            <p style="margin:0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(255,255,255,0.8);font-weight:700">
+              Amount due
+            </p>
+            <p style="margin:8px 0 0;font-size:32px;line-height:1.1;color:#ffffff;font-weight:700">
+              ${escapeHtml(opts.amountLabel)}
+            </p>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:0 0 12px;padding:12px 14px;background:#f0f7f4;border:1px solid #c5ddd1;border-radius:8px;color:${BRAND.ink};font-size:13px;line-height:1.5">
+        <strong style="color:${BRAND.green}">Nahda Publications PayPal</strong><br/>
+        Please send your APC to <strong>Asare Clement</strong> ·
+        <a href="mailto:Asareowusuclems2024@gmail.com" style="color:${BRAND.green};font-weight:600">Asareowusuclems2024@gmail.com</a>
+        — the official PayPal account used by Nahda Publications for article processing charges.
       </p>
-      <p style="margin:0 0 14px">
-        Please click the button below to complete your secure payment. The payment
-        page opens in a new tab.
+
+      <p style="margin:0 0 12px;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:${WARN};font-size:13px;line-height:1.55">
+        <strong>PayPal note (required):</strong>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-weight:700"> ${escapeHtml(opts.paymentReference)}</span><br/>
+        <strong>Paper:</strong> ${escapeHtml(opts.manuscriptId)} · ${escapeHtml(opts.journalAlias)}
       </p>
-      <p style="margin:0 0 14px;font-size:13px;color:${BRAND.muted}">
-        Secure payment • Visa • Mastercard
+
+      <p style="margin:0 0 8px;font-size:14px;color:${BRAND.ink};line-height:1.55">
+        1. Open PayPal and send
+        <strong>${escapeHtml(opts.amountLabel)}</strong> to the account above.<br/>
+        2. Return to your <strong>Nahda author dashboard</strong>.<br/>
+        3. Click <strong>Pay APC</strong>, then
+        <strong>I’ve sent the PayPal payment</strong>.
+      </p>
+      <p style="margin:0 0 4px;font-size:13px">
+        <a href="https://www.paypal.com/signin" style="color:${BRAND.green};font-weight:600"
+           target="_blank" rel="noopener noreferrer">Open PayPal login →</a>
       </p>
       ${fileBlock}
     `,
     cta: {
-      href: opts.checkoutUrl,
-      label: `Pay ${opts.amountLabel}`,
-      openInNewTab: true,
+      href: opts.dashboardUrl,
+      label: "Open author dashboard",
+      openInNewTab: false,
     },
     footerNote:
-      "This link opens the payment page in a new tab. After payment you will be taken to your author dashboard.",
+      "Your official Nahda receipt is emailed to the submitting author after we confirm payment.",
   });
 }
 
@@ -589,6 +636,7 @@ export function apcReceiptEmailHtml(opts: {
           <td style="padding:6px 24px 20px;background:#ffffff">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-family:Georgia,'Times New Roman',serif">
               ${row("Merchant", escapeHtml("Nahda Publications"))}
+              ${row("Method", "PayPal")}
               ${row("Currency", "USD")}
               ${row("Amount", escapeHtml(opts.amountLabel))}
               ${row("Receipt no.", escapeHtml(opts.receiptNumber), { mono: true })}

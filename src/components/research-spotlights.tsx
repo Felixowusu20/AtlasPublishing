@@ -3,6 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import AOS from "aos";
+import { useAosReady } from "@/components/aos-provider";
 
 export type ResearchSpotlightCard = {
   id: string;
@@ -15,7 +17,13 @@ export type ResearchSpotlightCard = {
   ctaLabel?: string | null;
 };
 
-function Card({ item }: { item: ResearchSpotlightCard }) {
+function Card({
+  item,
+  aosDelay,
+}: {
+  item: ResearchSpotlightCard;
+  aosDelay: number;
+}) {
   const inner = (
     <>
       <div className="relative aspect-[16/10] overflow-hidden bg-[var(--surface)]">
@@ -73,17 +81,27 @@ function Card({ item }: { item: ResearchSpotlightCard }) {
   );
 
   const className =
-    "research-spotlight-card group flex w-[min(78vw,280px)] shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_10px_30px_-18px_rgba(11,58,83,0.35)]";
+    "research-spotlight-card group flex w-[min(82vw,280px)] shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_10px_30px_-18px_rgba(11,58,83,0.35)] sm:w-[min(78vw,280px)]";
+
+  const aosProps = {
+    "data-aos": "fade-up",
+    "data-aos-delay": String(aosDelay),
+    "data-aos-duration": "750",
+  } as const;
 
   if (item.href) {
     return (
-      <Link href={item.href} className={className}>
+      <Link href={item.href} className={className} {...aosProps}>
         {inner}
       </Link>
     );
   }
 
-  return <article className={className}>{inner}</article>;
+  return (
+    <article className={className} {...aosProps}>
+      {inner}
+    </article>
+  );
 }
 
 export function ResearchSpotlights({
@@ -92,6 +110,7 @@ export function ResearchSpotlights({
   initialItems?: ResearchSpotlightCard[];
 }) {
   const [items, setItems] = useState<ResearchSpotlightCard[]>(initialItems);
+  const aosReady = useAosReady();
 
   useEffect(() => {
     if (initialItems.length > 0) return;
@@ -105,25 +124,40 @@ export function ResearchSpotlights({
       });
   }, [initialItems.length]);
 
+  useEffect(() => {
+    if (!aosReady || items.length === 0) return;
+    const id = window.setTimeout(() => AOS.refresh(), 80);
+    return () => window.clearTimeout(id);
+  }, [items.length, aosReady]);
+
   if (items.length === 0) return null;
 
-  const loop = items.length === 1 ? [...items, ...items, ...items] : [...items, ...items];
+  // Show unique cards (not the marquee duplicate loop) for AOS visibility;
+  // keep marquee track for continuous motion.
+  const loop =
+    items.length === 1 ? [...items, ...items, ...items] : [...items, ...items];
 
   return (
     <section
-      className="research-spotlights border-b border-[var(--line)] bg-[linear-gradient(180deg,#f7fafb_0%,#ffffff_55%)]"
+      className="research-spotlights border-b border-[var(--line)] bg-white"
       aria-label="Scientific research areas"
+      data-aos="fade-up"
+      data-aos-duration="700"
     >
-      <div className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+      <div className="mx-auto max-w-6xl px-4 pt-8 sm:px-6 sm:pt-16">
+        <div
+          className="flex flex-wrap items-end justify-between gap-3"
+          data-aos="fade-up"
+          data-aos-delay="60"
+        >
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
               Featured research
             </p>
-            <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl tracking-tight text-[var(--ink)] sm:text-3xl">
+            <h2 className="mt-1.5 font-[family-name:var(--font-display)] text-2xl leading-tight tracking-tight text-[var(--ink)] sm:mt-2 sm:text-4xl">
               Scientific research areas
             </h2>
-            <p className="mt-2 max-w-xl text-sm text-[var(--muted)]">
+            <p className="mt-2 text-sm leading-relaxed text-[var(--muted)] sm:mt-3 sm:text-base">
               Explore partner research themes and the papers we have published
               in those areas.
             </p>
@@ -131,10 +165,14 @@ export function ResearchSpotlights({
         </div>
       </div>
 
-      <div className="research-spotlights-track mt-6 pb-9">
+      <div className="research-spotlights-track mt-6 pb-8 sm:mt-8 sm:pb-12">
         <div className="research-spotlights-marquee">
           {loop.map((item, index) => (
-            <Card key={`${item.id}-${index}`} item={item} />
+            <Card
+              key={`${item.id}-${index}`}
+              item={item}
+              aosDelay={Math.min((index % items.length) * 90, 360)}
+            />
           ))}
         </div>
       </div>

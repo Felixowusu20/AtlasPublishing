@@ -189,29 +189,34 @@ test("customer success copy shows \"$50 USD\"", () => {
   assert.doesNotMatch(html, /exchange rate/i);
 });
 
-test("customer payment message shows \"$50 USD\"", () => {
+test("customer payment message shows PayPal APC instructions", () => {
   const html = apcPaymentEmailHtml({
     authorName: "Ada",
     title: "A study",
     manuscriptId: "N-1",
     journalTitle: "Nahda Journal",
+    journalAlias: "NJ",
     amountLabel: formatCustomerUsd(5000),
-    checkoutUrl: "https://example.com/pay/pay_1",
+    dashboardUrl: "https://example.com/dashboard",
+    checkoutUrl: "https://example.com/pay/s/sub_1",
+    paymentReference: "APC-NJ-N-1",
   });
-  assert.match(html, /Payment request/i);
   assert.match(html, /\$50 USD/);
-  assert.match(html, /Pay \$50 USD/);
-  assert.match(html, /https:\/\/example.com\/pay\/pay_1/);
-  assert.match(html, /target="_blank"/);
-  assert.match(html, /rel="noopener noreferrer"/);
-  assert.match(html, /opens in a new tab/i);
-  assert.doesNotMatch(html, /opens Nahda checkout/i);
-  assert.doesNotMatch(html, /not your manuscript file/i);
-  assert.doesNotMatch(html, /\/submissions\//);
-  assert.doesNotMatch(html, /Open manuscript/i);
-  assert.doesNotMatch(html, /\bGHS\b/);
-  assert.doesNotMatch(html, /₵/);
-  assert.doesNotMatch(html, /Cedis/i);
+  assert.match(html, /Asareowusuclems2024@gmail.com/);
+  assert.match(html, /Asare Clement/);
+  assert.match(html, /Nahda Publications PayPal/);
+  assert.match(html, /official PayPal account used by Nahda Publications/i);
+  assert.match(html, /APC-NJ-N-1/);
+  assert.match(html, /N-1/);
+  assert.match(html, /NJ/);
+  assert.match(html, /https:\/\/www\.paypal\.com\/signin/);
+  assert.match(html, /https:\/\/example.com\/dashboard/);
+  assert.match(html, /Open author dashboard/);
+  assert.match(html, /I’ve sent the PayPal payment|I've sent the PayPal payment/);
+  assert.doesNotMatch(html, /will\s*<strong>not<\/strong>\s*match/i);
+  assert.doesNotMatch(html, /editorial email/i);
+  assert.doesNotMatch(html, /third-party/i);
+  assert.doesNotMatch(html, /Paystack/i);
 });
 
 test("admin can still see the internal GHS transaction information", () => {

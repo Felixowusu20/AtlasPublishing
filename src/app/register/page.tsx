@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
   AUTH_IMAGES,
   AuthSplitLayout,
 } from "@/components/auth-split-layout";
 import { PasswordField } from "@/components/password-field";
+import { TurnstileField } from "@/components/turnstile-field";
+import { turnstileEnabled } from "@/lib/turnstile-public";
 
 export default function RegisterPage() {
   const { register, user, ready } = useAuth();
@@ -21,8 +23,13 @@ export default function RegisterPage() {
     institution: "",
     orcid: "",
   });
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const needsTurnstile = turnstileEnabled();
+  const onToken = useCallback((token: string | null) => {
+    setTurnstileToken(token);
+  }, []);
 
   useEffect(() => {
     if (ready && user) router.replace("/dashboard");
@@ -39,6 +46,10 @@ export default function RegisterPage() {
       setError("Passwords do not match.");
       return;
     }
+    if (needsTurnstile && !turnstileToken) {
+      setError("Please complete the human verification.");
+      return;
+    }
     setLoading(true);
     const result = await register({
       name: form.name,
@@ -46,6 +57,7 @@ export default function RegisterPage() {
       password: form.password,
       institution: form.institution,
       orcid: form.orcid,
+      turnstileToken,
     });
     setLoading(false);
     if (!result.ok) {
@@ -120,6 +132,10 @@ export default function RegisterPage() {
             onChange={(e) => update("confirm", e.target.value)}
             autoComplete="new-password"
           />
+
+          <div className="sm:col-span-2">
+            <TurnstileField onToken={onToken} />
+          </div>
 
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700 sm:col-span-2">

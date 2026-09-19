@@ -83,6 +83,20 @@ const nav: {
     roles: ["SUPER_ADMIN"],
   },
   {
+    href: "/admin/home-goals",
+    label: "Get started CMS",
+    short: "Goals",
+    icon: "cms",
+    roles: ["SUPER_ADMIN"],
+  },
+  {
+    href: "/admin/indexed-platforms",
+    label: "Indexed platforms",
+    short: "Indexed",
+    icon: "research",
+    roles: ["SUPER_ADMIN"],
+  },
+  {
     href: "/admin/research-spotlights",
     label: "Research areas",
     short: "Research",

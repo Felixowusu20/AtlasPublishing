@@ -79,6 +79,7 @@ export default function AdminSubmissionDetailPage({
   const [success, setSuccess] = useState("");
 
   const [waiving, setWaiving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   async function load() {
     const res = await fetch(`/api/admin/submissions/${id}`);
@@ -119,6 +120,41 @@ export default function AdminSubmissionDetailPage({
       setError(err instanceof Error ? err.message : "Waive failed");
     } finally {
       setWaiving(false);
+    }
+  }
+
+  async function confirmPaypalApc() {
+    if (!submission) return;
+    if (
+      !confirm(
+        "Confirm that PayPal APC payment was received for this manuscript? The submitting author will be emailed a Nahda receipt.",
+      )
+    ) {
+      return;
+    }
+    setConfirming(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch("/api/admin/payments/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId: submission.id,
+          paypalReference: submission.payment?.paystackReference ?? undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not confirm payment");
+      if (data.submission) setSubmission(data.submission);
+      else await load();
+      setSuccess(
+        `PayPal APC confirmed. Receipt emailed to ${data.receiptSentTo ?? submission.author.email}.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Confirm failed");
+    } finally {
+      setConfirming(false);
     }
   }
 
@@ -287,25 +323,22 @@ export default function AdminSubmissionDetailPage({
                 </div>
                 <div>
                   <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
-                    Internal Paystack amount
+                    Amount (USD)
                   </dt>
                   <dd className="mt-0.5 font-medium">
-                    {submission.payment.internalAmountLabel ?? "—"}
+                    {submission.payment.amountLabel ??
+                      `$${(submission.payment.amountCents / 100).toLocaleString("en-US")} USD`}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
-                    Exchange rate
+                    Method
                   </dt>
-                  <dd className="mt-0.5 font-medium">
-                    {submission.payment.exchangeRate != null
-                      ? `${submission.payment.exchangeRate} GHS / USD`
-                      : "—"}
-                  </dd>
+                  <dd className="mt-0.5 font-medium">PayPal</dd>
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
-                    Paystack reference
+                    Payment reference
                   </dt>
                   <dd className="mt-0.5 font-mono text-xs">
                     {submission.payment.paystackReference ?? "—"}
@@ -418,14 +451,24 @@ export default function AdminSubmissionDetailPage({
                     : "Ready for production"}
               </p>
               {submission.apcPaymentStatus === "PENDING" ? (
-                <button
-                  type="button"
-                  disabled={waiving}
-                  onClick={() => void waiveApc()}
-                  className="text-xs font-semibold text-[var(--accent)] underline disabled:opacity-50"
-                >
-                  {waiving ? "Waiving…" : "Waive APC"}
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    disabled={confirming}
+                    onClick={() => void confirmPaypalApc()}
+                    className="text-xs font-semibold text-[var(--accent)] underline disabled:opacity-50"
+                  >
+                    {confirming ? "Confirming…" : "Confirm PayPal payment"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={waiving}
+                    onClick={() => void waiveApc()}
+                    className="text-xs font-semibold text-[var(--muted)] underline disabled:opacity-50"
+                  >
+                    {waiving ? "Waiving…" : "Waive APC"}
+                  </button>
+                </div>
               ) : (
                 <div className="flex flex-wrap gap-3">
                   <Link

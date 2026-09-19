@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Libre_Franklin, Source_Serif_4 } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
+import { AosProvider } from "@/components/aos-provider";
 import { CookieConsentGate } from "@/components/cookie-consent-gate";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { seoBaseUrl } from "@/lib/seo/scholar";
@@ -85,10 +86,12 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <AuthProvider>
-          <SiteHeader />
-          <main className="min-w-0 flex-1 overflow-x-clip">{children}</main>
-          <SiteFooter />
-          <CookieConsentGate />
+          <AosProvider>
+            <SiteHeader />
+            <main className="min-w-0 flex-1 overflow-x-clip">{children}</main>
+            <SiteFooter />
+            <CookieConsentGate />
+          </AosProvider>
         </AuthProvider>
       </body>
     </html>

@@ -177,7 +177,7 @@ export default function AdminFinancesPage() {
                       </p>
                       {row.paystackReference && (
                         <p className="mt-1 font-mono text-[11px] text-[var(--muted)]">
-                          {row.paystackReference}
+                          Ref {row.paystackReference}
                         </p>
                       )}
                     </td>

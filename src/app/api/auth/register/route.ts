@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonCreated, jsonError } from "@/lib/api";
+import { guardAuthPost } from "@/lib/auth-guard";
 import {
   createToken,
   hashPassword,
@@ -16,11 +17,15 @@ const schema = z.object({
   password: z.string().min(6),
   institution: z.string().min(2),
   orcid: z.string().optional(),
+  turnstileToken: z.string().optional().nullable(),
 });
 
 export async function POST(request: Request) {
   try {
     const body = schema.parse(await request.json());
+    const blocked = await guardAuthPost(request, body.turnstileToken);
+    if (blocked) return blocked;
+
     const email = body.email.trim().toLowerCase();
 
     const existing = await prisma.user.findUnique({ where: { email } });

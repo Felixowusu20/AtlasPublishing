@@ -15,7 +15,7 @@ What we stand for
 
 - Rigorous peer review and editorial standards
 - Clear fees and waiver pathways after acceptance
-- Secure payments processed through Paystack
+- Secure payments collected via PayPal (Nahda Publications)
 - Open discovery via DOI metadata and journal sites
 - Responsive support for authors and readers
 
@@ -35,7 +35,7 @@ You must provide accurate registration details and keep your login credentials c
 Authors confirm that submitted work is original, that they have the right to submit it, and that it does not infringe third-party rights. Editorial decisions (including acceptance, revision, or rejection) are at the discretion of the journal and do not create a guarantee of publication.
 
 4. Article processing charges (APCs)
-Where an APC applies, the amount shown for the relevant journal in our Fees pages is due after acceptance and before production. Nahda’s payment pages, invoices, and receipts show that amount in US dollars (USD). Card checkout is completed through Paystack’s official payment flow.
+Where an APC applies, the amount shown for the relevant journal in our Fees pages is due after acceptance and before production. Nahda’s payment pages, invoices, and receipts show that amount in US dollars (USD). Authors pay by PayPal to the official Nahda Publications account.
 
 5. Refunds
 APC payments are generally non-refundable once production has begun. If a charge was made in error, contact nahdapublications@gmail.com within 14 days with your manuscript ID and payment reference. Refund eligibility is assessed case by case.
@@ -47,7 +47,7 @@ You may not attempt to disrupt the Services, upload malware, scrape personal dat
 Site design, branding, and platform software remain our property. Authors retain rights in their manuscripts subject to the journal’s publishing agreement and licence terms at acceptance/publication.
 
 8. Third-party services
-Payments are processed by Paystack. File storage and delivery may use Cloudinary or similar providers. Their terms and privacy practices apply to those processing steps.
+Payments are collected via PayPal to the official Nahda Publications account. File storage and delivery may use Cloudinary or similar providers. Their terms and privacy practices apply to those processing steps.
 
 9. Disclaimer
 The Services are provided “as is”. We do not warrant uninterrupted availability. To the fullest extent permitted by law, we are not liable for indirect or consequential losses arising from use of the Services.
@@ -65,7 +65,7 @@ This Privacy Policy explains how Nahda Publications (“we”, “us”) collect
 1. Information we collect
 - Account details: name, email, password (stored as a hash), institution, ORCID, and research interests you provide
 - Manuscript and editorial data: titles, abstracts, files, co-author details you submit, and review correspondence
-- Payment data: amount, status, Paystack reference, and billing email. We do not store full card numbers; Paystack processes card details
+- Payment data: amount, status, PayPal / payment reference, and billing email. We do not store full card numbers
 - Technical data: cookies needed for sign-in and preference storage, and basic server logs (IP, user agent) for security
 
 2. How we use information
@@ -80,7 +80,7 @@ We process data to perform our publishing contract with you, to pursue legitimat
 
 4. Sharing
 We share data with:
-- Paystack — payment processing
+- PayPal — APC payment collection (Nahda Publications account)
 - Cloudinary (or similar) — secure file hosting for manuscripts and images
 - Email delivery providers configured for our SMTP account
 - Reviewers and editors — only information needed for peer review
@@ -136,13 +136,13 @@ const DEFAULT_FAQS: { question: string; answer: string; sortOrder: number }[] =
       sortOrder: 3,
       question: "How do APCs and waivers work?",
       answer:
-        "See Fees & waivers. Article processing charges are paid after acceptance and before production via our Nahda checkout (Paystack). Waiver requests can be sent to the editorial office.",
+        "See Fees & waivers. Article processing charges are paid after acceptance and before production via PayPal to Nahda Publications. Waiver requests can be sent to the editorial office.",
     },
     {
       sortOrder: 4,
       question: "How are payments secured?",
       answer:
-        "Card payments are processed by Paystack’s official checkout. Nahda does not store full card numbers or bank OTPs. You receive an official Nahda Publications receipt in USD by email after a successful payment.",
+        "APC payments are made by PayPal to the official Nahda Publications account. You receive an official Nahda Publications receipt in USD by email after editorial confirmation of payment.",
     },
     {
       sortOrder: 5,
@@ -154,7 +154,7 @@ const DEFAULT_FAQS: { question: string; answer: string; sortOrder: number }[] =
       sortOrder: 6,
       question: "How do I contact support?",
       answer:
-        "Email nahdapublications@gmail.com. Typical response within 1 to 2 business days. For payment issues, include your manuscript ID and Paystack reference.",
+        "Email nahdapublications@gmail.com. Typical response within 1 to 2 business days. For payment issues, include your manuscript ID and PayPal payment reference.",
     },
   ];
 

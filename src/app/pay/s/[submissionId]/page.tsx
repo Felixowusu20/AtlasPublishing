@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { NahdaCheckoutModal } from "@/components/nahda-checkout-modal";
+import { PaypalApcPanel } from "@/components/paypal-apc-panel";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { RequireAuth } from "@/components/require-auth";
 
@@ -18,6 +18,9 @@ function AuthorPayInner({ submissionId }: { submissionId: string }) {
   const router = useRouter();
   const [info, setInfo] = useState<PayInfo | null>(null);
   const [amountLabel, setAmountLabel] = useState("");
+  const [paymentReference, setPaymentReference] = useState<string | null>(null);
+  const [journalAlias, setJournalAlias] = useState<string | undefined>();
+  const [journalTitle, setJournalTitle] = useState<string | undefined>();
   const [error, setError] = useState("");
   const [paid, setPaid] = useState(false);
 
@@ -55,9 +58,18 @@ function AuthorPayInner({ submissionId }: { submissionId: string }) {
         } else if (sub.payment?.amountLabel) {
           setAmountLabel(sub.payment.amountLabel);
         }
+        if (typeof checkoutData.paymentReference === "string") {
+          setPaymentReference(checkoutData.paymentReference);
+        }
+        if (typeof checkoutData.journalAlias === "string") {
+          setJournalAlias(checkoutData.journalAlias);
+        }
+        if (typeof checkoutData.journalTitle === "string") {
+          setJournalTitle(checkoutData.journalTitle);
+        }
 
         if (!checkoutRes.ok) {
-          throw new Error(checkoutData.error ?? "Could not start checkout");
+          throw new Error(checkoutData.error ?? "Could not load PayPal instructions");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not load payment");
@@ -81,26 +93,27 @@ function AuthorPayInner({ submissionId }: { submissionId: string }) {
         variant="screen"
         label={
           paid
-            ? "Payment successful. Opening your dashboard…"
-            : "Opening secure payment…"
+            ? "Payment confirmed. Opening your dashboard…"
+            : "Loading PayPal payment instructions…"
         }
       />
     );
   }
 
   return (
-    <div className="min-h-[80vh] bg-[var(--paper)]">
-      <NahdaCheckoutModal
-        open
-        closable={false}
-        onClose={() => undefined}
+    <div className="mx-auto min-h-[80vh] max-w-2xl bg-[var(--paper)] px-4 py-10 sm:px-6">
+      <p className="mb-3 text-sm text-[var(--muted)]">
+        <a href="/dashboard" className="font-semibold text-[var(--accent)] hover:underline">
+          ← Author dashboard
+        </a>
+      </p>
+      <PaypalApcPanel
         submissionId={info.id}
         manuscriptId={info.manuscriptId}
         amountLabel={amountLabel || info.payment?.amountLabel || ""}
-        onPaid={() => {
-          setPaid(true);
-          router.replace("/dashboard?paid=1");
-        }}
+        journalTitle={journalTitle}
+        journalAlias={journalAlias}
+        paymentReference={paymentReference}
       />
     </div>
   );

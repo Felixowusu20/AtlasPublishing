@@ -118,16 +118,19 @@ model ResearchSpotlight {
 }
 
 model Announcement {
-  id        String   @id @default(cuid())
-  title     String
-  summary   String
-  href      String?
+  id          String   @id @default(cuid())
+  title       String
+  summary     String
+  href        String?
+  imageUrl    String?
+  imagePublicId String?
   publishedAt DateTime @default(now())
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([publishedAt])
+  @@index([isActive])
 }
 
 model Journal {
@@ -369,6 +372,58 @@ model FaqItem {
 
   @@index([sortOrder])
   @@index([isActive])
+}
+
+/// Homepage “Get started” goal tabs (CMS-managed copy + images).
+model HomeGoalTab {
+  id             String   @id @default(cuid())
+  /// Stable key used by the UI (publish | journals | authors | discover | pathway).
+  key            String   @unique
+  label          String
+  title          String
+  body           String
+  story          String?
+  imageUrl       String
+  imagePublicId  String?
+  imageAlt       String?
+  imageCaption   String?
+  /// [{ "label": string, "href": string }]
+  links          Json     @default("[]")
+  sortOrder      Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([sortOrder])
+  @@index([isActive])
+}
+
+/// Homepage “Indexed & discoverable” platform cards.
+model IndexedPlatform {
+  id            String   @id @default(cuid())
+  name          String
+  blurb         String
+  href          String
+  logoUrl       String
+  logoPublicId  String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([sortOrder])
+  @@index([isActive])
+}
+
+/// Section headings for homepage CMS blocks (goals | indexed).
+model HomeSection {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  eyebrow   String?
+  title     String
+  body      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// House NID (Nahda Identifier) configuration — free IDs minted on publish.

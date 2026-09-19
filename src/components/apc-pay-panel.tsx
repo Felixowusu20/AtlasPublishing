@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCustomerUsd } from "@/lib/format-usd";
-import { NahdaCheckoutModal } from "@/components/nahda-checkout-modal";
+import { PaypalApcPanel } from "@/components/paypal-apc-panel";
 
 type Props = {
   submissionId: string;
@@ -22,18 +22,8 @@ export function ApcPayPanel({
   amountCents,
   amountLabel: amountLabelProp,
   onPaid,
-  autoOpen = false,
 }: Props) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
-  const [paidLabel, setPaidLabel] = useState("");
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-
-  function goToDashboard() {
-    router.replace("/dashboard?paid=1");
-  }
   const [amountLabel, setAmountLabel] = useState(() => {
     if (amountLabelProp) return amountLabelProp;
     if (amountCents != null && amountCents > 0) {
@@ -41,6 +31,10 @@ export function ApcPayPanel({
     }
     return "";
   });
+  const [paymentReference, setPaymentReference] = useState<string | null>(null);
+  const [journalAlias, setJournalAlias] = useState<string | undefined>();
+  const [journalTitle, setJournalTitle] = useState<string | undefined>();
+  const [cleared, setCleared] = useState(false);
 
   useEffect(() => {
     if (amountLabelProp) {
@@ -50,47 +44,42 @@ export function ApcPayPanel({
     }
   }, [amountCents, amountLabelProp]);
 
-  const didAutoOpen = useRef(false);
   useEffect(() => {
-    if (!autoOpen || didAutoOpen.current) return;
     if (apcPaymentStatus !== "PENDING") return;
-    didAutoOpen.current = true;
-    void openCheckout();
-    // openCheckout is stable for this mount; we only auto-open once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoOpen, apcPaymentStatus]);
-
-  async function openCheckout() {
-    setBusy(true);
-    setError("");
-    try {
-      const res = await fetch("/api/payments/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ submissionId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not start checkout");
-
-      if (data.alreadyCleared) {
-        setInfo("This manuscript’s APC is already cleared.");
-        onPaid?.();
-        goToDashboard();
-        return;
+    void (async () => {
+      try {
+        const res = await fetch("/api/payments/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ submissionId }),
+        });
+        const data = await res.json();
+        if (data.alreadyCleared) {
+          setCleared(true);
+          onPaid?.();
+          router.replace("/dashboard?paid=1");
+          return;
+        }
+        if (typeof data.amountLabel === "string" && data.amountLabel) {
+          setAmountLabel(data.amountLabel);
+        }
+        if (typeof data.paymentReference === "string") {
+          setPaymentReference(data.paymentReference);
+        }
+        if (typeof data.journalAlias === "string") {
+          setJournalAlias(data.journalAlias);
+        }
+        if (typeof data.journalTitle === "string") {
+          setJournalTitle(data.journalTitle);
+        }
+      } catch {
+        // panel still shows base props
       }
-
-      if (typeof data.amountLabel === "string" && data.amountLabel) {
-        setAmountLabel(data.amountLabel);
-      }
-      setCheckoutOpen(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Checkout failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+    })();
+  }, [apcPaymentStatus, submissionId, onPaid, router]);
 
   if (
+    cleared ||
     apcPaymentStatus === "PAID" ||
     apcPaymentStatus === "WAIVED" ||
     (apcPaymentStatus === "NOT_REQUIRED" &&
@@ -110,7 +99,7 @@ export function ApcPayPanel({
         </h2>
         <p className="mt-2 text-sm text-emerald-900/80">
           {apcPaymentStatus === "PAID"
-            ? `Your payment of ${amountLabel || paidLabel || "the article processing charge"} has been received. Thank you for your payment.`
+            ? `Your PayPal payment of ${amountLabel || "the article processing charge"} has been received. Thank you for your payment.`
             : "Your manuscript can proceed in production."}
         </p>
       </section>
@@ -118,66 +107,13 @@ export function ApcPayPanel({
   }
 
   return (
-    <>
-      <NahdaCheckoutModal
-        open={checkoutOpen}
-        onClose={() => setCheckoutOpen(false)}
-        submissionId={submissionId}
-        manuscriptId={manuscriptId}
-        amountLabel={amountLabel}
-        onPaid={() => {
-          setPaidLabel(amountLabel);
-          setInfo(
-            `PAYMENT SUCCESSFUL. Your payment of ${amountLabel} has been received. Thank you for your payment.`,
-          );
-          setCheckoutOpen(false);
-          onPaid?.();
-          goToDashboard();
-        }}
-      />
-
-      <section className="mt-6 rounded-2xl border-2 border-[var(--accent)]/30 bg-gradient-to-br from-[var(--accent-soft)] to-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-          Payment request
-        </p>
-        <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
-          Amount due
-        </h2>
-        <p className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-[var(--ink)]">
-          {amountLabel || "USD"}
-        </p>
-        <p className="mt-3 text-sm text-[var(--muted)]">
-          Thank you for your order ({manuscriptId}). Please complete your secure
-          payment using the button below.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void openCheckout()}
-            className="btn-primary !px-4 !py-2.5 text-sm disabled:opacity-60"
-          >
-            {busy
-              ? "Opening…"
-              : amountLabel
-                ? `Pay ${amountLabel}`
-                : "Pay now"}
-          </button>
-        </div>
-        <p className="mt-3 text-xs text-[var(--muted)]">
-          Secure payment • Visa • Mastercard
-        </p>
-        {info && (
-          <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-            {info}
-          </p>
-        )}
-        {error && (
-          <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
-            {error}
-          </p>
-        )}
-      </section>
-    </>
+    <PaypalApcPanel
+      submissionId={submissionId}
+      manuscriptId={manuscriptId}
+      amountLabel={amountLabel}
+      journalTitle={journalTitle}
+      journalAlias={journalAlias}
+      paymentReference={paymentReference}
+    />
   );
 }
