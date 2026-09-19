@@ -9,7 +9,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /** Bump when schema fields change so a stale HMR client is discarded. */
-const PRISMA_SCHEMA_VERSION = 5;
+const PRISMA_SCHEMA_VERSION = 6;
 
 function isTransientDbError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);

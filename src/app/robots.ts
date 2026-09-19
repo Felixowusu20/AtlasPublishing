@@ -1,6 +1,44 @@
 import type { MetadataRoute } from "next";
 import { seoBaseUrl } from "@/lib/seo/scholar";
 
+const PUBLIC_ALLOW = [
+  "/",
+  "/articles",
+  "/articles/current-issues",
+  "/articles/past-issues",
+  "/journals",
+  "/nid",
+  "/doi",
+  "/search",
+  "/about",
+  "/help",
+  "/terms",
+  "/privacy",
+  "/authors",
+] as const;
+
+const SCHOLAR_ALLOW = [
+  "/",
+  "/articles",
+  "/journals",
+  "/nid",
+  "/doi",
+  "/api/articles/",
+] as const;
+
+const PRIVATE_DISALLOW = [
+  "/admin",
+  "/admin/",
+  "/dashboard",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/notifications",
+  "/profile",
+  "/submissions",
+] as const;
+
 export default function robots(): MetadataRoute.Robots {
   const base = seoBaseUrl();
 
@@ -8,37 +46,30 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/articles", "/articles/current-issues", "/articles/past-issues", "/journals", "/nid", "/doi", "/search", "/about", "/help", "/terms", "/privacy", "/authors"],
-        disallow: [
-          "/admin",
-          "/admin/",
-          "/api/",
-          "/dashboard",
-          "/login",
-          "/register",
-          "/forgot-password",
-          "/reset-password",
-          "/notifications",
-          "/profile",
-          "/submissions",
-        ],
+        allow: [...PUBLIC_ALLOW],
+        disallow: [...PRIVATE_DISALLOW, "/api/"],
       },
       {
-        // Allow Google Scholar / Googlebot to fetch PDFs via the public download API
+        // Google Scholar / Googlebot — keep papers + PDF download API open
         userAgent: "Googlebot",
-        allow: [
-          "/",
-          "/articles",
-          "/journals",
-          "/nid",
-          "/doi",
-          "/api/articles/",
-        ],
+        allow: [...SCHOLAR_ALLOW],
         disallow: ["/admin", "/dashboard", "/login", "/register", "/api/admin"],
       },
       {
         userAgent: "Googlebot-News",
-        allow: ["/", "/articles", "/journals", "/nid", "/doi", "/api/articles/"],
+        allow: [...SCHOLAR_ALLOW],
+      },
+      {
+        userAgent: "Google-Scholar",
+        allow: [...SCHOLAR_ALLOW],
+      },
+      {
+        userAgent: "SemanticScholarBot",
+        allow: [...SCHOLAR_ALLOW],
+      },
+      {
+        userAgent: "bingbot",
+        allow: [...SCHOLAR_ALLOW],
       },
     ],
     sitemap: [

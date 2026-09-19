@@ -1,20 +1,16 @@
 import { prisma } from "@/lib/db";
 import { parseApcAmountCents } from "@/lib/apc";
-import {
-  appBaseUrl,
-  makePaystackReference,
-  resolvePaystackCharge,
-  verifyPaystackTransaction,
-} from "@/lib/paystack";
-import {
-  formatCustomerUsd,
-  INTERNAL_PAYSTACK_CURRENCY,
-} from "@/lib/payment-currency";
+import { formatCustomerUsd } from "@/lib/payment-currency";
 import { apcPayPageUrl } from "@/lib/payment-link";
 import { progressForStatus } from "@/lib/submission-utils";
 import { notifyAdmins } from "@/lib/notify-admins";
 import { apcReceiptEmailHtml, sendEmail } from "@/lib/mail";
 import { isApcAlreadyCleared } from "@/lib/payment-verify";
+import {
+  journalPaymentAlias,
+  makePaypalPaymentReference,
+} from "@/lib/paypal";
+import { getAppBaseUrl } from "@/lib/app-url";
 import type { Journal, Payment, Submission } from "@/generated/prisma/client";
 
 type SubmissionWithJournal = Submission & {
@@ -31,6 +27,7 @@ export type PreparedApcPayment = {
   reference: string | null;
   authorEmail: string | null;
   payment: Payment | null;
+  journalAlias: string;
 };
 
 /**
@@ -41,7 +38,6 @@ export async function syncPendingApcFromJournal(journal: Journal): Promise<void>
   const usdCents = parseApcAmountCents(journal.apc, {
     openAccess: journal.openAccess,
   });
-  const charge = resolvePaystackCharge(usdCents, INTERNAL_PAYSTACK_CURRENCY);
   const amountLabel = formatCustomerUsd(usdCents);
 
   if (usdCents <= 0) {
@@ -57,8 +53,8 @@ export async function syncPendingApcFromJournal(journal: Journal): Promise<void>
           status: "NOT_REQUIRED",
           paidAt: null,
           internalAmount: 0,
-          internalCurrency: charge.currency,
-          exchangeRate: charge.exchangeRate,
+          internalCurrency: "USD",
+          exchangeRate: 1,
         },
       }),
       prisma.submission.updateMany({
@@ -87,9 +83,9 @@ export async function syncPendingApcFromJournal(journal: Journal): Promise<void>
         status: "PENDING",
         paidAt: null,
         waivedAt: null,
-        internalAmount: charge.amount,
-        internalCurrency: charge.currency,
-        exchangeRate: charge.exchangeRate,
+        internalAmount: usdCents,
+        internalCurrency: "USD",
+        exchangeRate: 1,
       },
     }),
     prisma.submission.updateMany({
@@ -102,7 +98,7 @@ export async function syncPendingApcFromJournal(journal: Journal): Promise<void>
         apcPaymentStatus: "PENDING",
         status: "ACCEPTED",
         progress: progressForStatus("ACCEPTED"),
-        actionRequired: `Please pay the article processing charge (${amountLabel}) to continue to production.`,
+        actionRequired: `Please pay the article processing charge (${amountLabel}) via PayPal to continue to production.`,
       },
     }),
   ]);
@@ -110,12 +106,13 @@ export async function syncPendingApcFromJournal(journal: Journal): Promise<void>
 
 /**
  * Create/update the Payment row from the trusted journal APC (USD).
- * Computes and stores the internal GHS amount. Does not return GHS to callers
- * that serialize customer responses — use toCustomerPayment for that.
+ * Stores a PayPal payment reference (reuses paystackReference column).
  */
 export async function prepareApcPayment(
   submission: SubmissionWithJournal,
 ): Promise<PreparedApcPayment> {
+  const journalAlias = journalPaymentAlias(submission.journal);
+
   if (
     submission.payment?.status === "PAID" ||
     submission.payment?.status === "WAIVED" ||
@@ -131,13 +128,13 @@ export async function prepareApcPayment(
       reference: submission.payment?.paystackReference ?? null,
       authorEmail: submission.author?.email ?? null,
       payment: submission.payment ?? null,
+      journalAlias,
     };
   }
 
   const usdCents = parseApcAmountCents(submission.journal.apc, {
     openAccess: submission.journal.openAccess,
   });
-  const charge = resolvePaystackCharge(usdCents, INTERNAL_PAYSTACK_CURRENCY);
   const displayCurrency = "usd";
   const amountLabel = formatCustomerUsd(usdCents);
 
@@ -161,8 +158,8 @@ export async function prepareApcPayment(
           currency: displayCurrency,
           status: "NOT_REQUIRED",
           internalAmount: 0,
-          internalCurrency: charge.currency,
-          exchangeRate: charge.exchangeRate,
+          internalCurrency: "USD",
+          exchangeRate: 1,
         },
         update: {
           amountCents: 0,
@@ -170,8 +167,8 @@ export async function prepareApcPayment(
           status: "NOT_REQUIRED",
           paidAt: null,
           internalAmount: 0,
-          internalCurrency: charge.currency,
-          exchangeRate: charge.exchangeRate,
+          internalCurrency: "USD",
+          exchangeRate: 1,
         },
       }),
     ]);
@@ -183,8 +180,15 @@ export async function prepareApcPayment(
       reference: null,
       authorEmail: submission.author?.email ?? null,
       payment: null,
+      journalAlias,
     };
   }
+
+  const reference = makePaypalPaymentReference({
+    journalAlias,
+    manuscriptId: submission.manuscriptId,
+  });
+  const email = submission.author?.email?.trim() || null;
 
   const payment = await prisma.payment.upsert({
     where: { submissionId: submission.id },
@@ -193,9 +197,11 @@ export async function prepareApcPayment(
       amountCents: usdCents,
       currency: displayCurrency,
       status: "PENDING",
-      internalAmount: charge.amount,
-      internalCurrency: charge.currency,
-      exchangeRate: charge.exchangeRate,
+      paystackReference: reference,
+      customerEmail: email,
+      internalAmount: usdCents,
+      internalCurrency: "USD",
+      exchangeRate: 1,
     },
     update: {
       amountCents: usdCents,
@@ -203,9 +209,11 @@ export async function prepareApcPayment(
       status: "PENDING",
       paidAt: null,
       waivedAt: null,
-      internalAmount: charge.amount,
-      internalCurrency: charge.currency,
-      exchangeRate: charge.exchangeRate,
+      paystackReference: reference,
+      customerEmail: email,
+      internalAmount: usdCents,
+      internalCurrency: "USD",
+      exchangeRate: 1,
     },
   });
 
@@ -216,52 +224,7 @@ export async function prepareApcPayment(
       apcPaidAt: null,
       status: "ACCEPTED",
       progress: progressForStatus("ACCEPTED"),
-      actionRequired: `Please pay the article processing charge (${amountLabel}) to continue to production.`,
-    },
-  });
-
-  if (payment.paystackReference) {
-    try {
-      const existing = await verifyPaystackTransaction(payment.paystackReference);
-      if (existing.status === "success") {
-        await markApcPaid({
-          submissionId: submission.id,
-          reference: existing.reference,
-          accessCode: payment.paystackAccessCode,
-          customerEmail: submission.author?.email,
-        });
-        const paid = await prisma.payment.findUnique({
-          where: { id: payment.id },
-        });
-        return {
-          amountCents: usdCents,
-          amountLabel,
-          status: "PAID",
-          paymentId: payment.id,
-          reference: existing.reference,
-          authorEmail: submission.author?.email ?? null,
-          payment: paid,
-        };
-      }
-    } catch {
-      // Fresh initialize below
-    }
-  }
-
-  const email = submission.author?.email?.trim() || null;
-  const reference = makePaystackReference(payment.id);
-
-  const updated = await prisma.payment.update({
-    where: { id: payment.id },
-    data: {
-      paystackReference: reference,
-      paystackAccessCode: null,
-      customerEmail: email,
-      amountCents: usdCents,
-      currency: displayCurrency,
-      internalAmount: charge.amount,
-      internalCurrency: charge.currency,
-      exchangeRate: charge.exchangeRate,
+      actionRequired: `Please pay the article processing charge (${amountLabel}) via PayPal to continue to production. Use reference ${reference}.`,
     },
   });
 
@@ -272,11 +235,12 @@ export async function prepareApcPayment(
     paymentId: payment.id,
     reference,
     authorEmail: email,
-    payment: updated,
+    payment,
+    journalAlias,
   };
 }
 
-/** Link authors to our USD payment page — not Paystack's hosted URL. */
+/** Link authors to our PayPal APC instructions page. */
 export async function ensureApcCheckout(
   submission: SubmissionWithJournal,
 ): Promise<{
@@ -287,6 +251,7 @@ export async function ensureApcCheckout(
   amountLabel: string;
   status: string;
   paymentId: string | null;
+  journalAlias: string;
 }> {
   const prepared = await prepareApcPayment(submission);
   return {
@@ -297,23 +262,12 @@ export async function ensureApcCheckout(
     amountLabel: prepared.amountLabel,
     status: prepared.status,
     paymentId: prepared.paymentId,
+    journalAlias: prepared.journalAlias,
   };
 }
 
 export function nahdaReceiptNumber(manuscriptId: string, paidAt: Date) {
   return `NPR-${manuscriptId.replace(/[^A-Za-z0-9]/g, "").slice(0, 12)}-${paidAt.getTime().toString(36).toUpperCase()}`;
-}
-
-/** Inbox for Paystack’s own notices (authors get Nahda receipt instead). */
-export function paystackNotifyEmail(authorEmail: string): string {
-  return (
-    (process.env.PAYSTACK_RECEIPT_INBOX ?? "").trim() ||
-    (process.env.SMTP_FROM ?? "")
-      .replace(/^.*<([^>]+)>.*$/, "$1")
-      .trim() ||
-    (process.env.SMTP_USER ?? "").trim() ||
-    authorEmail
-  );
 }
 
 /** Mark APC paid and move the manuscript to IN_PRODUCTION (publish queue). */
@@ -354,7 +308,16 @@ export async function markApcPaid(opts: {
       : journalUsdCents;
   const amountLabel = formatCustomerUsd(amountCents);
   const currency = "usd";
-  const authorReceiptEmail = submission.author.email;
+  const authorReceiptEmail =
+    (opts.customerEmail ?? "").trim() || submission.author.email;
+  const alias = journalPaymentAlias(submission.journal);
+  const reference =
+    opts.reference ||
+    submission.payment?.paystackReference ||
+    makePaypalPaymentReference({
+      journalAlias: alias,
+      manuscriptId: submission.manuscriptId,
+    });
 
   const updated = await prisma.$transaction(async (tx) => {
     await tx.payment.upsert({
@@ -364,24 +327,27 @@ export async function markApcPaid(opts: {
         amountCents,
         currency,
         status: "PAID",
-        paystackReference: opts.reference ?? undefined,
+        paystackReference: reference,
         paystackAccessCode: opts.accessCode ?? undefined,
         customerEmail: authorReceiptEmail,
         receiptUrl: opts.receiptUrl ?? undefined,
         paidAt: new Date(),
-        internalAmount: submission.payment?.internalAmount,
-        internalCurrency: submission.payment?.internalCurrency,
-        exchangeRate: submission.payment?.exchangeRate,
+        internalAmount: amountCents,
+        internalCurrency: "USD",
+        exchangeRate: 1,
       },
       update: {
         status: "PAID",
         amountCents,
         currency,
-        paystackReference: opts.reference ?? undefined,
+        paystackReference: reference,
         paystackAccessCode: opts.accessCode ?? undefined,
         customerEmail: authorReceiptEmail,
         receiptUrl: opts.receiptUrl ?? undefined,
         paidAt: new Date(),
+        internalAmount: amountCents,
+        internalCurrency: "USD",
+        exchangeRate: 1,
       },
     });
 
@@ -402,20 +368,21 @@ export async function markApcPaid(opts: {
         userId: sub.authorId,
         submissionId: sub.id,
         title: "Payment received",
-        body: `Your payment of ${amountLabel} has been received. Your manuscript is now in production.`,
+        body: `Your PayPal payment of ${amountLabel} has been received. Your manuscript is now in production.`,
       },
     });
 
     return sub;
   });
 
-  const base = appBaseUrl();
+  const base = getAppBaseUrl();
   const paidAt = updated.payment?.paidAt ?? new Date();
   const receiptNumber = nahdaReceiptNumber(updated.manuscriptId, paidAt);
 
   try {
+    // Always send the official Nahda receipt to the submitting author account.
     const mail = await sendEmail({
-      to: updated.author.email,
+      to: submission.author.email,
       subject: `Nahda Publications receipt: ${updated.manuscriptId} — ${amountLabel}`,
       html: apcReceiptEmailHtml({
         authorName: updated.author.name,
@@ -427,9 +394,9 @@ export async function markApcPaid(opts: {
           dateStyle: "medium",
           timeStyle: "short",
         }),
-        reference: opts.reference ?? updated.payment?.paystackReference,
+        reference,
         receiptNumber,
-        submissionUrl: `${base}/submissions/${updated.id}`,
+        submissionUrl: `${base}/dashboard`,
       }),
       text: [
         `Nahda Publications — APC payment receipt`,
@@ -438,15 +405,16 @@ export async function markApcPaid(opts: {
         `Status: PAID`,
         `Amount paid: ${amountLabel}`,
         `Currency: USD`,
+        `Method: PayPal (Nahda Publications)`,
         `Merchant: Nahda Publications`,
         `Journal: ${updated.journal.title}`,
         `Manuscript: ${updated.manuscriptId}`,
         `Title: ${updated.title}`,
         `Paid on: ${paidAt.toISOString()}`,
-        opts.reference ? `Reference: ${opts.reference}` : "",
+        `Reference: ${reference}`,
         ``,
         `Your manuscript is now in production.`,
-        `${base}/submissions/${updated.id}`,
+        `${base}/dashboard`,
       ]
         .filter(Boolean)
         .join("\n"),
@@ -459,7 +427,7 @@ export async function markApcPaid(opts: {
       console.error("[apc-receipt] send failed", mail.error);
     } else {
       console.info(
-        `[apc-receipt] sent Nahda USD receipt to ${updated.author.email}`,
+        `[apc-receipt] sent Nahda USD receipt to submitting author ${submission.author.email}`,
       );
     }
   } catch (err) {
@@ -469,7 +437,7 @@ export async function markApcPaid(opts: {
   void notifyAdmins({
     submissionId: updated.id,
     title: "APC payment received",
-    body: `${updated.author.name} paid ${amountLabel} APC for “${updated.title}” (${updated.manuscriptId}). Ready for production.`,
+    body: `${updated.author.name} paid ${amountLabel} APC (PayPal) for “${updated.title}” (${updated.manuscriptId}). Ready for production.`,
   }).catch((err) => console.error("[notify-admins apc]", err));
 
   return updated;

@@ -24,12 +24,14 @@ type AdminAuthValue = {
   login: (
     email: string,
     password: string,
+    turnstileToken?: string | null,
   ) => Promise<{ ok: boolean; error?: string }>;
   register: (input: {
     name: string;
     email: string;
     password: string;
     institution?: string;
+    turnstileToken?: string | null;
   }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -62,17 +64,24 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     })();
   }, [refresh]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch("/api/admin/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { ok: false, error: data.error ?? "Login failed" };
-    setUser(data.user);
-    return { ok: true };
-  }, []);
+  const login = useCallback(
+    async (
+      email: string,
+      password: string,
+      turnstileToken?: string | null,
+    ) => {
+      const res = await fetch("/api/admin/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, turnstileToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data.error ?? "Login failed" };
+      setUser(data.user);
+      return { ok: true };
+    },
+    [],
+  );
 
   const register = useCallback(
     async (input: {
@@ -80,6 +89,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       email: string;
       password: string;
       institution?: string;
+      turnstileToken?: string | null;
     }) => {
       const res = await fetch("/api/admin/auth/register", {
         method: "POST",

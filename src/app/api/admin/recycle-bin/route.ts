@@ -33,14 +33,25 @@ export async function GET() {
   return jsonOk({ articles, submissions });
 }
 
-const actionSchema = z.object({
-  action: z.enum(["restore", "purge"]),
-  type: z.enum(["article", "submission"]),
-  id: z.string().min(1),
-});
+const actionSchema = z
+  .object({
+    action: z.enum(["restore", "purge"]),
+    type: z.enum(["article", "submission"]),
+    id: z.string().min(1).optional(),
+    ids: z.array(z.string().min(1)).min(1).optional(),
+  })
+  .refine((body) => Boolean(body.id) || (body.ids && body.ids.length > 0), {
+    message: "Provide id or ids",
+  });
+
+function resolveIds(body: z.infer<typeof actionSchema>): string[] {
+  if (body.ids?.length) return [...new Set(body.ids)];
+  return body.id ? [body.id] : [];
+}
 
 /**
  * Restore from recycle bin, or permanently delete (purge).
+ * Accepts a single `id` or an `ids` array for bulk actions.
  */
 export async function POST(request: Request) {
   const admin = await requireAdmin(["SUPER_ADMIN"]);
@@ -48,57 +59,87 @@ export async function POST(request: Request) {
 
   try {
     const body = actionSchema.parse(await request.json());
+    const ids = resolveIds(body);
+    if (ids.length === 0) return jsonError("Provide id or ids");
 
     if (body.action === "restore") {
-      if (body.type === "article") {
-        const restored = await prisma.$transaction(async (tx) =>
-          restorePublishedArticle(tx, body.id),
+      const restored: string[] = [];
+      await prisma.$transaction(async (tx) => {
+        for (const id of ids) {
+          if (body.type === "article") {
+            const item = await restorePublishedArticle(tx, id);
+            if (item) restored.push(id);
+          } else {
+            const item = await restoreSubmission(tx, id);
+            if (item) restored.push(id);
+          }
+        }
+      });
+      if (restored.length === 0) {
+        return jsonError(
+          body.type === "article"
+            ? "Article not found in recycle bin"
+            : "Submission not found in recycle bin",
+          404,
         );
-        if (!restored) return jsonError("Article not found in recycle bin", 404);
-        return jsonOk({ ok: true, restored: "article", id: body.id });
       }
-
-      const restored = await prisma.$transaction(async (tx) =>
-        restoreSubmission(tx, body.id),
-      );
-      if (!restored) {
-        return jsonError("Submission not found in recycle bin", 404);
-      }
-      return jsonOk({ ok: true, restored: "submission", id: body.id });
+      return jsonOk({
+        ok: true,
+        restored: body.type,
+        ids: restored,
+        count: restored.length,
+      });
     }
 
     // Permanent delete
     if (body.type === "article") {
-      const article = await prisma.publishedArticle.findFirst({
-        where: { id: body.id, deletedAt: { not: null } },
+      const found = await prisma.publishedArticle.findMany({
+        where: { id: { in: ids }, deletedAt: { not: null } },
         select: { id: true },
       });
-      if (!article) return jsonError("Article not found in recycle bin", 404);
-      await prisma.publishedArticle.delete({ where: { id: article.id } });
-      return jsonOk({ ok: true, purged: "article", id: body.id });
+      if (found.length === 0) {
+        return jsonError("Article not found in recycle bin", 404);
+      }
+      const purgeIds = found.map((a) => a.id);
+      await prisma.publishedArticle.deleteMany({
+        where: { id: { in: purgeIds } },
+      });
+      return jsonOk({
+        ok: true,
+        purged: "article",
+        ids: purgeIds,
+        count: purgeIds.length,
+      });
     }
 
-    const submission = await prisma.submission.findFirst({
-      where: { id: body.id, deletedAt: { not: null } },
+    const found = await prisma.submission.findMany({
+      where: { id: { in: ids }, deletedAt: { not: null } },
       select: { id: true },
     });
-    if (!submission) {
+    if (found.length === 0) {
       return jsonError("Submission not found in recycle bin", 404);
     }
+    const purgeIds = found.map((s) => s.id);
 
-    // Any leftover soft-deleted article still linked via trashedSubmissionId
-    await prisma.publishedArticle.deleteMany({
-      where: {
-        OR: [
-          { trashedSubmissionId: submission.id },
-          { submissionId: submission.id },
-        ],
-        deletedAt: { not: null },
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.publishedArticle.deleteMany({
+        where: {
+          OR: [
+            { trashedSubmissionId: { in: purgeIds } },
+            { submissionId: { in: purgeIds } },
+          ],
+          deletedAt: { not: null },
+        },
+      });
+      await tx.submission.deleteMany({ where: { id: { in: purgeIds } } });
     });
 
-    await prisma.submission.delete({ where: { id: submission.id } });
-    return jsonOk({ ok: true, purged: "submission", id: body.id });
+    return jsonOk({
+      ok: true,
+      purged: "submission",
+      ids: purgeIds,
+      count: purgeIds.length,
+    });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return jsonError(err.issues[0]?.message ?? "Invalid input");

@@ -15,10 +15,18 @@ export async function GET() {
 const schema = z.object({
   title: z.string().min(2),
   summary: z.string().min(2),
-  href: z.string().optional(),
+  href: z.string().optional().nullable(),
+  imageUrl: z.string().url().optional().nullable(),
+  imagePublicId: z.string().optional().nullable(),
   publishedAt: z.string().datetime().optional(),
   isActive: z.boolean().optional(),
 });
+
+function cleanHref(href: string | null | undefined) {
+  if (href == null) return href;
+  const trimmed = href.trim();
+  return trimmed || null;
+}
 
 export async function POST(request: Request) {
   const admin = await requireAdmin(["SUPER_ADMIN"]);
@@ -28,9 +36,11 @@ export async function POST(request: Request) {
     const body = schema.parse(await request.json());
     const announcement = await prisma.announcement.create({
       data: {
-        title: body.title,
-        summary: body.summary,
-        href: body.href,
+        title: body.title.trim(),
+        summary: body.summary.trim(),
+        href: cleanHref(body.href),
+        imageUrl: body.imageUrl || null,
+        imagePublicId: body.imagePublicId || null,
         publishedAt: body.publishedAt ? new Date(body.publishedAt) : undefined,
         isActive: body.isActive ?? true,
       },
@@ -56,7 +66,18 @@ export async function PATCH(request: Request) {
     const announcement = await prisma.announcement.update({
       where: { id },
       data: {
-        ...data,
+        ...(data.title !== undefined ? { title: data.title.trim() } : {}),
+        ...(data.summary !== undefined
+          ? { summary: data.summary.trim() }
+          : {}),
+        ...(data.href !== undefined ? { href: cleanHref(data.href) } : {}),
+        ...(data.imageUrl !== undefined
+          ? { imageUrl: data.imageUrl || null }
+          : {}),
+        ...(data.imagePublicId !== undefined
+          ? { imagePublicId: data.imagePublicId || null }
+          : {}),
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
         publishedAt: data.publishedAt ? new Date(data.publishedAt) : undefined,
       },
     });

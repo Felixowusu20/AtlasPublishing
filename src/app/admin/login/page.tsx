@@ -2,21 +2,28 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 import {
   AUTH_IMAGES,
   AuthSplitLayout,
 } from "@/components/auth-split-layout";
 import { PasswordField } from "@/components/password-field";
+import { TurnstileField } from "@/components/turnstile-field";
+import { turnstileEnabled } from "@/lib/turnstile-public";
 
 export default function AdminLoginPage() {
   const { login, user, ready } = useAdminAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const needsTurnstile = turnstileEnabled();
+  const onToken = useCallback((token: string | null) => {
+    setTurnstileToken(token);
+  }, []);
 
   useEffect(() => {
     if (ready && user) router.replace("/admin");
@@ -24,9 +31,13 @@ export default function AdminLoginPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (needsTurnstile && !turnstileToken) {
+      setError("Please complete the human verification.");
+      return;
+    }
     setLoading(true);
     setError("");
-    const result = await login(email, password);
+    const result = await login(email, password, turnstileToken);
     setLoading(false);
     if (!result.ok) {
       setError(result.error ?? "Login failed");
@@ -67,6 +78,7 @@ export default function AdminLoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
           />
+          <TurnstileField onToken={onToken} />
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
               {error}

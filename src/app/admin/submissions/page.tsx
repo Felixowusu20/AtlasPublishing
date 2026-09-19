@@ -26,9 +26,30 @@ export default function AdminSubmissionsPage() {
   const [success, setSuccess] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pending, setPending] = useState<Submission | null>(null);
+  const [query, setQuery] = useState("");
   const [collapsedJournals, setCollapsedJournals] = useState<Set<string>>(
     () => new Set(),
   );
+
+  const filteredSubmissions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return submissions;
+    const words = q.split(/\s+/).filter(Boolean);
+    return submissions.filter((s) => {
+      const haystack = [
+        s.title,
+        s.manuscriptId,
+        s.status,
+        s.author.name,
+        s.author.email,
+        s.journal.title,
+        s.journal.shortTitle ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return words.every((word) => haystack.includes(word));
+    });
+  }, [submissions, query]);
 
   const journalGroups = useMemo(() => {
     const groups = new Map<
@@ -41,7 +62,7 @@ export default function AdminSubmissionsPage() {
       }
     >();
 
-    for (const submission of submissions) {
+    for (const submission of filteredSubmissions) {
       const key = submission.journal.id || submission.journal.title;
       const group = groups.get(key);
       if (group) {
@@ -59,7 +80,9 @@ export default function AdminSubmissionsPage() {
     return [...groups.values()].sort((a, b) =>
       a.title.localeCompare(b.title),
     );
-  }, [submissions]);
+  }, [filteredSubmissions]);
+
+  const searching = query.trim().length > 0;
 
   function toggleJournal(id: string) {
     setCollapsedJournals((current) => {
@@ -184,15 +207,38 @@ export default function AdminSubmissionsPage() {
       )}
 
       {!loading && submissions.length > 0 && (
-        <div className="mt-6 flex flex-wrap gap-2">
-          <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-            {journalGroups.length}{" "}
-            {journalGroups.length === 1 ? "journal" : "journals"}
-          </span>
-          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--muted)] ring-1 ring-[var(--line)]">
-            {submissions.length}{" "}
-            {submissions.length === 1 ? "submission" : "submissions"}
-          </span>
+        <div className="mt-6 space-y-3">
+          <label className="field max-w-xl">
+            <span className="sr-only">Search submissions</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by journal, title, manuscript ID, author…"
+              className="w-full"
+              autoComplete="off"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+              {journalGroups.length}{" "}
+              {journalGroups.length === 1 ? "journal" : "journals"}
+            </span>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--muted)] ring-1 ring-[var(--line)]">
+              {filteredSubmissions.length}
+              {searching ? ` of ${submissions.length}` : ""}{" "}
+              {filteredSubmissions.length === 1 ? "submission" : "submissions"}
+            </span>
+            {searching ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="text-xs font-semibold text-[var(--accent)] hover:underline"
+              >
+                Clear search
+              </button>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -203,8 +249,16 @@ export default function AdminSubmissionsPage() {
             No submissions yet.
           </p>
         )}
+        {!loading && submissions.length > 0 && filteredSubmissions.length === 0 && (
+          <p className="rounded-xl border border-dashed border-[var(--line)] bg-white p-8 text-center text-sm text-[var(--muted)]">
+            No submissions match “{query.trim()}”. Try a journal name, part of
+            the title, manuscript ID, or author.
+          </p>
+        )}
         {journalGroups.map((group) => {
-          const collapsed = collapsedJournals.has(group.id);
+          const collapsed = searching
+            ? false
+            : collapsedJournals.has(group.id);
           const statuses = new Map<string, number>();
           for (const submission of group.submissions) {
             const label = uiStatus(submission.status);

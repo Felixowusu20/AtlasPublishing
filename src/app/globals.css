@@ -115,11 +115,20 @@
 
 html {
   scroll-behavior: smooth;
+  font-size: 17px;
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+}
+
+@media (min-width: 640px) {
+  html {
+    font-size: 18px;
+  }
 }
 
 input[type="search"] {
@@ -142,8 +151,8 @@ input[type="search"]::-webkit-search-results-decoration {
   justify-content: center;
   border-radius: 0.625rem;
   background: var(--accent);
-  padding: 0.625rem 1.1rem;
-  font-size: 0.875rem;
+  padding: 0.7rem 1.2rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: white;
   transition: background 0.15s ease, transform 0.15s ease;
@@ -160,8 +169,8 @@ input[type="search"]::-webkit-search-results-decoration {
   border-radius: 0.625rem;
   border: 1px solid var(--line);
   background: var(--admin-card, var(--paper));
-  padding: 0.625rem 1.1rem;
-  font-size: 0.875rem;
+  padding: 0.7rem 1.2rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--ink);
   transition: background 0.15s ease;
@@ -175,7 +184,7 @@ input[type="search"]::-webkit-search-results-decoration {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 0.875rem;
+  font-size: 0.95rem;
   color: var(--ink);
 }
 
@@ -228,6 +237,68 @@ input[type="search"]::-webkit-search-results-decoration {
   will-change: transform;
   /* Keep scaled images inside the slide — prevents mobile horizontal bleed */
   transform-origin: center center;
+}
+
+@keyframes home-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes home-fade-scale {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes home-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-page-enter {
+  animation: home-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.home-reveal,
+.home-reveal-child {
+  animation: home-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+.home-goal-panel {
+  animation: home-panel-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.home-goal-image {
+  animation: home-fade-scale 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-page-enter,
+  .home-reveal,
+  .home-reveal-child,
+  .home-goal-panel,
+  .home-goal-image,
+  .hero-kenburns {
+    animation: none !important;
+  }
 }
 
 @keyframes research-marquee {
@@ -290,13 +361,13 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .page-title {
   font-family: var(--font-display), Georgia, serif;
-  font-size: 1.5rem;
+  font-size: 1.85rem;
   color: var(--ink);
 }
 
 @media (min-width: 640px) {
   .page-title {
-    font-size: 1.875rem;
+    font-size: 2.25rem;
   }
 }
 

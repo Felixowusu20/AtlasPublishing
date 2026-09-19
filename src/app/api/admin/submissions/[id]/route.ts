@@ -13,7 +13,10 @@ import { ensureApcCheckout } from "@/lib/apc-checkout";
 import { apcPayPageUrl } from "@/lib/payment-link";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { formatCustomerUsd } from "@/lib/payment-currency";
-import { paystackConfigured } from "@/lib/paystack";
+import {
+  journalPaymentAlias,
+  makePaypalPaymentReference,
+} from "@/lib/paypal";
 import type { SubmissionStatus } from "@/generated/prisma/client";
 import { withAdminPayment } from "@/lib/payment-dto";
 import {
@@ -209,15 +212,12 @@ export async function POST(request: Request, { params }: Params) {
     let emailSent = false;
     let checkoutUrl: string | null = null;
     let apcAmountLabel: string | null = null;
+    let paymentReference: string | null = null;
+    let journalAlias: string | null = null;
 
-    // On accept: create Paystack Checkout and email the pay link
+    // On accept: prepare PayPal APC payment + email instructions
     if (status === "ACCEPTED") {
       try {
-        if (!paystackConfigured()) {
-          console.warn(
-            "[accept-apc] PAYSTACK_SECRET_KEY missing — author must use Pay APC once keys are set",
-          );
-        }
         const checkout = await ensureApcCheckout({
           ...latestSubmission,
           author: {
@@ -228,6 +228,8 @@ export async function POST(request: Request, { params }: Params) {
         checkoutUrl = checkout.checkoutUrl;
         apcAmountLabel =
           checkout.amountCents > 0 ? checkout.amountLabel : null;
+        paymentReference = checkout.reference ?? null;
+        journalAlias = checkout.journalAlias;
 
         const refreshed = await prisma.submission.findUnique({
           where: { id },
@@ -247,15 +249,14 @@ export async function POST(request: Request, { params }: Params) {
         });
         if (refreshed) latestSubmission = refreshed;
       } catch (apcErr) {
-        console.error("[accept-apc] checkout setup failed", apcErr);
-        // Still mark APC pending so author can pay from the submission page once currency works
+        console.error("[accept-apc] PayPal checkout setup failed", apcErr);
         try {
           await prisma.submission.update({
             where: { id },
             data: {
               apcPaymentStatus: "PENDING",
               actionRequired:
-                "Please pay the article processing charge using the payment link in your email.",
+                "Please pay the article processing charge via PayPal using the instructions in your email.",
             },
           });
         } catch (pendingErr) {
@@ -266,25 +267,41 @@ export async function POST(request: Request, { params }: Params) {
 
     try {
       if (status === "ACCEPTED" && checkoutUrl && apcAmountLabel) {
+        const alias =
+          journalAlias || journalPaymentAlias(submission.journal);
+        const reference =
+          paymentReference ||
+          makePaypalPaymentReference({
+            journalAlias: alias,
+            manuscriptId: submission.manuscriptId,
+          });
         const mail = await sendEmail({
           to: submission.author.email,
-          subject: `Accepted: pay APC for ${submission.manuscriptId}`,
+          subject: `Accepted: pay APC via PayPal for ${submission.manuscriptId}`,
           html: apcPaymentEmailHtml({
             authorName: submission.author.name,
             title: submission.title,
             manuscriptId: submission.manuscriptId,
             journalTitle: submission.journal.title,
+            journalAlias: alias,
             amountLabel: apcAmountLabel,
+            dashboardUrl: `${base}/dashboard`,
             checkoutUrl,
+            paymentReference: reference,
             reviewFile,
           }),
           text: [
-            `Your manuscript ${submission.manuscriptId} was accepted.`,
-            `Please pay the APC (${apcAmountLabel}) using this payment link:`,
-            checkoutUrl,
-            ...(reviewFile
-              ? ["", `Download the review file (${reviewFile.name}):`, reviewFile.href]
-              : []),
+            `Your manuscript ${submission.manuscriptId} was accepted. APC due: ${apcAmountLabel}.`,
+            ``,
+            `Pay to Nahda Publications via PayPal: Asare Clement <Asareowusuclems2024@gmail.com>`,
+            `PayPal note (required): ${reference}`,
+            `Paper: ${submission.manuscriptId} · ${alias}`,
+            ``,
+            `1. Pay on PayPal: https://www.paypal.com/signin`,
+            `2. Return to your author dashboard: ${base}/dashboard`,
+            `3. Click Pay APC, then “I’ve sent the PayPal payment”.`,
+            `Your Nahda receipt will be emailed to ${submission.author.email} after we confirm.`,
+            ...(reviewFile ? ["", `Review file: ${reviewFile.href}`] : []),
           ].join("\n"),
         });
         emailSent = mail.ok;
@@ -300,25 +317,42 @@ export async function POST(request: Request, { params }: Params) {
               openAccess: submission.journal.openAccess,
             }),
           );
+        const alias =
+          journalAlias || journalPaymentAlias(submission.journal);
+        const reference =
+          paymentReference ||
+          latestSubmission.payment?.paystackReference ||
+          makePaypalPaymentReference({
+            journalAlias: alias,
+            manuscriptId: submission.manuscriptId,
+          });
         const mail = await sendEmail({
           to: submission.author.email,
-          subject: `Accepted: pay APC for ${submission.manuscriptId}`,
+          subject: `Accepted: pay APC via PayPal for ${submission.manuscriptId}`,
           html: apcPaymentEmailHtml({
             authorName: submission.author.name,
             title: submission.title,
             manuscriptId: submission.manuscriptId,
             journalTitle: submission.journal.title,
+            journalAlias: alias,
             amountLabel: amount,
+            dashboardUrl: `${base}/dashboard`,
             checkoutUrl: payUrl,
+            paymentReference: reference,
             reviewFile,
           }),
           text: [
-            `Your manuscript ${submission.manuscriptId} was accepted.`,
-            `Please pay the APC (${amount}) using this payment link:`,
-            payUrl,
-            ...(reviewFile
-              ? ["", `Download the review file (${reviewFile.name}):`, reviewFile.href]
-              : []),
+            `Your manuscript ${submission.manuscriptId} was accepted. APC due: ${amount}.`,
+            ``,
+            `Pay to Nahda Publications via PayPal: Asare Clement <Asareowusuclems2024@gmail.com>`,
+            `PayPal note (required): ${reference}`,
+            `Paper: ${submission.manuscriptId} · ${alias}`,
+            ``,
+            `1. Pay on PayPal: https://www.paypal.com/signin`,
+            `2. Return to your author dashboard: ${base}/dashboard`,
+            `3. Click Pay APC, then “I’ve sent the PayPal payment”.`,
+            `Your Nahda receipt will be emailed to ${submission.author.email} after we confirm.`,
+            ...(reviewFile ? ["", `Review file: ${reviewFile.href}`] : []),
           ].join("\n"),
         });
         emailSent = mail.ok;

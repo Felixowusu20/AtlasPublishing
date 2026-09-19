@@ -124,6 +124,7 @@ function DashboardInner() {
   const [notifications, setNotifications] = useState<ApiNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [paidJustNow, setPaidJustNow] = useState(false);
+  const [apcReported, setApcReported] = useState(false);
 
   async function refresh() {
     const [subsRes, notifRes] = await Promise.all([
@@ -145,9 +146,15 @@ function DashboardInner() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("paid") !== "1") return;
-    setPaidJustNow(true);
-    router.replace("/dashboard", { scroll: false });
+    if (params.get("paid") === "1") {
+      setPaidJustNow(true);
+      router.replace("/dashboard", { scroll: false });
+      return;
+    }
+    if (params.get("apc") === "reported") {
+      setApcReported(true);
+      router.replace("/dashboard", { scroll: false });
+    }
   }, [router]);
 
   const drafts = submissions.filter((s) => s.status === "DRAFT");
@@ -220,6 +227,18 @@ function DashboardInner() {
             <p className="mt-1 text-sm text-emerald-950">
               Your article processing charge has been received. Thank you — your
               manuscript can now proceed in production.
+            </p>
+          </div>
+        )}
+        {apcReported && (
+          <div className="mb-6 rounded-2xl border border-[var(--accent)]/25 bg-[var(--accent-soft)] px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+              PayPal payment reported
+            </p>
+            <p className="mt-1 text-sm text-[var(--ink)]">
+              Thanks — editors have been notified. After Nahda confirms your
+              PayPal payment, your official receipt is emailed to the submitting
+              author and the manuscript moves to production.
             </p>
           </div>
         )}

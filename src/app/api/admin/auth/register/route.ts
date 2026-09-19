@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonCreated, jsonError } from "@/lib/api";
+import { guardAuthPost } from "@/lib/auth-guard";
 import {
   ADMIN_SESSION_COOKIE,
   createToken,
@@ -15,6 +16,7 @@ const schema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   institution: z.string().optional(),
+  turnstileToken: z.string().optional().nullable(),
 });
 
 /** First super-admin bootstrap. Blocked once a SUPER_ADMIN already exists. */
@@ -31,6 +33,9 @@ export async function POST(request: Request) {
     }
 
     const body = schema.parse(await request.json());
+    const blocked = await guardAuthPost(request, body.turnstileToken);
+    if (blocked) return blocked;
+
     const email = body.email.trim().toLowerCase();
 
     const taken = await prisma.user.findUnique({ where: { email } });

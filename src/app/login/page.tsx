@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useEffect, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
   AUTH_IMAGES,
@@ -10,6 +10,8 @@ import {
 } from "@/components/auth-split-layout";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { PasswordField } from "@/components/password-field";
+import { TurnstileField } from "@/components/turnstile-field";
+import { turnstileEnabled } from "@/lib/turnstile-public";
 
 function LoginForm() {
   const { login, user, ready } = useAuth();
@@ -18,8 +20,13 @@ function LoginForm() {
   const next = params.get("next") || "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const needsTurnstile = turnstileEnabled();
+  const onToken = useCallback((token: string | null) => {
+    setTurnstileToken(token);
+  }, []);
 
   useEffect(() => {
     if (ready && user) router.replace(next);
@@ -27,9 +34,13 @@ function LoginForm() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (needsTurnstile && !turnstileToken) {
+      setError("Please complete the human verification.");
+      return;
+    }
     setLoading(true);
     setError("");
-    const result = await login(email, password);
+    const result = await login(email, password, turnstileToken);
     setLoading(false);
     if (!result.ok) {
       setError(result.error ?? "Login failed");
@@ -81,6 +92,8 @@ function LoginForm() {
               Forgot password?
             </Link>
           </div>
+
+          <TurnstileField onToken={onToken} />
 
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
