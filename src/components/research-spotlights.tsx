@@ -3,8 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import AOS from "aos";
-import { useAosReady } from "@/components/aos-provider";
 
 export type ResearchSpotlightCard = {
   id: string;
@@ -86,7 +84,7 @@ function Card({
   const aosProps = {
     "data-aos": "fade-up",
     "data-aos-delay": String(aosDelay),
-    "data-aos-duration": "750",
+    "data-aos-duration": "900",
   } as const;
 
   if (item.href) {
@@ -110,7 +108,6 @@ export function ResearchSpotlights({
   initialItems?: ResearchSpotlightCard[];
 }) {
   const [items, setItems] = useState<ResearchSpotlightCard[]>(initialItems);
-  const aosReady = useAosReady();
 
   useEffect(() => {
     if (initialItems.length > 0) return;
@@ -124,12 +121,6 @@ export function ResearchSpotlights({
       });
   }, [initialItems.length]);
 
-  useEffect(() => {
-    if (!aosReady || items.length === 0) return;
-    const id = window.setTimeout(() => AOS.refresh(), 80);
-    return () => window.clearTimeout(id);
-  }, [items.length, aosReady]);
-
   if (items.length === 0) return null;
 
   // Show unique cards (not the marquee duplicate loop) for AOS visibility;
@@ -142,13 +133,14 @@ export function ResearchSpotlights({
       className="research-spotlights border-b border-[var(--line)] bg-white"
       aria-label="Scientific research areas"
       data-aos="fade-up"
-      data-aos-duration="700"
+      data-aos-duration="900"
     >
       <div className="mx-auto max-w-6xl px-4 pt-8 sm:px-6 sm:pt-16">
         <div
           className="flex flex-wrap items-end justify-between gap-3"
           data-aos="fade-up"
           data-aos-delay="60"
+          data-aos-duration="900"
         >
           <div className="max-w-2xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">

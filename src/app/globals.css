@@ -1817,12 +1817,28 @@ input[type="search"]::-webkit-search-results-decoration {
   animation: home-goal-panel-in 0.28s ease-out;
 }
 
-/* AOS hides [data-aos] until .aos-animate — show content until boot completes */
+/*
+ * AOS scroll animations (aos/dist/aos.css is imported in aos-provider).
+ * Keep nodes clickable always. Before boot, show content so DB data is never blank.
+ * After boot, AOS owns opacity/transform until scroll triggers .aos-animate.
+ */
+[data-aos] {
+  pointer-events: auto !important;
+}
+
 html:not(.aos-ready) [data-aos] {
   opacity: 1 !important;
   transform: none !important;
   transition: none !important;
   pointer-events: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-aos] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 
 @media print {
