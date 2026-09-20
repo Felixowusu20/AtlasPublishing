@@ -42,7 +42,7 @@ export function JournalImageCard({
       }`}
       data-aos="fade-up"
       data-aos-delay={aosDelay || undefined}
-      data-aos-duration="750"
+      data-aos-duration="900"
       aria-label={journal.title}
     >
       <div

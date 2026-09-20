@@ -41,6 +41,7 @@ function typeLabel(articleType: string) {
 export function ArticleListingCard({
   article,
   showAbstract = true,
+  aosDelay = 0,
 }: Props) {
   const doi =
     article.doi && article.doi !== "Pending" ? article.doi : null;
@@ -49,6 +50,9 @@ export function ArticleListingCard({
   return (
     <article
       className="group flex h-full w-full min-w-0 max-w-full flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--line)] transition hover:-translate-y-0.5 hover:shadow-md hover:ring-[var(--accent)]/25"
+      data-aos="fade-up"
+      data-aos-delay={aosDelay || undefined}
+      data-aos-duration="900"
     >
       {/* Accent strip — mirrors article page masthead bar */}
       <div className="flex min-w-0 items-stretch bg-[var(--accent)] text-white">

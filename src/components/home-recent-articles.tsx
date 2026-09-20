@@ -109,6 +109,9 @@ function IndexedAside({
     <aside
       className={className}
       aria-label={section.title || "Where Nahda publications appear"}
+      data-aos="fade-up"
+      data-aos-delay="100"
+      data-aos-duration="900"
     >
       <div className="border-t border-[var(--line)]/80 pt-4 sm:pt-5">
         {section.eyebrow ? (
@@ -207,6 +210,8 @@ export function HomeRecentArticles({
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-14">
         <div
           className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3"
+          data-aos="fade-up"
+          data-aos-duration="900"
         >
           <div className="max-w-2xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)] sm:text-xs">
@@ -222,6 +227,9 @@ export function HomeRecentArticles({
           <Link
             href="/articles"
             className="shrink-0 self-start text-sm font-semibold text-[var(--accent)] hover:underline sm:self-auto sm:text-base"
+            data-aos="fade-up"
+            data-aos-delay="80"
+            data-aos-duration="900"
           >
             View all articles →
           </Link>
@@ -233,6 +241,9 @@ export function HomeRecentArticles({
             <Link
               href={`/articles/${featured.slug}`}
               className="group flex flex-col overflow-hidden rounded-2xl bg-[var(--ink)] text-white shadow-[0_20px_40px_-24px_rgba(11,31,51,0.55)] transition hover:-translate-y-1 hover:shadow-[0_28px_48px_-20px_rgba(30,104,71,0.45)] sm:rounded-3xl"
+              data-aos="fade-up"
+              data-aos-delay="60"
+              data-aos-duration="950"
             >
               <div className="relative">
                 <ImageFrame
@@ -286,6 +297,9 @@ export function HomeRecentArticles({
             {side.length === 0 ? (
               <div
                 className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[var(--line)] bg-white p-5 text-sm text-[var(--muted)] sm:rounded-3xl sm:p-6 sm:text-base"
+                data-aos="fade-up"
+                data-aos-delay="120"
+                data-aos-duration="900"
               >
                 More papers will appear here as they are published.
               </div>
@@ -302,6 +316,9 @@ export function HomeRecentArticles({
                     key={article.id}
                     href={`/articles/${article.slug}`}
                     className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-sm transition hover:-translate-y-1 hover:border-[var(--accent)]/30 hover:shadow-md sm:rounded-3xl"
+                    data-aos="fade-up"
+                    data-aos-delay={String(140 + index * 100)}
+                    data-aos-duration="950"
                   >
                     <ImageFrame
                       src={article.imageUrl}

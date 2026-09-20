@@ -1818,18 +1818,27 @@ input[type="search"]::-webkit-search-results-decoration {
 }
 
 /*
- * AOS defaults hide [data-aos] with opacity:0 and pointer-events:none until
- * .aos-animate. That blanks homepage papers / soft-nav content until a hard
- * refresh. Keep elements visible and clickable; motion can still apply.
+ * AOS scroll animations (aos/dist/aos.css is imported in aos-provider).
+ * Keep nodes clickable always. Before boot, show content so DB data is never blank.
+ * After boot, AOS owns opacity/transform until scroll triggers .aos-animate.
  */
 [data-aos] {
-  opacity: 1 !important;
   pointer-events: auto !important;
 }
 
 html:not(.aos-ready) [data-aos] {
+  opacity: 1 !important;
   transform: none !important;
   transition: none !important;
+  pointer-events: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-aos] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 
 @media print {

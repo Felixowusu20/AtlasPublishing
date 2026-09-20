@@ -2,9 +2,10 @@
 
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -18,89 +19,145 @@ export function useAosReady() {
   return useContext(AosReadyContext);
 }
 
-function ensureVisible() {
-  // Guarantees clickability even if AOS misses a node after soft navigation.
-  document.querySelectorAll("[data-aos]").forEach((el) => {
-    el.classList.add("aos-init", "aos-animate");
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Only unblock nodes that are already on screen but never received .aos-animate. */
+function unstickInView() {
+  document.querySelectorAll("[data-aos]:not(.aos-animate)").forEach((node) => {
+    const el = node as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const inView =
+      rect.bottom > 0 &&
+      rect.top < (window.innerHeight || document.documentElement.clientHeight);
+    if (inView) {
+      el.classList.add("aos-init", "aos-animate");
+    }
   });
 }
 
 /**
- * Boots AOS after load. Content stays visible via globals.css overrides so
- * soft navigation / remounts never blank papers or links.
+ * Scroll-triggered AOS for cards, images, and sections.
+ * Content stays clickable; above-fold nodes are unstuck if AOS misses them.
+ * Soft navigations refresh AOS so the next page can animate on scroll again.
  */
 export function AosProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
+  const booted = useRef(false);
 
-  const refresh = useCallback(() => {
-    if (!ready) return;
-    AOS.refresh();
-    ensureVisible();
-  }, [ready]);
+  useLayoutEffect(() => {
+    if (!booted.current) return;
+    // New route: let AOS re-scan so cards animate as the user scrolls.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          AOS.refreshHard();
+        } catch {
+          // ignore
+        }
+        window.setTimeout(unstickInView, 700);
+      });
+    });
+  }, [pathname]);
 
   useEffect(() => {
     let cancelled = false;
-    let idleId: number | undefined;
-    let timeoutId: number | undefined;
+    let bootTimer: number | undefined;
+    let refreshTimer: number | undefined;
+    let unstickTimer: number | undefined;
+    let observer: MutationObserver | undefined;
 
     const boot = () => {
-      if (cancelled) return;
+      if (cancelled || booted.current) return;
+      booted.current = true;
+
+      if (prefersReducedMotion()) {
+        document.documentElement.classList.add("aos-ready");
+        document
+          .querySelectorAll("[data-aos]")
+          .forEach((el) => el.classList.add("aos-init", "aos-animate"));
+        setReady(true);
+        return;
+      }
+
       AOS.init({
-        duration: 800,
+        duration: 900,
         easing: "ease-out-cubic",
         once: true,
         mirror: false,
-        offset: 40,
+        offset: 80,
         delay: 0,
         anchorPlacement: "top-bottom",
-        disableMutationObserver: true,
+        disableMutationObserver: false,
+        disable: prefersReducedMotion,
       });
+
       document.documentElement.classList.add("aos-ready");
       AOS.refresh();
-      ensureVisible();
+      // Above-fold only — do NOT force-animate below-fold (that kills scroll).
+      unstickTimer = window.setTimeout(unstickInView, 600);
       setReady(true);
     };
 
-    const schedule = () => {
-      if (cancelled) return;
-      if (typeof window.requestIdleCallback === "function") {
-        idleId = window.requestIdleCallback(() => boot(), { timeout: 1200 });
-      } else {
-        timeoutId = window.setTimeout(boot, 200);
-      }
-    };
-
     if (document.readyState === "complete") {
-      schedule();
+      bootTimer = window.setTimeout(boot, 40);
     } else {
-      window.addEventListener("load", schedule, { once: true });
+      const onReady = () => {
+        bootTimer = window.setTimeout(boot, 40);
+      };
+      window.addEventListener("load", onReady, { once: true });
+      if (document.readyState === "interactive") onReady();
+      else document.addEventListener("DOMContentLoaded", onReady, { once: true });
     }
+
+    observer = new MutationObserver((mutations) => {
+      if (!booted.current || prefersReducedMotion()) return;
+      let found = false;
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (
+            node.hasAttribute("data-aos") ||
+            node.querySelector?.("[data-aos]")
+          ) {
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+      if (!found) return;
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        try {
+          AOS.refresh();
+        } catch {
+          // ignore
+        }
+        window.setTimeout(unstickInView, 500);
+      }, 50);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    const onScroll = () => {
+      // Lightweight: if something in view is stuck, free it.
+      window.clearTimeout(unstickTimer);
+      unstickTimer = window.setTimeout(unstickInView, 200);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
       cancelled = true;
-      window.removeEventListener("load", schedule);
-      if (idleId != null) window.cancelIdleCallback?.(idleId);
-      if (timeoutId != null) window.clearTimeout(timeoutId);
+      window.clearTimeout(bootTimer);
+      window.clearTimeout(refreshTimer);
+      window.clearTimeout(unstickTimer);
+      window.removeEventListener("scroll", onScroll);
+      observer?.disconnect();
       document.documentElement.classList.remove("aos-ready");
     };
   }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    const id = window.setTimeout(() => {
-      AOS.refresh();
-      ensureVisible();
-    }, 50);
-    return () => window.clearTimeout(id);
-  }, [pathname, ready]);
-
-  useEffect(() => {
-    if (!ready) return;
-    const onLoad = () => refresh();
-    window.addEventListener("load", onLoad);
-    return () => window.removeEventListener("load", onLoad);
-  }, [ready, refresh]);
 
   return (
     <AosReadyContext.Provider value={ready}>{children}</AosReadyContext.Provider>
