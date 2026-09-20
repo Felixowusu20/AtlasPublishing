@@ -18,20 +18,16 @@ export function useAosReady() {
   return useContext(AosReadyContext);
 }
 
-function stripAosClasses() {
-  document.querySelectorAll(".aos-init, .aos-animate").forEach((el) => {
-    el.classList.remove("aos-init", "aos-animate");
+function ensureVisible() {
+  // Guarantees clickability even if AOS misses a node after soft navigation.
+  document.querySelectorAll("[data-aos]").forEach((el) => {
+    el.classList.add("aos-init", "aos-animate");
   });
 }
 
-function markReady(on: boolean) {
-  document.documentElement.classList.toggle("aos-ready", on);
-}
-
 /**
- * Boots AOS only after the document has finished loading (and React has
- * hydrated streamed trees). Starting earlier mutates className with
- * `aos-init` / `aos-animate` and triggers hydration mismatches.
+ * Boots AOS after load. Content stays visible via globals.css overrides so
+ * soft navigation / remounts never blank papers or links.
  */
 export function AosProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -39,7 +35,8 @@ export function AosProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(() => {
     if (!ready) return;
-    AOS.refreshHard();
+    AOS.refresh();
+    ensureVisible();
   }, [ready]);
 
   useEffect(() => {
@@ -49,7 +46,6 @@ export function AosProvider({ children }: { children: ReactNode }) {
 
     const boot = () => {
       if (cancelled) return;
-      stripAosClasses();
       AOS.init({
         duration: 800,
         easing: "ease-out-cubic",
@@ -60,18 +56,18 @@ export function AosProvider({ children }: { children: ReactNode }) {
         anchorPlacement: "top-bottom",
         disableMutationObserver: true,
       });
-      markReady(true);
+      document.documentElement.classList.add("aos-ready");
       AOS.refresh();
+      ensureVisible();
       setReady(true);
     };
 
     const schedule = () => {
       if (cancelled) return;
-      // Idle after load so Suspense/streaming hydration can finish first.
       if (typeof window.requestIdleCallback === "function") {
-        idleId = window.requestIdleCallback(() => boot(), { timeout: 1800 });
+        idleId = window.requestIdleCallback(() => boot(), { timeout: 1200 });
       } else {
-        timeoutId = window.setTimeout(boot, 400);
+        timeoutId = window.setTimeout(boot, 200);
       }
     };
 
@@ -86,16 +82,16 @@ export function AosProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("load", schedule);
       if (idleId != null) window.cancelIdleCallback?.(idleId);
       if (timeoutId != null) window.clearTimeout(timeoutId);
-      markReady(false);
-      stripAosClasses();
+      document.documentElement.classList.remove("aos-ready");
     };
   }, []);
 
   useEffect(() => {
     if (!ready) return;
     const id = window.setTimeout(() => {
-      AOS.refreshHard();
-    }, 80);
+      AOS.refresh();
+      ensureVisible();
+    }, 50);
     return () => window.clearTimeout(id);
   }, [pathname, ready]);
 

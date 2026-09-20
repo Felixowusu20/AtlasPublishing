@@ -1817,12 +1817,19 @@ input[type="search"]::-webkit-search-results-decoration {
   animation: home-goal-panel-in 0.28s ease-out;
 }
 
-/* AOS hides [data-aos] until .aos-animate — show content until boot completes */
-html:not(.aos-ready) [data-aos] {
+/*
+ * AOS defaults hide [data-aos] with opacity:0 and pointer-events:none until
+ * .aos-animate. That blanks homepage papers / soft-nav content until a hard
+ * refresh. Keep elements visible and clickable; motion can still apply.
+ */
+[data-aos] {
   opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+html:not(.aos-ready) [data-aos] {
   transform: none !important;
   transition: none !important;
-  pointer-events: auto !important;
 }
 
 @media print {
