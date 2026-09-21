@@ -21,6 +21,9 @@ const emptyForm = {
   href: "",
 };
 
+const WHATSAPP_CHANNEL =
+  "https://whatsapp.com/channel/0029Vb8PMfyKmCPVu8DaIt1E";
+
 async function uploadImage(file: File) {
   return uploadFileDirect(file, {
     folder: "atlas/announcements",
@@ -38,6 +41,8 @@ export default function AnnouncementsCmsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [waPaste, setWaPaste] = useState("");
+  const [waBusy, setWaBusy] = useState(false);
 
   async function load() {
     const res = await fetch("/api/admin/announcements");
@@ -75,10 +80,69 @@ export default function AnnouncementsCmsPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  async function importWhatsApp(publish: boolean) {
+    if (!waPaste.trim()) {
+      setError("Paste a WhatsApp channel post first.");
+      return;
+    }
+    setWaBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      if (!publish) {
+        const res = await fetch("/api/admin/announcements/import-whatsapp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: waPaste, preview: true }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Preview failed");
+        const p = data.preview as {
+          title: string;
+          summary: string;
+          href: string | null;
+          imageUrl: string | null;
+        };
+        setEditingId(null);
+        setFile(null);
+        setExistingImageUrl(p.imageUrl);
+        setForm({
+          title: p.title,
+          summary: p.summary,
+          href: p.href ?? "",
+        });
+        setSuccess(
+          "Parsed the WhatsApp paste into the form. Review, add an image if needed, then Publish.",
+        );
+        return;
+      }
+
+      const res = await fetch("/api/admin/announcements/import-whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: waPaste, publish: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Import failed");
+      setWaPaste("");
+      setSuccess(
+        data.deduped
+          ? (data.message ?? "Already imported for this link.")
+          : "WhatsApp post published to announcements.",
+      );
+      resetForm();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setWaBusy(false);
+    }
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!editingId && !file) {
-      setError("Choose a hero image for the announcement");
+    if (!editingId && !file && !existingImageUrl) {
+      setError("Choose a hero image, or import from WhatsApp (OG image).");
       return;
     }
     setLoading(true);
@@ -91,6 +155,8 @@ export default function AnnouncementsCmsPage() {
         const uploaded = await uploadImage(file);
         imageUrl = uploaded.url;
         imagePublicId = uploaded.publicId;
+      } else if (!editingId && existingImageUrl) {
+        imageUrl = existingImageUrl;
       }
 
       const payload: Record<string, unknown> = {
@@ -100,7 +166,7 @@ export default function AnnouncementsCmsPage() {
       };
       if (imageUrl) {
         payload.imageUrl = imageUrl;
-        payload.imagePublicId = imagePublicId;
+        payload.imagePublicId = imagePublicId ?? null;
       }
 
       const res = await fetch("/api/admin/announcements", {
@@ -153,13 +219,65 @@ export default function AnnouncementsCmsPage() {
           Announcements CMS
         </h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Homepage news cards with a hero image header. Edit any post to update
-          the image, title, summary, or link.
+          Homepage news cards with a hero image. Import scholarship / news posts
+          from your WhatsApp channel, or add manually.
         </p>
+
+        <section className="mt-6 rounded-2xl border border-[var(--line)] bg-[var(--accent-soft)]/40 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+            WhatsApp channel
+          </p>
+          <h2 className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
+            Import a channel post
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            WhatsApp does not offer a public feed API for channels, so copy a post
+            from{" "}
+            <a
+              href={WHATSAPP_CHANNEL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-[var(--accent)] hover:underline"
+            >
+              your channel
+            </a>{" "}
+            and paste it here. We extract title, body, apply link, and try the
+            link&apos;s preview image (like Chevening).
+          </p>
+          <label className="field mt-4">
+            <span>Paste post text</span>
+            <textarea
+              rows={8}
+              value={waPaste}
+              onChange={(e) => setWaPaste(e.target.value)}
+              placeholder={`Fully Funded UK Government Chevening Scholarship 2027 Open\n\nChevening is now accepting applications…\n\nhttps://www.chevening.org/apply/`}
+              className="font-mono text-xs sm:text-sm"
+            />
+          </label>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={waBusy}
+              onClick={() => void importWhatsApp(true)}
+            >
+              {waBusy ? "Working…" : "Publish from paste"}
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)]"
+              disabled={waBusy}
+              onClick={() => void importWhatsApp(false)}
+            >
+              Preview into form
+            </button>
+          </div>
+        </section>
+
         <div className="mt-6 space-y-4">
           {items.length === 0 && (
             <p className="rounded-2xl border border-dashed border-[var(--line)] bg-white p-6 text-sm text-[var(--muted)]">
-              No announcements yet. Add one with the form.
+              No announcements yet. Import from WhatsApp or add one with the form.
             </p>
           )}
           {items.map((item) => (
@@ -261,9 +379,11 @@ export default function AnnouncementsCmsPage() {
         <label className="field">
           <span>
             Hero image
-            {editingId ? " (optional — leave blank to keep current)" : ""}
+            {editingId || existingImageUrl
+              ? " (optional — leave blank to keep current / OG)"
+              : ""}
           </span>
-          {editingId && existingImageUrl ? (
+          {(editingId || existingImageUrl) && existingImageUrl ? (
             <div className="mb-2 overflow-hidden rounded-lg border border-[var(--line)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -276,7 +396,7 @@ export default function AnnouncementsCmsPage() {
           <input
             type="file"
             accept="image/*"
-            required={!editingId}
+            required={!editingId && !existingImageUrl}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
         </label>
@@ -305,7 +425,7 @@ export default function AnnouncementsCmsPage() {
           <input
             value={form.href}
             onChange={(e) => setForm((p) => ({ ...p, href: e.target.value }))}
-            placeholder="/journals/…"
+            placeholder="https://www.chevening.org/apply/"
           />
         </label>
 
