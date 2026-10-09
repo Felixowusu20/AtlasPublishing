@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState, use } from "react";
 import { ManuscriptViewer } from "@/components/manuscript-viewer";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { FeedbackHistory } from "@/components/feedback-history";
+import { SubmissionProgressBar } from "@/components/submission-progress-bar";
 import { readApiJson, uploadFileDirect } from "@/lib/client-upload";
 import { formatBytes } from "@/lib/prepare-upload-file";
 import { formatArticleDate } from "@/lib/article-dates";
@@ -277,18 +278,12 @@ export default function AdminSubmissionDetailPage({
             </span>
           </p>
 
-          <div className="mt-4">
-            <div className="mb-1 flex justify-between text-[10px] uppercase tracking-wider text-[var(--muted)]">
-              <span>Author-visible progress</span>
-              <span>{submission.progress}%</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-[var(--surface)]">
-              <div
-                className="h-full rounded-full bg-[var(--accent)] transition-all"
-                style={{ width: `${submission.progress}%` }}
-              />
-            </div>
-          </div>
+          <SubmissionProgressBar
+            className="mt-4"
+            label="Author-visible progress"
+            progress={submission.progress}
+            published={submission.status === "PUBLISHED"}
+          />
 
           <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-5">
             <h2 className="text-sm font-semibold">Abstract</h2>
@@ -318,7 +313,9 @@ export default function AdminSubmissionDetailPage({
                     Payment status
                   </dt>
                   <dd className="mt-0.5 font-medium">
-                    {submission.payment.status}
+                    {submission.payment.status === "REPORTED"
+                      ? "Payment reported"
+                      : submission.payment.status}
                   </dd>
                 </div>
                 <div>
@@ -444,14 +441,25 @@ export default function AdminSubmissionDetailPage({
             submission.status === "IN_PRODUCTION") && (
             <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
               <p className="font-medium">
-                {submission.apcPaymentStatus === "PENDING"
-                  ? "Waiting for APC payment"
-                  : submission.status === "IN_PRODUCTION"
-                    ? "In production"
-                    : "Ready for production"}
+                {submission.apcPaymentStatus === "REPORTED"
+                  ? "Payment reported — awaiting confirmation"
+                  : submission.apcPaymentStatus === "PENDING"
+                    ? "Waiting for APC payment"
+                    : submission.status === "IN_PRODUCTION"
+                      ? "In production"
+                      : "Ready for production"}
               </p>
-              {submission.apcPaymentStatus === "PENDING" ? (
+              {submission.apcPaymentStatus === "PENDING" ||
+              submission.apcPaymentStatus === "REPORTED" ? (
                 <div className="flex flex-wrap gap-3">
+                  {submission.apcPaymentStatus === "REPORTED" ? (
+                    <Link
+                      href="/admin/apc-inbox"
+                      className="text-xs font-semibold text-[var(--accent)] underline"
+                    >
+                      Open APC inbox
+                    </Link>
+                  ) : null}
                   <button
                     type="button"
                     disabled={confirming}

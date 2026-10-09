@@ -36,6 +36,8 @@ enum ReviewType {
 enum ApcPaymentStatus {
   NOT_REQUIRED
   PENDING
+  /// Author reported a PayPal transfer; awaiting editorial confirmation.
+  REPORTED
   PAID
   WAIVED
 }
@@ -282,6 +284,8 @@ model Payment {
   paystackAccessCode String?
   customerEmail      String?
   receiptUrl         String?
+  /// When the author clicked “I’ve sent payment” (PayPal reported).
+  reportedAt         DateTime?
   paidAt             DateTime?
   waivedAt           DateTime?
   waivedById         String?
@@ -290,6 +294,7 @@ model Payment {
 
   @@index([status])
   @@index([paystackReference])
+  @@index([reportedAt])
 }
 
 model ReviewFeedback {

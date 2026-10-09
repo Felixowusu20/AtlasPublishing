@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PaypalApcPanel } from "@/components/paypal-apc-panel";
+import { ApcPayPanel } from "@/components/apc-pay-panel";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { RequireAuth } from "@/components/require-auth";
 
@@ -11,65 +11,37 @@ type PayInfo = {
   manuscriptId: string;
   title: string;
   apcPaymentStatus?: string | null;
-  payment?: { amountLabel?: string | null } | null;
+  payment?: {
+    amountCents?: number | null;
+    amountLabel?: string | null;
+  } | null;
 };
 
 function AuthorPayInner({ submissionId }: { submissionId: string }) {
   const router = useRouter();
   const [info, setInfo] = useState<PayInfo | null>(null);
-  const [amountLabel, setAmountLabel] = useState("");
-  const [paymentReference, setPaymentReference] = useState<string | null>(null);
-  const [journalAlias, setJournalAlias] = useState<string | undefined>();
-  const [journalTitle, setJournalTitle] = useState<string | undefined>();
   const [error, setError] = useState("");
   const [paid, setPaid] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
-        const [subRes, checkoutRes] = await Promise.all([
-          fetch(`/api/submissions/${encodeURIComponent(submissionId)}`),
-          fetch("/api/payments/checkout", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ submissionId }),
-          }),
-        ]);
+        const subRes = await fetch(
+          `/api/submissions/${encodeURIComponent(submissionId)}`,
+        );
         const subData = await subRes.json();
-        const checkoutData = await checkoutRes.json();
         if (!subRes.ok) {
           throw new Error(subData.error ?? "Could not load payment");
         }
         const sub = subData.submission as PayInfo;
         setInfo(sub);
 
-        const alreadyCleared =
-          Boolean(checkoutData.alreadyCleared) ||
+        if (
           sub.apcPaymentStatus === "PAID" ||
-          sub.apcPaymentStatus === "WAIVED";
-        if (alreadyCleared) {
+          sub.apcPaymentStatus === "WAIVED"
+        ) {
           setPaid(true);
           router.replace("/dashboard?paid=1");
-          return;
-        }
-
-        if (typeof checkoutData.amountLabel === "string" && checkoutData.amountLabel) {
-          setAmountLabel(checkoutData.amountLabel);
-        } else if (sub.payment?.amountLabel) {
-          setAmountLabel(sub.payment.amountLabel);
-        }
-        if (typeof checkoutData.paymentReference === "string") {
-          setPaymentReference(checkoutData.paymentReference);
-        }
-        if (typeof checkoutData.journalAlias === "string") {
-          setJournalAlias(checkoutData.journalAlias);
-        }
-        if (typeof checkoutData.journalTitle === "string") {
-          setJournalTitle(checkoutData.journalTitle);
-        }
-
-        if (!checkoutRes.ok) {
-          throw new Error(checkoutData.error ?? "Could not load PayPal instructions");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not load payment");
@@ -107,13 +79,16 @@ function AuthorPayInner({ submissionId }: { submissionId: string }) {
           ← Author dashboard
         </a>
       </p>
-      <PaypalApcPanel
+      <ApcPayPanel
         submissionId={info.id}
         manuscriptId={info.manuscriptId}
-        amountLabel={amountLabel || info.payment?.amountLabel || ""}
-        journalTitle={journalTitle}
-        journalAlias={journalAlias}
-        paymentReference={paymentReference}
+        apcPaymentStatus={info.apcPaymentStatus}
+        amountCents={info.payment?.amountCents}
+        amountLabel={info.payment?.amountLabel}
+        onPaid={() => {
+          setPaid(true);
+          router.replace("/dashboard?paid=1");
+        }}
       />
     </div>
   );

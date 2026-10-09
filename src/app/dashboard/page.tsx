@@ -9,6 +9,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ResubmitPanel } from "@/components/resubmit-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { ReviewFileDownload } from "@/components/review-file-download";
+import { SubmissionProgressBar } from "@/components/submission-progress-bar";
 import { initials } from "@/lib/auth";
 import { canAuthorResubmit, uiStatus, articleDownloadPath, authorApcPayPath } from "@/lib/submission-utils";
 import type { SubmissionStatus as UiSubmissionStatus } from "@/lib/types";
@@ -81,6 +82,8 @@ function canResubmit(sub: ApiSubmission) {
 
 function needsAuthorAction(sub: ApiSubmission) {
   if (sub.status === "PUBLISHED" || sub.status === "REJECTED") return false;
+  // Author already reported PayPal — ball is with editors.
+  if (sub.apcPaymentStatus === "REPORTED") return false;
   if (
     (sub.status === "ACCEPTED" || sub.status === "IN_PRODUCTION") &&
     (sub.apcPaymentStatus === "PENDING" ||
@@ -419,6 +422,13 @@ function DashboardInner() {
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusBadge status={toUiStatus(sub.status)} />
                             {!isPublished &&
+                              sub.apcPaymentStatus === "REPORTED" && (
+                                <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                  Payment reported
+                                </span>
+                              )}
+                            {!isPublished &&
+                              sub.apcPaymentStatus !== "REPORTED" &&
                               (sub.actionRequired ||
                                 sub.apcPaymentStatus === "PENDING" ||
                                 sub.status === "MAJOR_REVISION" ||
@@ -515,18 +525,12 @@ function DashboardInner() {
                         </div>
                       )}
 
-                      <div className="mt-4">
-                        <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">
-                          <span>Editorial progress</span>
-                          <span>{progress}%</span>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface)]">
-                          <div
-                            className="h-full rounded-full bg-[var(--accent)] transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                      </div>
+                      <SubmissionProgressBar
+                        className="mt-4"
+                        size="sm"
+                        progress={progress}
+                        published={isPublished}
+                      />
 
                       {sub.feedback?.[0] && (
                         <div className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--surface)]/60 px-3 py-2.5">

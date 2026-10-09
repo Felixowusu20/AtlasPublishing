@@ -70,8 +70,10 @@ export function livePendingApcCents(
   if (!journal) return payment?.amountCents ?? null;
   if (
     apcPaymentStatus === "PENDING" ||
+    apcPaymentStatus === "REPORTED" ||
     apcPaymentStatus === "NOT_REQUIRED" ||
     payment?.status === "PENDING" ||
+    payment?.status === "REPORTED" ||
     payment?.status === "NOT_REQUIRED"
   ) {
     return parseApcAmountCents(journal.apc, { openAccess: journal.openAccess });

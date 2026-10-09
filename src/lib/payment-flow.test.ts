@@ -88,6 +88,15 @@ test("pending APC follows the current journal fee", () => {
   assert.equal(paid, 5000);
 });
 
+test("reported APC still follows the live journal fee until confirmed", () => {
+  const live = livePendingApcCents(
+    { apc: "$120", openAccess: true },
+    { id: "p", amountCents: 5000, status: "REPORTED" },
+    "REPORTED",
+  );
+  assert.equal(live, 12000);
+});
+
 test("frontend cannot manipulate the internal Paystack amount", () => {
   const parsed = customerCheckoutRequestSchema.parse({
     submissionId: "sub_trusted",

@@ -121,10 +121,13 @@ export async function POST(request: Request, { params }: Params) {
     // Production / publish statuses require APC cleared first
     if (
       (status === "IN_PRODUCTION" || status === "PUBLISHED") &&
-      submission.apcPaymentStatus === "PENDING"
+      (submission.apcPaymentStatus === "PENDING" ||
+        submission.apcPaymentStatus === "REPORTED")
     ) {
       return jsonError(
-        "APC payment is still pending. Wait for the author to pay, or waive the APC first.",
+        submission.apcPaymentStatus === "REPORTED"
+          ? "APC payment was reported but not confirmed yet. Confirm or waive APC first (Admin → APC inbox)."
+          : "APC payment is still pending. Wait for the author to pay, or waive the APC first.",
         400,
       );
     }

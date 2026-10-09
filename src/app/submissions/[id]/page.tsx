@@ -9,6 +9,7 @@ import { ResubmitPanel } from "@/components/resubmit-panel";
 import { ApcPayPanel } from "@/components/apc-pay-panel";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { FeedbackHistory } from "@/components/feedback-history";
+import { SubmissionProgressBar } from "@/components/submission-progress-bar";
 import {
   articleDownloadPath,
   canAuthorResubmit,
@@ -117,15 +118,21 @@ function Detail({ id }: { id: string }) {
         {sub.journal.title} · {sub.articleType}
       </p>
 
+      <SubmissionProgressBar
+        className="mt-6"
+        progress={sub.progress}
+        published={isPublished}
+      />
+
       {isPublished ? (
-        <section className="mt-8 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
+        <section className="mt-6 rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 to-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-rose-800">
             Published
           </p>
           <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)] sm:text-2xl">
             Your article is live
           </h2>
-          <p className="mt-2 max-w-xl text-sm text-emerald-950/80">
+          <p className="mt-2 max-w-xl text-sm text-rose-950/80">
             Editorial tracking and resubmission are closed. Download the final
             Nahda PDF below, or open the public article page.
           </p>
@@ -160,22 +167,12 @@ function Detail({ id }: { id: string }) {
             </span>
           </div>
         </section>
-      ) : (
-        <div className="mt-6">
-          <div className="mb-1.5 flex justify-between text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">
-            <span>Editorial progress</span>
-            <span>{sub.progress}%</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-[var(--surface)]">
-            <div
-              className="h-full rounded-full bg-[var(--accent)] transition-all"
-              style={{ width: `${sub.progress}%` }}
-            />
-          </div>
-        </div>
-      )}
+      ) : null}
 
-      {!isPublished && sub.actionRequired && sub.apcPaymentStatus !== "PENDING" && (
+      {!isPublished &&
+        sub.actionRequired &&
+        sub.apcPaymentStatus !== "PENDING" &&
+        sub.apcPaymentStatus !== "REPORTED" && (
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           {sub.actionRequired}
         </div>
@@ -183,6 +180,7 @@ function Detail({ id }: { id: string }) {
 
       {(sub.status === "ACCEPTED" ||
         sub.apcPaymentStatus === "PENDING" ||
+        sub.apcPaymentStatus === "REPORTED" ||
         sub.apcPaymentStatus === "PAID" ||
         sub.apcPaymentStatus === "WAIVED") && (
         <ApcPayPanel

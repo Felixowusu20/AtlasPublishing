@@ -132,6 +132,7 @@ export async function PUT(request: Request) {
     const submission = await prisma.submission.findFirst({
       where: { id: body.submissionId, authorId: session.sub },
       include: {
+        journal: true,
         payment: true,
         author: { select: { name: true, email: true } },
       },
@@ -142,21 +143,46 @@ export async function PUT(request: Request) {
       return jsonOk({ alreadyCleared: true, status: submission.apcPaymentStatus });
     }
 
-    await prisma.submission.update({
-      where: { id: submission.id },
-      data: {
-        actionRequired:
-          "Author reported PayPal APC payment sent — awaiting editorial confirmation.",
-      },
-    });
+    if (submission.apcPaymentStatus === "REPORTED") {
+      return jsonOk({ reported: true, status: "REPORTED", alreadyReported: true });
+    }
+
+    // Ensure Payment row + reference exist, then mark REPORTED for the admin inbox.
+    const prepared = await prepareApcPayment(submission);
+    if (isApcAlreadyCleared(prepared.status)) {
+      return jsonOk({ alreadyCleared: true, status: prepared.status });
+    }
+    if (!prepared.paymentId) {
+      return jsonError("Could not prepare APC payment", 500);
+    }
+
+    const reportedAt = new Date();
+    await prisma.$transaction([
+      prisma.submission.update({
+        where: { id: submission.id },
+        data: {
+          apcPaymentStatus: "REPORTED",
+          actionRequired:
+            "PayPal APC payment reported — awaiting editorial confirmation.",
+        },
+      }),
+      prisma.payment.update({
+        where: { id: prepared.paymentId },
+        data: {
+          status: "REPORTED",
+          reportedAt,
+          customerEmail: submission.author.email,
+        },
+      }),
+    ]);
 
     void notifyAdmins({
       submissionId: submission.id,
-      title: "Author reports PayPal APC sent",
-      body: `${submission.author.name} (${submission.author.email}) says they paid APC for “${submission.title}” (${submission.manuscriptId})${body.note ? `. Note: ${body.note}` : ""}. Confirm in the submission and a receipt will be emailed to the author.`,
+      title: "APC awaiting confirmation",
+      body: `${submission.author.name} (${submission.author.email}) reported PayPal APC for “${submission.title}” (${submission.manuscriptId})${body.note ? `. Note: ${body.note}` : ""}. Open Admin → APC inbox to confirm and email the receipt.`,
     }).catch((err) => console.error("[notify-admins paypal]", err));
 
-    return jsonOk({ reported: true });
+    return jsonOk({ reported: true, status: "REPORTED" });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return jsonError(err.issues[0]?.message ?? "Invalid input");

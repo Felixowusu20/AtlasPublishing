@@ -16,6 +16,7 @@ type NavIcon =
   | "publish"
   | "ai"
   | "finances"
+  | "apc"
   | "hero"
   | "research"
   | "doi"
@@ -66,6 +67,13 @@ const nav: {
     label: "AI assist",
     short: "AI",
     icon: "ai",
+    roles: ["SUPER_ADMIN", "REVIEWER"],
+  },
+  {
+    href: "/admin/apc-inbox",
+    label: "APC awaiting confirmation",
+    short: "APC",
+    icon: "apc",
     roles: ["SUPER_ADMIN", "REVIEWER"],
   },
   {
@@ -265,6 +273,13 @@ function NavGlyph({
           <path d="M3 10h18" />
           <path d="M7 15h2" />
           <path d="M12 15h5" />
+        </svg>
+      );
+    case "apc":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
         </svg>
       );
     case "hero":
