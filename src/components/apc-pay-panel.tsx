@@ -78,6 +78,33 @@ export function ApcPayPanel({
     })();
   }, [apcPaymentStatus, submissionId, onPaid, router]);
 
+  if (apcPaymentStatus === "REPORTED") {
+    return (
+      <section className="mt-6 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+        <div className="border-b border-amber-100 bg-amber-50 px-5 py-4 sm:px-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-800">
+            Payment reported
+          </p>
+          <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+            Awaiting editorial confirmation
+          </h2>
+        </div>
+        <div className="space-y-2 px-5 py-5 text-sm text-[var(--muted)] sm:px-6">
+          <p>
+            You reported a PayPal transfer
+            {amountLabel ? ` of ${amountLabel}` : ""}. Editors will confirm when
+            funds arrive; your Nahda receipt is then emailed to the submitting
+            author and the manuscript moves to production.
+          </p>
+          <p className="text-xs">
+            Manuscript {manuscriptId}. No further action is needed unless an
+            editor contacts you.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   if (
     cleared ||
     apcPaymentStatus === "PAID" ||

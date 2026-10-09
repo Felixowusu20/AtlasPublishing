@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { NahdaLoader } from "@/components/nahda-loader";
+import { SubmissionProgressBar } from "@/components/submission-progress-bar";
 import { formatArticleDate } from "@/lib/article-dates";
 import { uiStatus } from "@/lib/submission-utils";
 
@@ -361,18 +362,12 @@ export default function AdminSubmissionsPage() {
                                 {formatArticleDate(sub.submittedAt) || "—"}
                               </span>
                             </p>
-                            <div className="mt-3">
-                              <div className="mb-1 flex justify-between text-[10px] uppercase tracking-wider text-[var(--muted)]">
-                                <span>Editorial progress</span>
-                                <span>{sub.progress}%</span>
-                              </div>
-                              <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface)]">
-                                <div
-                                  className="h-full rounded-full bg-[var(--accent)]"
-                                  style={{ width: `${sub.progress}%` }}
-                                />
-                              </div>
-                            </div>
+                            <SubmissionProgressBar
+                              className="mt-3"
+                              size="sm"
+                              progress={sub.progress}
+                              published={sub.status === "PUBLISHED"}
+                            />
                           </Link>
                           <button
                             type="button"

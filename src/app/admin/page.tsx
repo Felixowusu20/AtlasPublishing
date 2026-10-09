@@ -268,6 +268,13 @@ export default function AdminHomePage() {
             hint="Editorial AI checks"
             icon={<AiIcon />}
           />
+          <Stat
+            label="APC inbox"
+            value="PayPal"
+            href="/admin/apc-inbox"
+            hint="Awaiting confirmation"
+            icon={<InboxIcon />}
+          />
           {user.role === "SUPER_ADMIN" && (
             <>
               <Stat

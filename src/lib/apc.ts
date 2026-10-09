@@ -63,5 +63,12 @@ export function isApcCleared(
 export function needsApcPayment(
   status: ApcPaymentStatus | string | null | undefined,
 ): boolean {
-  return status === "PENDING";
+  return status === "PENDING" || status === "REPORTED";
+}
+
+/** Author says PayPal was sent; editors still need to confirm. */
+export function isApcReported(
+  status: ApcPaymentStatus | string | null | undefined,
+): boolean {
+  return status === "REPORTED";
 }

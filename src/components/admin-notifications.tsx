@@ -6,6 +6,10 @@ import {
 } from "@/components/realtime-notifications";
 
 function adminHref(n: AppNotification) {
+  const title = (n.title ?? "").toLowerCase();
+  if (title.includes("apc awaiting") || title.includes("paypal apc")) {
+    return "/admin/apc-inbox";
+  }
   if (!n.submissionId) return "/admin/submissions";
   const status = n.submission?.status;
   if (status === "ACCEPTED" || status === "IN_PRODUCTION") {

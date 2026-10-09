@@ -72,6 +72,20 @@ export async function syncPendingApcFromJournal(journal: Journal): Promise<void>
   }
 
   await prisma.$transaction([
+    // Keep REPORTED amount in sync without demoting status back to PENDING.
+    prisma.payment.updateMany({
+      where: {
+        status: "REPORTED",
+        submission: { journalId: journal.id },
+      },
+      data: {
+        amountCents: usdCents,
+        currency: "usd",
+        internalAmount: usdCents,
+        internalCurrency: "USD",
+        exchangeRate: 1,
+      },
+    }),
     prisma.payment.updateMany({
       where: {
         status: { in: ["PENDING", "NOT_REQUIRED"] },
@@ -128,6 +142,52 @@ export async function prepareApcPayment(
       reference: submission.payment?.paystackReference ?? null,
       authorEmail: submission.author?.email ?? null,
       payment: submission.payment ?? null,
+      journalAlias,
+    };
+  }
+
+  // Keep author-reported payments in the confirmation inbox (do not reset to PENDING).
+  if (
+    submission.apcPaymentStatus === "REPORTED" ||
+    submission.payment?.status === "REPORTED"
+  ) {
+    const usdCents = parseApcAmountCents(submission.journal.apc, {
+      openAccess: submission.journal.openAccess,
+    });
+    const cents =
+      usdCents > 0
+        ? usdCents
+        : submission.payment?.amountCents ?? 0;
+    const amountLabel = formatCustomerUsd(cents);
+    const reference =
+      submission.payment?.paystackReference ||
+      makePaypalPaymentReference({
+        journalAlias,
+        manuscriptId: submission.manuscriptId,
+      });
+    let payment = submission.payment ?? null;
+    if (payment && usdCents > 0 && payment.amountCents !== usdCents) {
+      payment = await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          amountCents: usdCents,
+          internalAmount: usdCents,
+          currency: "usd",
+          internalCurrency: "USD",
+          exchangeRate: 1,
+          paystackReference: reference,
+          status: "REPORTED",
+        },
+      });
+    }
+    return {
+      amountCents: cents,
+      amountLabel,
+      status: "REPORTED",
+      paymentId: payment?.id ?? null,
+      reference,
+      authorEmail: submission.author?.email ?? null,
+      payment,
       journalAlias,
     };
   }
@@ -190,6 +250,7 @@ export async function prepareApcPayment(
   });
   const email = submission.author?.email?.trim() || null;
 
+  // REPORTED is handled above and never reaches here, so PENDING is safe.
   const payment = await prisma.payment.upsert({
     where: { submissionId: submission.id },
     create: {
