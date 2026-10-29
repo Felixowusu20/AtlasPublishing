@@ -371,8 +371,10 @@ export function reviewerResubmissionNoticeHtml(opts: {
     bodyHtml: `
       <p style="margin:0 0 14px">Dear ${escapeHtml(opts.reviewerName)},</p>
       <p style="margin:0 0 14px">
-        ${escapeHtml(opts.authorName)} has uploaded a revised file for
-        <strong>${escapeHtml(opts.title)}</strong>.
+        ${escapeHtml(opts.authorName)} has replaced the manuscript for
+        <strong>${escapeHtml(opts.title)}</strong> with a revised file, and
+        uploaded a separate response showing how the comments were addressed.
+        Both files are on the submission page to read or download.
       </p>
     `,
     cta: { href: opts.adminUrl, label: "Open in inbox" },
@@ -558,8 +560,8 @@ export function apcPaymentEmailHtml(opts: {
         1. Open PayPal and send
         <strong>${escapeHtml(opts.amountLabel)}</strong> to the account above.<br/>
         2. Return to your <strong>Nahda author dashboard</strong>.<br/>
-        3. Click <strong>Pay APC</strong>, then
-        <strong>I’ve sent the PayPal payment</strong>.
+        3. Click <strong>Pay APC</strong>, upload a screenshot of the payment,
+        then click <strong>I’ve sent the PayPal payment</strong>.
       </p>
       <p style="margin:0 0 4px;font-size:13px">
         <a href="https://www.paypal.com/signin" style="color:${BRAND.green};font-weight:600"

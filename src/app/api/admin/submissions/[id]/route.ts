@@ -51,7 +51,18 @@ export async function GET(_request: Request, { params }: Params) {
 
   if (!submission) return jsonError("Not found", 404);
   if (submission.deletedAt) return jsonError("Not found", 404);
-  return jsonOk({ submission: withAdminPayment(submission) });
+  return jsonOk({
+    submission: {
+      ...withAdminPayment(submission),
+      paymentProof: submission.payment?.proofUrl
+        ? {
+            url: submission.payment.proofUrl,
+            publicId: submission.payment.proofPublicId,
+            fileName: submission.payment.proofFileName,
+          }
+        : null,
+    },
+  });
 }
 
 const reviewSchema = z
@@ -77,6 +88,7 @@ const reviewSchema = z
     fileResourceType: z.enum(["image", "raw", "auto", "video"]).optional(),
   })
   .superRefine((value, ctx) => {
+    if (value.status === "ACCEPTED") return;
     const comment = value.message.trim();
     if (value.fileUrl) return;
     if (comment.length < 10) {
@@ -109,9 +121,11 @@ export async function POST(request: Request, { params }: Params) {
     const comment = body.message.trim();
     const storedMessage =
       comment ||
-      (body.fileName
-        ? `Review file attached: ${body.fileName}`
-        : "Review file attached.");
+      (status === "ACCEPTED"
+        ? "Manuscript accepted."
+        : body.fileName
+          ? `Review file attached: ${body.fileName}`
+          : "Review file attached.");
     const notificationBody = comment
       ? comment.slice(0, 280)
       : body.fileName
@@ -302,7 +316,7 @@ export async function POST(request: Request, { params }: Params) {
             ``,
             `1. Pay on PayPal: https://www.paypal.com/signin`,
             `2. Return to your author dashboard: ${base}/dashboard`,
-            `3. Click Pay APC, then “I’ve sent the PayPal payment”.`,
+            `3. Click Pay APC, upload a screenshot of the payment, then “I’ve sent the PayPal payment”.`,
             `Your Nahda receipt will be emailed to ${submission.author.email} after we confirm.`,
             ...(reviewFile ? ["", `Review file: ${reviewFile.href}`] : []),
           ].join("\n"),
@@ -353,7 +367,7 @@ export async function POST(request: Request, { params }: Params) {
             ``,
             `1. Pay on PayPal: https://www.paypal.com/signin`,
             `2. Return to your author dashboard: ${base}/dashboard`,
-            `3. Click Pay APC, then “I’ve sent the PayPal payment”.`,
+            `3. Click Pay APC, upload a screenshot of the payment, then “I’ve sent the PayPal payment”.`,
             `Your Nahda receipt will be emailed to ${submission.author.email} after we confirm.`,
             ...(reviewFile ? ["", `Review file: ${reviewFile.href}`] : []),
           ].join("\n"),

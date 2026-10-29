@@ -4,7 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { StatusBadge } from "@/components/status-badge";
 import { RequireAuth } from "@/components/require-auth";
-import { ManuscriptViewer } from "@/components/manuscript-viewer";
+import { RevisionFiles } from "@/components/revision-files";
 import { ResubmitPanel } from "@/components/resubmit-panel";
 import { ApcPayPanel } from "@/components/apc-pay-panel";
 import { NahdaLoader } from "@/components/nahda-loader";
@@ -40,6 +40,11 @@ type Submission = {
   apcPaymentStatus?: string | null;
   manuscriptUrl?: string | null;
   manuscriptPublicId?: string | null;
+  manuscriptFileName?: string | null;
+  responseFileUrl?: string | null;
+  responseFilePublicId?: string | null;
+  responseFileName?: string | null;
+  responseFileBytes?: number | null;
   journal: { title: string; apc?: string | null };
   payment?: {
     paymentId?: string;
@@ -206,8 +211,8 @@ function Detail({ id }: { id: string }) {
                   Resubmit revised manuscript
                 </h2>
                 <p className="mt-1 text-sm text-amber-900/80">
-                  After you fix reviewer comments, upload the corrected file and
-                  a short message, then submit.
+                  After you address the reviewer comments, upload your response
+                  file and the revised manuscript.
                 </p>
               </div>
               <a href="#resubmit-form" className="btn-primary shrink-0">
@@ -254,10 +259,24 @@ function Detail({ id }: { id: string }) {
 
       {!isPublished && sub.manuscriptUrl && (
         <section className="mt-8">
-          <ManuscriptViewer
-            url={sub.manuscriptUrl}
-            publicId={sub.manuscriptPublicId}
-            title={`${sub.manuscriptId} — your manuscript`}
+          <RevisionFiles
+            manuscriptId={sub.manuscriptId}
+            audience="author"
+            manuscript={{
+              url: sub.manuscriptUrl,
+              publicId: sub.manuscriptPublicId,
+              fileName: sub.manuscriptFileName,
+            }}
+            response={
+              sub.responseFileUrl
+                ? {
+                    url: sub.responseFileUrl,
+                    publicId: sub.responseFilePublicId,
+                    fileName: sub.responseFileName,
+                    fileBytes: sub.responseFileBytes,
+                  }
+                : null
+            }
           />
         </section>
       )}

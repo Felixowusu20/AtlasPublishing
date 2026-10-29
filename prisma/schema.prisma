@@ -236,6 +236,13 @@ model Submission {
   ethicsStatement    String?
   manuscriptUrl      String?
   manuscriptPublicId String?
+  /// Filename of the current manuscript. Replaced when the author resubmits.
+  manuscriptFileName String?
+  /// Author’s file showing how reviewer comments were addressed. Kept alongside the revised manuscript.
+  responseFileUrl           String?
+  responseFilePublicId      String?
+  responseFileName          String?
+  responseFileBytes         Int?
   /// Full article body (HTML) bound to the journal template.
   productionBody     String?
   /// Uploaded figures for the production body: [{ id, url, filename, caption }]
@@ -286,6 +293,10 @@ model Payment {
   receiptUrl         String?
   /// When the author clicked “I’ve sent payment” (PayPal reported).
   reportedAt         DateTime?
+  /// Screenshot the author uploaded as proof of the PayPal transfer.
+  proofUrl           String?
+  proofPublicId      String?
+  proofFileName      String?
   paidAt             DateTime?
   waivedAt           DateTime?
   waivedById         String?

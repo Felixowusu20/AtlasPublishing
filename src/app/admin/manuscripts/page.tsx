@@ -34,6 +34,11 @@ type QueueItem = {
   progress: number;
   submittedAt?: string;
   manuscriptUrl?: string | null;
+  manuscriptPublicId?: string | null;
+  manuscriptFileName?: string | null;
+  responseFileUrl?: string | null;
+  responseFilePublicId?: string | null;
+  responseFileName?: string | null;
   productionBody?: string | null;
   productionFigures?: ManuscriptFigure[] | null;
   manuscriptReadyAt?: string | null;
@@ -379,12 +384,26 @@ function ManuscriptsPageInner() {
                 <div className="flex flex-wrap gap-2">
                   {selected.manuscriptUrl && (
                     <a
-                      href={`/api/files/view?url=${encodeURIComponent(selected.manuscriptUrl)}`}
+                      href={`/api/files/view?url=${encodeURIComponent(selected.manuscriptUrl)}${selected.manuscriptPublicId ? `&publicId=${encodeURIComponent(selected.manuscriptPublicId)}` : ""}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs font-semibold text-[var(--accent)] underline"
                     >
-                      Original file
+                      {selected.responseFileUrl
+                        ? "Revised manuscript"
+                        : "Manuscript file"}
+                    </a>
+                  )}
+                  {selected.responseFileUrl && (
+                    <a
+                      href={`/api/files/view?url=${encodeURIComponent(selected.responseFileUrl)}${selected.responseFilePublicId ? `&publicId=${encodeURIComponent(selected.responseFilePublicId)}` : ""}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-semibold text-amber-800 underline"
+                    >
+                      {selected.responseFileName
+                        ? `Response: ${selected.responseFileName}`
+                        : "Response to reviewers"}
                     </a>
                   )}
                   <button

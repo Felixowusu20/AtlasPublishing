@@ -166,6 +166,11 @@ export function FeedbackHistory({
                     <ReviewFileDownload
                       submissionId={submissionId}
                       item={item}
+                      label={
+                        item.message.startsWith("Author response")
+                          ? "Download response to reviewers"
+                          : undefined
+                      }
                     />
                   </div>
                 )}

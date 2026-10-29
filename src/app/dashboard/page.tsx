@@ -282,7 +282,7 @@ function DashboardInner() {
                         <p className="mt-1 text-xs text-amber-900/75">
                           {sub.actionRequired ||
                             (canResubmit(sub)
-                              ? "Upload your revised manuscript and response to reviewers."
+                              ? "Upload your response to reviewers and the revised manuscript."
                               : "Action needed on this manuscript.")}
                         </p>
                         {sub.feedback?.[0] && (

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState, use } from "react";
-import { ManuscriptViewer } from "@/components/manuscript-viewer";
+import { RevisionFiles } from "@/components/revision-files";
 import { NahdaLoader } from "@/components/nahda-loader";
 import { FeedbackHistory } from "@/components/feedback-history";
 import { SubmissionProgressBar } from "@/components/submission-progress-bar";
@@ -45,6 +45,11 @@ type Submission = {
   apcPaymentStatus?: string | null;
   manuscriptUrl?: string | null;
   manuscriptPublicId?: string | null;
+  manuscriptFileName?: string | null;
+  responseFileUrl?: string | null;
+  responseFilePublicId?: string | null;
+  responseFileName?: string | null;
+  responseFileBytes?: number | null;
   coverLetter?: string | null;
   author: { name: string; email: string; institution?: string | null };
   journal: { title: string; apc?: string | null };
@@ -59,6 +64,11 @@ type Submission = {
     internalAmountLabel?: string | null;
     exchangeRate?: number | null;
     paystackReference?: string | null;
+  } | null;
+  paymentProof?: {
+    url: string;
+    publicId?: string | null;
+    fileName?: string | null;
   } | null;
   feedback: Feedback[];
 };
@@ -159,10 +169,12 @@ export default function AdminSubmissionDetailPage({
     }
   }
 
+  const accepting = status === "ACCEPTED";
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const comment = message.trim();
-    if (!reviewFile && comment.length < 10) {
+    if (!accepting && !reviewFile && comment.length < 10) {
       setError("Write a short comment, or attach a review file.");
       return;
     }
@@ -177,7 +189,7 @@ export default function AdminSubmissionDetailPage({
         fileBytes?: number;
         fileResourceType?: string;
       } = {};
-      if (reviewFile) {
+      if (reviewFile && !accepting) {
         const uploaded = await uploadFileDirect(reviewFile, {
           folder: "atlas/review-files",
           resourceType: "raw",
@@ -318,6 +330,32 @@ export default function AdminSubmissionDetailPage({
                       : submission.payment.status}
                   </dd>
                 </div>
+                {submission.paymentProof?.url ? (
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
+                      Proof of payment
+                    </dt>
+                    <dd className="mt-2">
+                      <a
+                        href={`/api/files/view?${new URLSearchParams({
+                          url: submission.paymentProof.url,
+                          resourceType: "image",
+                          ...(submission.paymentProof.publicId
+                            ? { publicId: submission.paymentProof.publicId }
+                            : {}),
+                        }).toString()}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-[var(--accent)] underline"
+                      >
+                        Open payment screenshot
+                        {submission.paymentProof.fileName
+                          ? ` (${submission.paymentProof.fileName})`
+                          : ""}
+                      </a>
+                    </dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt className="text-xs uppercase tracking-wider text-[var(--muted)]">
                     Amount (USD)
@@ -347,10 +385,23 @@ export default function AdminSubmissionDetailPage({
 
           {submission.manuscriptUrl && (
             <section className="mt-6">
-              <ManuscriptViewer
-                url={submission.manuscriptUrl}
-                publicId={submission.manuscriptPublicId}
-                title={`${submission.manuscriptId} — manuscript`}
+              <RevisionFiles
+                manuscriptId={submission.manuscriptId}
+                manuscript={{
+                  url: submission.manuscriptUrl,
+                  publicId: submission.manuscriptPublicId,
+                  fileName: submission.manuscriptFileName,
+                }}
+                response={
+                  submission.responseFileUrl
+                    ? {
+                        url: submission.responseFileUrl,
+                        publicId: submission.responseFilePublicId,
+                        fileName: submission.responseFileName,
+                        fileBytes: submission.responseFileBytes,
+                      }
+                    : null
+                }
               />
             </section>
           )}
@@ -369,16 +420,22 @@ export default function AdminSubmissionDetailPage({
         >
           <h2 className="text-sm font-semibold">Send review feedback</h2>
           <p className="text-xs text-[var(--muted)]">
-            Attach a review file (any format or size) and an optional comment.
-            The author is emailed and can download the file from their dashboard.
+            {accepting
+              ? "Acceptance does not need a review file. A comment is optional."
+              : "Attach a review file (any format or size) and an optional comment. The author is emailed and can download the file from their dashboard."}
           </p>
           <label className="field">
             <span>New status</span>
             <select
               value={status}
-              onChange={(e) =>
-                setStatus(e.target.value as (typeof statuses)[number])
-              }
+              onChange={(e) => {
+                const next = e.target.value as (typeof statuses)[number];
+                setStatus(next);
+                if (next === "ACCEPTED") {
+                  setReviewFile(null);
+                  setFileInputKey((key) => key + 1);
+                }
+              }}
             >
               {statuses.map((s) => (
                 <option key={s} value={s}>
@@ -396,18 +453,27 @@ export default function AdminSubmissionDetailPage({
               placeholder="Optional note. Required only if you do not attach a file."
             />
           </label>
-          <label className="field">
-            <span>Review file (any format, any size)</span>
+          <label className={`field ${accepting ? "opacity-60" : ""}`}>
+            <span>
+              {accepting
+                ? "Review file (not used when accepting)"
+                : "Review file (any format, any size)"}
+            </span>
             <input
               key={fileInputKey}
               type="file"
+              disabled={accepting}
               onChange={(e) => setReviewFile(e.target.files?.[0] ?? null)}
             />
-            {reviewFile && (
+            {accepting ? (
+              <p className="mt-1 text-[11px] text-[var(--muted)]">
+                File upload is turned off for Accepted.
+              </p>
+            ) : reviewFile ? (
               <p className="mt-1 text-[11px] text-[var(--muted)]">
                 {reviewFile.name} · {formatBytes(reviewFile.size)}
               </p>
-            )}
+            ) : null}
           </label>
           <label className="field">
             <span>Action required (optional)</span>
@@ -497,10 +563,12 @@ export default function AdminSubmissionDetailPage({
           )}
           <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading
-              ? reviewFile
+              ? reviewFile && !accepting
                 ? "Uploading and sending…"
                 : "Sending…"
-              : "Send feedback"}
+              : accepting
+                ? "Accept manuscript"
+                : "Send feedback"}
           </button>
         </form>
       </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PAYPAL_ACCOUNT } from "@/lib/paypal";
+import { uploadFileDirect } from "@/lib/client-upload";
 
 type Props = {
   submissionId: string;
@@ -27,6 +28,7 @@ export function PaypalApcPanel({
   const [reference, setReference] = useState(paymentReference ?? "");
   const [alias, setAlias] = useState(journalAlias ?? "");
   const [title, setTitle] = useState(journalTitle ?? "");
+  const [proof, setProof] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
@@ -70,13 +72,35 @@ export function PaypalApcPanel({
   }
 
   async function reportSent() {
+    if (!proof) {
+      setError("Upload a screenshot of your PayPal payment.");
+      return;
+    }
+    const looksLikeImage =
+      proof.type.startsWith("image/") ||
+      /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(proof.name);
+    if (!looksLikeImage) {
+      setError("The proof of payment must be a screenshot image.");
+      return;
+    }
+
     setBusy(true);
     setError("");
     try {
+      const uploaded = await uploadFileDirect(proof, {
+        folder: "nahda/payment-proofs",
+        resourceType: "image",
+        prepare: false,
+      });
       const res = await fetch("/api/payments/checkout", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ submissionId }),
+        body: JSON.stringify({
+          submissionId,
+          proofUrl: uploaded.url,
+          proofPublicId: uploaded.publicId,
+          proofFileName: proof.name,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not notify editors");
@@ -169,12 +193,28 @@ export function PaypalApcPanel({
 
         <ol className="list-decimal space-y-1.5 pl-5 text-sm text-[var(--muted)]">
           <li>Open PayPal and send the amount above (use the required note).</li>
-          <li>Come back here and tap “I’ve sent the PayPal payment”.</li>
+          <li>Upload a screenshot of the payment below.</li>
           <li>
-            You’ll return to your author dashboard. After editors confirm, your
+            Tap “I’ve sent the PayPal payment.” After editors confirm, your
             receipt is emailed to the submitting author.
           </li>
         </ol>
+
+        <label className="field">
+          <span>Proof of payment</span>
+          <p className="text-xs font-normal text-[var(--muted)]">
+            Screenshot of the PayPal transfer.
+          </p>
+          <input
+            type="file"
+            accept="image/*"
+            required
+            onChange={(e) => setProof(e.target.files?.[0] ?? null)}
+          />
+          {proof ? (
+            <p className="text-xs font-normal text-[var(--muted)]">{proof.name}</p>
+          ) : null}
+        </label>
 
         <div className="flex flex-wrap items-center gap-3">
           <a

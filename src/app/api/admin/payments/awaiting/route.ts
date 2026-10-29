@@ -38,6 +38,9 @@ export async function GET() {
     amountCents: payment.amountCents,
     amountLabel: formatCustomerUsd(payment.amountCents),
     paypalReference: payment.paystackReference,
+    proofUrl: payment.proofUrl,
+    proofPublicId: payment.proofPublicId,
+    proofFileName: payment.proofFileName,
     payment: toAdminPayment(payment),
     submission: payment.submission,
   }));

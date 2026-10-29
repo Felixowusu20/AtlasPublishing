@@ -24,6 +24,10 @@ export async function GET(request: Request) {
   const resourceTypeParam = (searchParams.get("resourceType") ??
     undefined) as ResourceType | undefined;
   const redirectFallback = searchParams.get("redirect") === "1";
+  const downloadName = searchParams.get("download");
+  const disposition = downloadName
+    ? `attachment; filename="${downloadName.replace(/["\r\n]/g, "").slice(0, 180)}"`
+    : "inline";
 
   if (!rawUrl && !publicIdParam) return jsonError("Missing url");
 
@@ -66,7 +70,7 @@ export async function GET(request: Request) {
           status: 200,
           headers: {
             "Content-Type": contentType,
-            "Content-Disposition": "inline",
+            "Content-Disposition": disposition,
             "Cache-Control": "private, max-age=300",
             "X-Content-Type-Options": "nosniff",
           },
@@ -93,7 +97,7 @@ export async function GET(request: Request) {
             status: 200,
             headers: {
               "Content-Type": contentType,
-              "Content-Disposition": "inline",
+              "Content-Disposition": disposition,
               "Cache-Control": "private, max-age=300",
               "X-Content-Type-Options": "nosniff",
             },

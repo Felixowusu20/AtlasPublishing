@@ -126,6 +126,9 @@ export async function PUT(request: Request) {
       .object({
         submissionId: z.string().min(1),
         note: z.string().max(500).optional(),
+        proofUrl: z.string().url(),
+        proofPublicId: z.string().min(1).max(400),
+        proofFileName: z.string().min(1).max(260),
       })
       .parse(await request.json());
 
@@ -172,6 +175,9 @@ export async function PUT(request: Request) {
           status: "REPORTED",
           reportedAt,
           customerEmail: submission.author.email,
+          proofUrl: body.proofUrl,
+          proofPublicId: body.proofPublicId,
+          proofFileName: body.proofFileName,
         },
       }),
     ]);
@@ -179,7 +185,7 @@ export async function PUT(request: Request) {
     void notifyAdmins({
       submissionId: submission.id,
       title: "APC awaiting confirmation",
-      body: `${submission.author.name} (${submission.author.email}) reported PayPal APC for “${submission.title}” (${submission.manuscriptId})${body.note ? `. Note: ${body.note}` : ""}. Open Admin → APC inbox to confirm and email the receipt.`,
+      body: `${submission.author.name} (${submission.author.email}) reported PayPal APC for “${submission.title}” (${submission.manuscriptId}) and uploaded a payment screenshot${body.note ? `. Note: ${body.note}` : ""}. Open Admin → APC inbox to confirm and email the receipt.`,
     }).catch((err) => console.error("[notify-admins paypal]", err));
 
     return jsonOk({ reported: true, status: "REPORTED" });

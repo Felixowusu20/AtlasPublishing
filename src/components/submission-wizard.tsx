@@ -544,7 +544,7 @@ export function SubmissionWizard() {
         {step === 5 && (
           <div className="space-y-5">
             <label className="field">
-              <span>Manuscript file (PDF preferred)</span>
+              <span>Manuscript file</span>
               <input
                 type="file"
                 accept=".pdf,.doc,.docx"
@@ -552,9 +552,8 @@ export function SubmissionWizard() {
               />
             </label>
             <p className="text-xs text-[var(--muted)]">
-              PDF opens best in the admin reader. Word files can still be opened
-              from the inbox. Files over 10 MB are compressed automatically when
-              possible.
+              Word and PDF files can both be opened from the inbox. Files over
+              10 MB are compressed automatically when possible.
             </p>
             {file && (
               <p className="text-xs text-[var(--muted)]">

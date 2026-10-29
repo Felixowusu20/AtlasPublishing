@@ -26,10 +26,12 @@ export function ReviewFileDownload({
   submissionId,
   item,
   className,
+  label,
 }: {
   submissionId: string;
   item: ReviewFileFields;
   className?: string;
+  label?: string;
 }) {
   if (!hasReviewFile(item) || !item.fileName) return null;
   return (
@@ -40,7 +42,7 @@ export function ReviewFileDownload({
         "mt-3 inline-flex items-center rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--accent)] hover:border-[var(--accent)]"
       }
     >
-      Download {item.fileName}
+      {label ?? `Download ${item.fileName}`}
       {formatSize(item.fileBytes)}
     </a>
   );

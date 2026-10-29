@@ -5,12 +5,27 @@ import { useCallback, useEffect, useState } from "react";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 import { NahdaLoader } from "@/components/nahda-loader";
 
+function proofViewPath(item: {
+  proofUrl: string;
+  proofPublicId: string | null;
+}) {
+  const params = new URLSearchParams({
+    url: item.proofUrl,
+    resourceType: "image",
+  });
+  if (item.proofPublicId) params.set("publicId", item.proofPublicId);
+  return `/api/files/view?${params.toString()}`;
+}
+
 type InboxItem = {
   paymentId: string;
   reportedAt: string;
   amountCents: number;
   amountLabel: string;
   paypalReference: string | null;
+  proofUrl: string | null;
+  proofPublicId: string | null;
+  proofFileName: string | null;
   submission: {
     id: string;
     manuscriptId: string;
@@ -208,6 +223,40 @@ export default function AdminApcInboxPage() {
                       ) : null}
                     </div>
                   </div>
+
+                  {item.proofUrl ? (
+                    <a
+                      href={proofViewPath({
+                        proofUrl: item.proofUrl,
+                        proofPublicId: item.proofPublicId,
+                      })}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block overflow-hidden rounded-xl border border-[var(--line)]"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={proofViewPath({
+                          proofUrl: item.proofUrl,
+                          proofPublicId: item.proofPublicId,
+                        })}
+                        alt={
+                          item.proofFileName
+                            ? `Payment screenshot: ${item.proofFileName}`
+                            : "Payment screenshot"
+                        }
+                        className="max-h-72 w-full bg-[var(--surface)] object-contain"
+                      />
+                      <span className="block border-t border-[var(--line)] px-3 py-2 text-xs font-semibold text-[var(--accent)]">
+                        Open proof of payment
+                        {item.proofFileName ? ` · ${item.proofFileName}` : ""}
+                      </span>
+                    </a>
+                  ) : (
+                    <p className="text-xs text-[var(--muted)]">
+                      No payment screenshot was uploaded.
+                    </p>
+                  )}
 
                   <div className="flex flex-wrap gap-2">
                     <button

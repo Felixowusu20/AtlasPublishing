@@ -17,7 +17,12 @@ const schema = z.object({
   manuscriptUrl: z.string().url(),
   manuscriptPublicId: z.string().optional(),
   coverLetter: z.string().optional(),
-  responseToReviewers: z.string().min(3),
+  manuscriptFileName: z.string().min(1).max(260).optional(),
+  responseFileUrl: z.string().url(),
+  responseFilePublicId: z.string().optional(),
+  responseFileName: z.string().min(1).max(260),
+  responseFileBytes: z.number().int().nonnegative().optional(),
+  responseFileResourceType: z.string().max(32).optional(),
 });
 
 /** Author resubmits a revised manuscript after major/minor revision. */
@@ -55,9 +60,18 @@ export async function POST(request: Request, { params }: Params) {
       await tx.reviewFeedback.create({
         data: {
           submissionId: id,
-          reviewerId: submission.reviewerId ?? session.sub,
+          reviewerId: session.sub,
           status: "UNDER_REVIEW",
-          message: `Author response to reviewers:\n\n${body.responseToReviewers}`,
+          message: `Author response to reviewers: ${body.responseFileName}`,
+          fileUrl: body.responseFileUrl,
+          filePublicId: body.responseFilePublicId,
+          fileName: body.responseFileName,
+          fileBytes:
+            body.responseFileBytes != null &&
+            body.responseFileBytes <= 2_147_483_647
+              ? body.responseFileBytes
+              : undefined,
+          fileResourceType: body.responseFileResourceType,
         },
       });
 
@@ -69,6 +83,15 @@ export async function POST(request: Request, { params }: Params) {
           actionRequired: null,
           manuscriptUrl: body.manuscriptUrl,
           manuscriptPublicId: body.manuscriptPublicId,
+          manuscriptFileName: body.manuscriptFileName,
+          responseFileUrl: body.responseFileUrl,
+          responseFilePublicId: body.responseFilePublicId,
+          responseFileName: body.responseFileName,
+          responseFileBytes:
+            body.responseFileBytes != null &&
+            body.responseFileBytes <= 2_147_483_647
+              ? body.responseFileBytes
+              : undefined,
           coverLetter: body.coverLetter ?? submission.coverLetter,
         },
         include: {

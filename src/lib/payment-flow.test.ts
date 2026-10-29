@@ -222,6 +222,7 @@ test("customer payment message shows PayPal APC instructions", () => {
   assert.match(html, /https:\/\/example.com\/dashboard/);
   assert.match(html, /Open author dashboard/);
   assert.match(html, /I’ve sent the PayPal payment|I've sent the PayPal payment/);
+  assert.match(html, /screenshot of the payment/i);
   assert.doesNotMatch(html, /will\s*<strong>not<\/strong>\s*match/i);
   assert.doesNotMatch(html, /editorial email/i);
   assert.doesNotMatch(html, /third-party/i);
