@@ -66,7 +66,7 @@ function ImageFrame({
   className,
   sizes,
 }: {
-  src: string | null | undefined;
+  src: string;
   className?: string;
   sizes: string;
 }) {
@@ -74,25 +74,30 @@ function ImageFrame({
     <div
       className={`relative overflow-hidden bg-[var(--surface)] ${className ?? ""}`}
     >
-      {src ? (
-        <Image
-          src={src}
-          alt=""
-          fill
-          className="object-cover object-center transition duration-700 group-hover:scale-[1.03]"
-          sizes={sizes}
-          unoptimized
-        />
-      ) : (
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(135deg, #1e6847 0%, #0b1f33 55%, #163d32 100%)",
-          }}
-        />
-      )}
+      <Image
+        src={src}
+        alt=""
+        fill
+        className="object-cover object-center transition duration-700 group-hover:scale-[1.03]"
+        sizes={sizes}
+        unoptimized
+      />
     </div>
+  );
+}
+
+function FeaturedBadges({ openAccess }: { openAccess: boolean }) {
+  return (
+    <>
+      <span className="rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:px-3 sm:py-1 sm:text-[11px]">
+        Newest
+      </span>
+      {openAccess ? (
+        <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:px-3 sm:py-1 sm:text-[11px]">
+          Open access
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -245,24 +250,23 @@ export function HomeRecentArticles({
               data-aos-delay="60"
               data-aos-duration="950"
             >
-              <div className="relative">
-                <ImageFrame
-                  src={featured.imageUrl}
-                  className="h-[160px] w-full bg-[#061018] sm:h-[230px]"
-                  sizes="(max-width: 1024px) 100vw, 55vw"
-                />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[var(--ink)] to-transparent sm:h-12" />
-                <div className="absolute left-3 top-3 flex flex-wrap gap-1.5 sm:left-5 sm:top-5 sm:gap-2">
-                  <span className="rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:px-3 sm:py-1 sm:text-[11px]">
-                    Newest
-                  </span>
-                  {featured.openAccess ? (
-                    <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:px-3 sm:py-1 sm:text-[11px]">
-                      Open access
-                    </span>
-                  ) : null}
+              {featured.imageUrl ? (
+                <div className="relative">
+                  <ImageFrame
+                    src={featured.imageUrl}
+                    className="h-[160px] w-full bg-[#061018] sm:h-[230px]"
+                    sizes="(max-width: 1024px) 100vw, 55vw"
+                  />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[var(--ink)] to-transparent sm:h-12" />
+                  <div className="absolute left-3 top-3 flex flex-wrap gap-1.5 sm:left-5 sm:top-5 sm:gap-2">
+                    <FeaturedBadges openAccess={featured.openAccess} />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 px-4 pt-4 sm:gap-2 sm:px-6 sm:pt-5">
+                  <FeaturedBadges openAccess={featured.openAccess} />
+                </div>
+              )}
 
               <div className="relative z-10 flex flex-col px-4 py-3.5 sm:px-6 sm:py-5">
                 <p className="line-clamp-2 text-xs font-medium text-emerald-200 sm:line-clamp-none sm:text-sm">
@@ -320,11 +324,13 @@ export function HomeRecentArticles({
                     data-aos-delay={String(140 + index * 100)}
                     data-aos-duration="950"
                   >
-                    <ImageFrame
-                      src={article.imageUrl}
-                      className="h-[140px] w-full border-b border-[var(--line)] bg-[#f4f7f5] sm:h-auto sm:aspect-[16/9]"
-                      sizes="(max-width: 1024px) 100vw, 380px"
-                    />
+                    {article.imageUrl ? (
+                      <ImageFrame
+                        src={article.imageUrl}
+                        className="h-[140px] w-full border-b border-[var(--line)] bg-[#f4f7f5] sm:h-auto sm:aspect-[16/9]"
+                        sizes="(max-width: 1024px) 100vw, 380px"
+                      />
+                    ) : null}
                     <div className="flex min-w-0 flex-col p-3.5 sm:p-5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--accent)] sm:text-[11px]">
