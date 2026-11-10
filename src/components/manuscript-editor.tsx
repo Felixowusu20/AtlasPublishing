@@ -24,6 +24,7 @@ import {
   htmlToPlainText,
   sanitizeManuscriptHtml,
 } from "@/lib/import-manuscript";
+import { layoutTableFigures } from "@/lib/nahda-table-orient";
 
 export type ManuscriptFigure = {
   id: string;
@@ -403,6 +404,9 @@ export function ManuscriptEditor({
         spacer.innerHTML = "<br>";
         el.appendChild(spacer);
       }
+      requestAnimationFrame(() => {
+        if (editorRef.current) layoutTableFigures(editorRef.current);
+      });
       lastEmitted.current = el.innerHTML;
       seeded.current = true;
       if (el.innerHTML !== value) onChange(el.innerHTML);
@@ -411,6 +415,9 @@ export function ManuscriptEditor({
     if (value === lastEmitted.current) return;
     const html = ensureManuscriptHtml(value);
     el.innerHTML = html;
+    requestAnimationFrame(() => {
+      if (editorRef.current) layoutTableFigures(editorRef.current);
+    });
     lastEmitted.current = html;
   }, [value, onChange]);
 
@@ -730,11 +737,13 @@ export function ManuscriptEditor({
     const target = targetTableRef.current;
     if (target && root?.contains(target) && replaceTableTarget(target, html)) {
       targetTableRef.current = null;
+      layoutTableFigures(root);
       emit();
       setTableOpen(false);
       return;
     }
     insertHtml(html);
+    if (root) layoutTableFigures(root);
     setTableOpen(false);
   }
 

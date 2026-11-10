@@ -8,6 +8,7 @@
  */
 
 import { CLOUDINARY_MAX_UPLOAD_BYTES } from "@/lib/prepare-upload-file";
+import { clearRotatedLayout } from "@/lib/nahda-table-orient";
 import type { jsPDF } from "jspdf";
 
 const A4_WIDTH_MM = 210;
@@ -134,6 +135,30 @@ const PAGED_CSS = `
 .nahda-paged-article .nahda-workflow {
   max-height: 230mm;
   margin: 0.7em 0 0.85em;
+}
+
+.nahda-paged-article figure:has(table),
+.nahda-paged-article figure.table-full,
+.nahda-paged-article .nahda-table-wrap {
+  display: block !important;
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+
+.nahda-paged-article table {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+  max-height: none !important;
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+.nahda-paged-article thead {
+  display: table-header-group;
 }
 
 .nahda-paged-article p,
@@ -288,11 +313,79 @@ function restoreCaptureStyles(root: HTMLElement, widthPx?: number) {
   });
 }
 
+async function bakeRotatedTables(root: HTMLElement, html2canvas: Html2CanvasFn) {
+  const figures = Array.from(
+    root.querySelectorAll<HTMLElement>("figure.table-rotated"),
+  );
+  for (const figure of figures) {
+    try {
+      clearRotatedLayout(figure);
+      const table = figure.querySelector("table");
+      if (!(table instanceof HTMLElement)) continue;
+      table.style.position = "fixed";
+      table.style.left = "0";
+      table.style.top = "0";
+      table.style.zIndex = "-1";
+      table.style.width = "max-content";
+      table.style.maxWidth = "none";
+      table.style.background = "#ffffff";
+      const shot = await html2canvas(table, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
+      });
+      const rotated = document.createElement("canvas");
+      rotated.width = shot.height;
+      rotated.height = shot.width;
+      const ctx = rotated.getContext("2d");
+      if (!ctx) continue;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, rotated.width, rotated.height);
+      ctx.translate(0, rotated.height);
+      ctx.rotate(-Math.PI / 2);
+      ctx.drawImage(shot, 0, 0);
+      const img = document.createElement("img");
+      img.src = rotated.toDataURL("image/png");
+      img.alt = (figure.querySelector("figcaption")?.textContent || "Table")
+        .replace(/\s+/g, " ")
+        .trim();
+      img.style.display = "block";
+      img.style.width = "100%";
+      img.style.height = "auto";
+      img.style.maxWidth = "100%";
+      table.replaceWith(img);
+      figure.classList.remove("table-rotated");
+      figure.classList.add("nahda-baked-table");
+    } catch (err) {
+      console.warn("[nahda-pdf] could not rotate table", err);
+    }
+  }
+}
+
+function isTableBlock(el: HTMLElement) {
+  return (
+    el.tagName === "TABLE" ||
+    el.classList.contains("nahda-table-wrap") ||
+    el.classList.contains("nahda-table-rotator") ||
+    el.classList.contains("table-rotated") ||
+    el.classList.contains("nahda-baked-table") ||
+    Boolean(el.querySelector("table"))
+  );
+}
+
 function fitUnbreakableBlocks(root: HTMLElement, maxCssPx: number) {
   const blocks = root.querySelectorAll<HTMLElement>(
     "figure, .nahda-workflow, .nahda-table-wrap",
   );
   blocks.forEach((el) => {
+    if (isTableBlock(el)) {
+      el.style.breakInside = "auto";
+      el.style.pageBreakInside = "auto";
+      el.style.transform = "none";
+      el.style.maxHeight = "none";
+      return;
+    }
     el.style.breakInside = "avoid";
     el.style.pageBreakInside = "avoid";
     const height = Math.max(el.scrollHeight, el.offsetHeight);
@@ -783,6 +876,7 @@ async function capturePagedPages(
     mount.appendChild(sourceHolder);
 
     await waitForImages(prepared);
+    await bakeRotatedTables(prepared, html2canvas);
     const widthPx = Math.max(sourceHolder.offsetWidth, prepared.offsetWidth, 1);
     const pageCssPx = Math.round((CONTENT_HEIGHT_MM / CONTENT_WIDTH_MM) * widthPx);
     fitUnbreakableBlocks(prepared, Math.floor(pageCssPx * 0.92));

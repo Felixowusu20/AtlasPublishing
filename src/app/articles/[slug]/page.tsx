@@ -36,6 +36,10 @@ import {
 } from "@/lib/seo/article-seo";
 import { buildArticleMetadata } from "@/lib/seo/scholar";
 import { scholarlyArticleJsonLd } from "@/lib/seo/jsonld";
+import {
+  parseSupplementaryFiles,
+  supplementaryPath,
+} from "@/lib/supplementary-files";
 
 export const dynamic = "force-dynamic";
 
@@ -197,6 +201,8 @@ export default async function ArticleDetailPage({
       citations: dbArticle.citations,
       manuscriptUrl,
       slug: dbArticle.slug,
+      supplementaryCount: parseSupplementaryFiles(dbArticle.supplementaryFiles)
+        .length,
       recommendations,
       relatedCards,
     };
@@ -272,6 +278,7 @@ type ViewArticle = {
   citations: number;
   manuscriptUrl?: string | null;
   slug: string;
+  supplementaryCount?: number;
   sections?: { heading: string; body: string }[];
   recommendations?: MastheadRecommendation[];
   relatedCards?: RelatedCard[];
@@ -431,6 +438,27 @@ function ArticleView({
                 </section>
               ) : null}
 
+              {article.supplementaryCount ? (
+                <section className="mt-8 rounded-2xl bg-[var(--surface)] px-5 py-5 ring-1 ring-[var(--line)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                    Supplementary material
+                  </p>
+                  <h2 className="mt-2 font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+                    Extra files for this paper
+                  </h2>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--muted)]">
+                    Tables, data, and other files uploaded with this article
+                    stay on its supplementary page.
+                  </p>
+                  <Link
+                    href={supplementaryPath(article.slug)}
+                    className="btn-primary mt-4 inline-flex text-sm"
+                  >
+                    Read supplementary material
+                  </Link>
+                </section>
+              ) : null}
+
               {hasSections ? (
                 <div className="mt-10 space-y-10">
                   {article.sections!.map((section) => {
@@ -555,6 +583,14 @@ function ArticleView({
                         PDF unavailable
                       </button>
                     )}
+                    {article.supplementaryCount ? (
+                      <Link
+                        href={supplementaryPath(article.slug)}
+                        className="btn-secondary mt-2 w-full text-center text-sm"
+                      >
+                        Read supplementary material
+                      </Link>
+                    ) : null}
                     <Link
                       href={`/submissions/new?journal=${article.journalId}`}
                       className="btn-secondary mt-2 w-full text-center text-sm"

@@ -12,9 +12,35 @@ import {
 } from "react";
 import { uploadFileDirect } from "@/lib/client-upload";
 import type { ManuscriptFigure } from "@/components/manuscript-editor";
+import {
+  WordTableEditor,
+  htmlToTableModel,
+  type WordTableModel,
+} from "@/components/word-table-editor";
+import { sanitizeManuscriptHtml } from "@/lib/import-manuscript";
+import {
+  FONT_OPTIONS,
+  HIGHLIGHT_COLORS,
+  SIZE_OPTIONS,
+  TEXT_COLORS,
+  TOOLBAR_SELECT_CLASS,
+  applyColorToEditor,
+  applyFontToEditor,
+  applySizeToEditor,
+  closestTableTarget,
+  isPlaceholderTable,
+  replaceTableTarget,
+} from "@/lib/rich-text-format-helpers";
+import {
+  applyResizeDrag,
+  clearFigureSelection,
+  figureFromResizeHandle,
+  selectResizableFigure,
+  setFigureWidthPct,
+} from "@/lib/nahda-figure-chrome";
+import { layoutTableFigures, toggleTableRotation } from "@/lib/nahda-table-orient";
 
 type Props = {
-  /** Element that wraps the template editables (abstract + body). */
   scopeRef: RefObject<HTMLElement | null>;
   onError?: (message: string) => void;
   onFigureAdded?: (figure: ManuscriptFigure) => void;
@@ -66,11 +92,23 @@ const IMAGE_TYPES = [
   "image/svg+xml",
 ];
 
+const EMPTY_TABLE: WordTableModel = {
+  headers: ["Column 1", "Column 2", "Column 3"],
+  rows: [
+    ["", "", ""],
+    ["", "", ""],
+    ["", "", ""],
+  ],
+  caption: "Table 1.",
+  fullWidth: true,
+  orientation: "normal",
+  supplementary: false,
+};
+
 function figureHtml(caption: string, url: string) {
   return `<figure class="figure-full"><img src="${url}" alt="${caption}" /><figcaption>${caption}</figcaption></figure>`;
 }
 
-/** Empty figure slot that shows “Select image to insert” via CSS. */
 function isEmptyImagePlaceholder(figure: Element | null): figure is HTMLElement {
   if (!(figure instanceof HTMLElement) || figure.tagName !== "FIGURE") {
     return false;
@@ -136,10 +174,6 @@ function notifyEditorChanged(el: HTMLElement) {
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-/**
- * Formatting + image tools for in-template abstract/body editing.
- * Applies to whichever `[data-nahda-rich]` field last held the caret.
- */
 export function TemplateFormatToolbar({
   scopeRef,
   onError,
@@ -147,12 +181,19 @@ export function TemplateFormatToolbar({
   journalPrimary,
 }: Props) {
   const fileId = useId();
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const activeEditorRef = useRef<HTMLElement | null>(null);
   const targetFigureRef = useRef<HTMLElement | null>(null);
+  const targetTableRef = useRef<HTMLElement | null>(null);
+
   const [uploading, setUploading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
+  const [tableUpdateMode, setTableUpdateMode] = useState(false);
+  const [tableEditorKey, setTableEditorKey] = useState(0);
+  const [tableSeed, setTableSeed] = useState<WordTableModel>(EMPTY_TABLE);
   const [linkUrl, setLinkUrl] = useState("https://");
   const [linkLabel, setLinkLabel] = useState("");
 
@@ -181,7 +222,15 @@ export function TemplateFormatToolbar({
     return () => document.removeEventListener("selectionchange", onSel);
   }, [capture]);
 
-  // Click “Select image to insert” placeholder → open OS file picker.
+  /** Keep the last text highlight before toolbar controls steal focus. */
+  useEffect(() => {
+    const bar = toolbarRef.current;
+    if (!bar) return;
+    const stash = () => capture();
+    bar.addEventListener("pointerdown", stash, true);
+    return () => bar.removeEventListener("pointerdown", stash, true);
+  }, [capture]);
+
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
       if (uploading) return;
@@ -189,6 +238,7 @@ export function TemplateFormatToolbar({
       if (!scope) return;
       const target = e.target;
       if (!(target instanceof HTMLElement) || !scope.contains(target)) return;
+      if (toolbarRef.current?.contains(target)) return;
       if (target.closest("figcaption")) return;
       const fig = target.closest("figure");
       if (!isEmptyImagePlaceholder(fig) || !scope.contains(fig)) return;
@@ -223,49 +273,249 @@ export function TemplateFormatToolbar({
     }
   }, []);
 
+  const emit = useCallback(() => {
+    const el = activeEditorRef.current;
+    if (el) notifyEditorChanged(el);
+    capture();
+  }, [capture]);
+
   const run = useCallback(
     (command: string, value?: string) => {
-      capture();
       if (!restore()) {
-        onError?.("Click in the abstract or body first, then use the toolbar.");
+        onError?.("Highlight text in the abstract or body, then use the toolbar.");
         return;
       }
       document.execCommand("styleWithCSS", false, "true");
       document.execCommand(command, false, value);
-      const el = activeEditorRef.current;
-      if (el) notifyEditorChanged(el);
-      capture();
+      emit();
     },
-    [capture, restore, onError],
+    [restore, onError, emit],
   );
 
   const insertHtml = useCallback(
     (html: string) => {
-      capture();
       if (!restore()) {
         onError?.("Click in the abstract or body first, then insert.");
         return;
       }
+      const safe = sanitizeManuscriptHtml(html);
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
-        insertHtmlAtRange(html, sel.getRangeAt(0));
+        insertHtmlAtRange(safe, sel.getRangeAt(0));
       } else {
-        document.execCommand("insertHTML", false, html);
+        document.execCommand("insertHTML", false, safe);
       }
-      const el = activeEditorRef.current;
-      if (el) notifyEditorChanged(el);
-      capture();
+      emit();
     },
-    [capture, restore, onError],
+    [restore, onError, emit],
   );
+
+  const applyTableHtml = useCallback(
+    (html: string) => {
+      const editor = activeEditorRef.current;
+      const target = targetTableRef.current;
+      const safe = sanitizeManuscriptHtml(html);
+      if (target && editor?.contains(target) && replaceTableTarget(target, safe)) {
+        targetTableRef.current = null;
+        layoutTableFigures(editor);
+        notifyEditorChanged(editor);
+        setTableOpen(false);
+        return;
+      }
+      insertHtml(safe);
+      if (editor) layoutTableFigures(editor);
+      setTableOpen(false);
+    },
+    [insertHtml],
+  );
+
+  const openTableEditor = useCallback((el: HTMLElement, editor: HTMLElement) => {
+    activeEditorRef.current = editor;
+    targetTableRef.current = el;
+    const siblingCaption =
+      el.previousElementSibling &&
+      /^table(?:\s+\d+)?(?:[.:]|\s|$)/i.test(
+        el.previousElementSibling.textContent?.trim() ?? "",
+      )
+        ? el.previousElementSibling.textContent?.trim() ?? ""
+        : "";
+    setTableSeed(htmlToTableModel(el, siblingCaption));
+    setTableUpdateMode(true);
+    setTableEditorKey((k) => k + 1);
+    setTableOpen(true);
+    setLinkOpen(false);
+  }, []);
+
+  const toggleTablePanel = useCallback(() => {
+    const scope = scopeRef.current;
+    const sel = window.getSelection();
+    const editorFromSel =
+      sel?.anchorNode instanceof Node
+        ? (sel.anchorNode instanceof Element
+            ? sel.anchorNode
+            : sel.anchorNode.parentElement
+          )?.closest("[data-nahda-rich='true']")
+        : null;
+
+    if (editorFromSel instanceof HTMLElement && scope?.contains(editorFromSel)) {
+      activeEditorRef.current = editorFromSel;
+      const fromSel = closestTableTarget(sel?.anchorNode ?? null, editorFromSel);
+      if (fromSel) {
+        openTableEditor(fromSel, editorFromSel);
+        return;
+      }
+    }
+
+    if (
+      targetFigureRef.current &&
+      isPlaceholderTable(targetFigureRef.current) &&
+      scope?.contains(targetFigureRef.current)
+    ) {
+      const editor =
+        targetFigureRef.current.closest("[data-nahda-rich='true']") ??
+        editorFromSel;
+      if (editor instanceof HTMLElement) {
+        openTableEditor(targetFigureRef.current, editor);
+        return;
+      }
+    }
+
+    targetTableRef.current = null;
+    setTableUpdateMode(false);
+    setTableSeed(EMPTY_TABLE);
+    setTableEditorKey((k) => k + 1);
+    setTableOpen((o) => !o);
+    setLinkOpen(false);
+  }, [openTableEditor, scopeRef]);
+
+  useEffect(() => {
+    const scope = scopeRef.current;
+    if (!scope) return;
+    const openFromTableEvent = (e: MouseEvent) => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (toolbarRef.current?.contains(t)) return;
+      const editor = t.closest("[data-nahda-rich='true']");
+      if (!(editor instanceof HTMLElement) || !scope.contains(editor)) return;
+      if (t.closest("a[href]")) return;
+      const tableTarget = closestTableTarget(t, editor);
+      if (!tableTarget) return;
+      e.preventDefault();
+      openTableEditor(tableTarget, editor);
+    };
+
+    const onClick = (e: MouseEvent) => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (toolbarRef.current?.contains(t)) return;
+
+      const chromeAction = t
+        .closest("[data-fig-action]")
+        ?.getAttribute("data-fig-action");
+      const figForChrome = t.closest("figure");
+      const editorForFig = t.closest("[data-nahda-rich='true']");
+      if (
+        chromeAction === "full" &&
+        figForChrome instanceof HTMLElement &&
+        editorForFig instanceof HTMLElement &&
+        scope.contains(editorForFig)
+      ) {
+        e.preventDefault();
+        const full = !figForChrome.classList.contains("table-full") &&
+          !figForChrome.classList.contains("figure-full");
+        setFigureWidthPct(figForChrome, full ? 100 : 62);
+        activeEditorRef.current = editorForFig;
+        notifyEditorChanged(editorForFig);
+        return;
+      }
+
+      if (
+        chromeAction === "rotate" &&
+        figForChrome instanceof HTMLElement &&
+        editorForFig instanceof HTMLElement &&
+        scope.contains(editorForFig)
+      ) {
+        e.preventDefault();
+        const rotated = toggleTableRotation(figForChrome);
+        const button = figForChrome.querySelector("[data-fig-action='rotate']");
+        if (button) button.textContent = rotated ? "Upright" : "Rotate";
+        activeEditorRef.current = editorForFig;
+        notifyEditorChanged(editorForFig);
+        return;
+      }
+
+      if (t.closest(".nahda-fig-chrome, .nahda-fig-handle")) return;
+
+      const editor = t.closest("[data-nahda-rich='true']");
+      if (!(editor instanceof HTMLElement) || !scope.contains(editor)) return;
+
+      // Single click inside cells: select text and use font/size/color tools.
+      if (t.closest("th, td")) return;
+
+      const fig = t.closest("figure");
+      if (
+        fig instanceof HTMLElement &&
+        (fig.querySelector(":scope > img") ||
+          fig.querySelector(":scope > table, :scope > .nahda-table-wrap"))
+      ) {
+        selectResizableFigure(fig, editor, { tableHint: true });
+        activeEditorRef.current = editor;
+        return;
+      }
+
+      clearFigureSelection(editor);
+    };
+
+    const onDblClick = (e: MouseEvent) => {
+      openFromTableEvent(e);
+    };
+
+    scope.addEventListener("click", onClick);
+    scope.addEventListener("dblclick", onDblClick);
+    return () => {
+      scope.removeEventListener("click", onClick);
+      scope.removeEventListener("dblclick", onDblClick);
+    };
+  }, [scopeRef, openTableEditor]);
+
+  useEffect(() => {
+    const scope = scopeRef.current;
+    if (!scope) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      const handle = t.closest(".nahda-fig-handle");
+      if (!(handle instanceof HTMLElement)) return;
+      const fig = figureFromResizeHandle(handle, scope);
+      if (!fig) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const editor = fig.closest("[data-nahda-rich='true']");
+      if (editor instanceof HTMLElement) activeEditorRef.current = editor;
+      applyResizeDrag(fig, handle, e.clientX, () => {
+        if (editor instanceof HTMLElement) notifyEditorChanged(editor);
+      });
+    };
+
+    scope.addEventListener("mousedown", onMouseDown, true);
+    return () => scope.removeEventListener("mousedown", onMouseDown, true);
+  }, [scopeRef]);
+
+  function withEditor(runFn: () => void) {
+    if (!restore()) {
+      onError?.("Highlight text in the abstract or body, then use the toolbar.");
+      return;
+    }
+    runFn();
+    emit();
+  }
 
   async function onPickImages(files: FileList | null) {
     const placeholder = targetFigureRef.current;
     targetFigureRef.current = null;
     if (!files?.length) return;
-    const list = Array.from(files).filter((f) =>
-      IMAGE_TYPES.includes(f.type),
-    );
+    const list = Array.from(files).filter((f) => IMAGE_TYPES.includes(f.type));
     if (!list.length) {
       onError?.("Choose a PNG, JPEG, WebP, GIF, or SVG image.");
       return;
@@ -312,11 +562,6 @@ export function TemplateFormatToolbar({
     }
   }
 
-  function openImagePicker(forPlaceholder: HTMLElement | null = null) {
-    targetFigureRef.current = forPlaceholder;
-    fileInputRef.current?.click();
-  }
-
   function insertLink() {
     const url = linkUrl.trim();
     if (!url || url === "https://") {
@@ -334,7 +579,8 @@ export function TemplateFormatToolbar({
 
   return (
     <div
-      className="sticky top-0 z-20 space-y-1.5 border border-[var(--line)] bg-white/95 px-2 py-2 shadow-sm backdrop-blur-sm print:hidden"
+      ref={toolbarRef}
+      className="template-format-toolbar sticky top-0 z-20 space-y-1.5 border border-[var(--line)] bg-white/95 px-2 py-2 shadow-sm backdrop-blur-sm print:hidden"
       style={
         journalPrimary
           ? ({ "--j-primary": journalPrimary } as CSSProperties)
@@ -348,10 +594,55 @@ export function TemplateFormatToolbar({
         <span className="text-[10px] text-[var(--muted)]">
           {uploading
             ? "Uploading image…"
-            : "Click in the text, then use these tools"}
+            : "Highlight text, then format · click table caption/edge to resize · double-click table for rows"}
         </span>
       </div>
       <div className="-mx-1 flex flex-nowrap items-center gap-0.5 overflow-x-auto px-1 sm:flex-wrap sm:overflow-visible">
+        <select
+          className={TOOLBAR_SELECT_CLASS}
+          defaultValue=""
+          title="Font family"
+          aria-label="Font family"
+          onMouseDown={(e) => e.preventDefault()}
+          onChange={(e) => {
+            const font = e.target.value;
+            e.target.value = "";
+            if (!font) return;
+            withEditor(() => {
+              const root = activeEditorRef.current;
+              if (root) applyFontToEditor(root, font, run);
+            });
+          }}
+        >
+          {FONT_OPTIONS.map((o) => (
+            <option key={o.label} value={o.value} disabled={!o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className={`${TOOLBAR_SELECT_CLASS} max-w-[4.5rem]`}
+          defaultValue=""
+          title="Font size"
+          aria-label="Font size"
+          onMouseDown={(e) => e.preventDefault()}
+          onChange={(e) => {
+            const size = e.target.value;
+            e.target.value = "";
+            if (!size) return;
+            withEditor(() => {
+              const root = activeEditorRef.current;
+              if (root) applySizeToEditor(root, size);
+            });
+          }}
+        >
+          {SIZE_OPTIONS.map((o) => (
+            <option key={o.label} value={o.value} disabled={!o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <Divider />
         <ToolBtn title="Bold" onClick={() => run("bold")}>
           <span className="font-extrabold">B</span>
         </ToolBtn>
@@ -373,6 +664,55 @@ export function TemplateFormatToolbar({
         <ToolBtn title="Clear formatting" onClick={() => run("removeFormat")}>
           Clear
         </ToolBtn>
+        <Divider />
+        <button
+          type="button"
+          title="Journal heading color"
+          className="h-5 w-5 rounded-sm border border-black/15 ring-1 ring-black/5"
+          style={{
+            background: journalPrimary || "var(--j-primary, var(--accent))",
+          }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() =>
+            withEditor(() => {
+              const root = activeEditorRef.current;
+              if (root) applyColorToEditor(root, "", "fore");
+            })
+          }
+        />
+        {TEXT_COLORS.map((c) => (
+          <button
+            key={c.value}
+            type="button"
+            title={`Text ${c.label}`}
+            className="h-5 w-5 rounded-sm border border-black/10"
+            style={{ background: c.value }}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() =>
+              withEditor(() => {
+                const root = activeEditorRef.current;
+                if (root) applyColorToEditor(root, c.value, "fore");
+              })
+            }
+          />
+        ))}
+        <span className="mx-0.5 text-[10px] text-[var(--muted)]">Hi</span>
+        {HIGHLIGHT_COLORS.map((c) => (
+          <button
+            key={c.value}
+            type="button"
+            title={`Highlight ${c.label}`}
+            className="h-5 w-5 rounded-sm border border-black/10"
+            style={{ background: c.value }}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() =>
+              withEditor(() => {
+                const root = activeEditorRef.current;
+                if (root) applyColorToEditor(root, c.value, "back");
+              })
+            }
+          />
+        ))}
         <Divider />
         <ToolBtn title="Align left" onClick={() => run("justifyLeft")}>
           Left
@@ -397,6 +737,18 @@ export function TemplateFormatToolbar({
           H3
         </ToolBtn>
         <ToolBtn
+          title="Block quote"
+          onClick={() => run("formatBlock", "<blockquote>")}
+        >
+          Quote
+        </ToolBtn>
+        <ToolBtn title="Increase indent" onClick={() => run("indent")}>
+          →
+        </ToolBtn>
+        <ToolBtn title="Decrease indent" onClick={() => run("outdent")}>
+          ←
+        </ToolBtn>
+        <ToolBtn
           title="Bullet list"
           onClick={() => run("insertUnorderedList")}
         >
@@ -412,24 +764,24 @@ export function TemplateFormatToolbar({
         <ToolBtn
           title="Insert / edit link"
           active={linkOpen}
-          onClick={() => setLinkOpen((o) => !o)}
+          onClick={() => {
+            setLinkOpen((o) => !o);
+            setTableOpen(false);
+          }}
         >
           Link
         </ToolBtn>
         <ToolBtn
-          title="Insert a 3×3 table with visible grid lines"
-          onClick={() =>
-            insertHtml(
-              `<figure class="table-full"><figcaption>Table 1.</figcaption><table><thead><tr><th>Column 1</th><th>Column 2</th><th>Column 3</th></tr></thead><tbody><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></tbody></table></figure><p><br></p>`,
-            )
-          }
+          title="Insert or edit table (click a table in the article to edit)"
+          active={tableOpen}
+          onClick={toggleTablePanel}
         >
           Table
         </ToolBtn>
         <ToolBtn
           title="Upload image from your computer"
           disabled={uploading}
-          onClick={() => openImagePicker(null)}
+          onClick={() => fileInputRef.current?.click()}
         >
           {uploading ? "Uploading…" : "Image"}
         </ToolBtn>
@@ -470,6 +822,20 @@ export function TemplateFormatToolbar({
           >
             Insert link
           </button>
+        </div>
+      ) : null}
+      {tableOpen ? (
+        <div className="border-t border-[var(--line)] bg-[var(--surface)]/40 px-1 py-2">
+          <WordTableEditor
+            key={tableEditorKey}
+            initial={tableSeed}
+            updateMode={tableUpdateMode}
+            onCancel={() => {
+              setTableOpen(false);
+              targetTableRef.current = null;
+            }}
+            onInsert={(html) => applyTableHtml(html)}
+          />
         </div>
       ) : null}
     </div>

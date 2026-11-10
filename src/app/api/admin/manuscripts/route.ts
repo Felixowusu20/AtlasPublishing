@@ -112,6 +112,16 @@ const saveSchema = z.object({
       }),
     )
     .optional(),
+  supplementaryFiles: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1).max(200),
+        fileName: z.string().min(1).max(240),
+        url: z.string().url(),
+      }),
+    )
+    .optional(),
   /** When true, marks manuscript ready and caller should redirect to publish. */
   done: z.boolean().optional(),
 });
@@ -124,6 +134,7 @@ type SavedRow = {
   keywords: string[];
   productionBody: string | null;
   productionFigures: unknown;
+  supplementaryFiles?: unknown;
   manuscriptReadyAt: Date | null;
   status: string;
   progress: number;
@@ -143,6 +154,7 @@ async function saveProductionFields(args: {
   title?: string;
   abstract?: string;
   keywords?: string[];
+  supplementaryFiles?: unknown;
 }): Promise<SavedRow> {
   const readyAt = args.done ? new Date() : args.existingReadyAt;
   const nextStatus = args.done ? ("IN_PRODUCTION" as const) : undefined;
@@ -160,6 +172,11 @@ async function saveProductionFields(args: {
         ...meta,
         productionBody: args.body,
         productionFigures: args.figures as Prisma.InputJsonValue,
+        ...(args.supplementaryFiles !== undefined
+          ? {
+              supplementaryFiles: args.supplementaryFiles as Prisma.InputJsonValue,
+            }
+          : {}),
         manuscriptReadyAt: readyAt,
         ...(nextStatus
           ? {
@@ -176,6 +193,7 @@ async function saveProductionFields(args: {
         keywords: true,
         productionBody: true,
         productionFigures: true,
+        supplementaryFiles: true,
         manuscriptReadyAt: true,
         status: true,
         progress: true,
@@ -183,7 +201,7 @@ async function saveProductionFields(args: {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (!/productionBody|Unknown argument/i.test(msg)) throw err;
+    if (!/productionBody|supplementaryFiles|Unknown argument/i.test(msg)) throw err;
 
     console.warn(
       "[manuscripts] Prisma client missing production fields — using SQL fallback. Restart Next.js after prisma generate.",
@@ -195,6 +213,7 @@ async function saveProductionFields(args: {
         SET
           "productionBody" = ${args.body},
           "productionFigures" = ${JSON.stringify(args.figures)}::jsonb,
+          "supplementaryFiles" = ${JSON.stringify(args.supplementaryFiles ?? [])}::jsonb,
           "manuscriptReadyAt" = ${readyAt},
           "status" = 'IN_PRODUCTION'::"SubmissionStatus",
           "progress" = ${progress ?? 85},
@@ -209,6 +228,7 @@ async function saveProductionFields(args: {
         SET
           "productionBody" = ${args.body},
           "productionFigures" = ${JSON.stringify(args.figures)}::jsonb,
+          "supplementaryFiles" = ${JSON.stringify(args.supplementaryFiles ?? [])}::jsonb,
           "title" = COALESCE(${args.title ?? null}, "title"),
           "abstract" = COALESCE(${args.abstract ?? null}, "abstract"),
           "updatedAt" = NOW()
@@ -286,6 +306,7 @@ export async function PATCH(request: Request) {
       id: data.submissionId,
       body: ensureManuscriptHtml(data.body),
       figures: data.figures ?? [],
+      supplementaryFiles: data.supplementaryFiles,
       done: Boolean(data.done),
       existingReadyAt,
       title: data.title?.trim(),

@@ -197,6 +197,8 @@ model PublishedArticle {
   coverImageUrl String?
   coverImagePublicId String?
   manuscriptUrl String?
+  /// Extra files for this paper: [{ id, label, fileName, url }]
+  supplementaryFiles Json?
   citations     Int      @default(0)
   downloads     Int      @default(0)
   views         Int      @default(0)
@@ -247,6 +249,8 @@ model Submission {
   productionBody     String?
   /// Uploaded figures for the production body: [{ id, url, filename, caption }]
   productionFigures  Json?
+  /// Extra files bound to this paper: [{ id, label, fileName, url }]
+  supplementaryFiles Json?
   /// Set when the reviewer marks the full manuscript as ready for publish.
   manuscriptReadyAt  DateTime?
   actionRequired     String?

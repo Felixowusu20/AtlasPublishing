@@ -1,10 +1,11 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { AuthorOrcidLine } from "@/components/orcid-id";
 import { TemplateEditable } from "@/components/template-editable";
 import { journalArticlePalette } from "@/lib/journal-colors";
 import { ensureManuscriptHtml } from "@/lib/import-manuscript";
+import { layoutTableFigures } from "@/lib/nahda-table-orient";
 import { buildApaCitation } from "@/lib/apa-citation";
 import { authorDisplayName } from "@/lib/orcid";
 
@@ -59,6 +60,8 @@ type Props = {
    */
   editable?: boolean;
   onEditableChange?: (patch: TemplateEditableFields) => void;
+  /** Public page for this paper’s extra files. Shown only when files exist. */
+  supplementaryHref?: string;
 };
 
 function AbstractHtml({ abstract }: { abstract: string }) {
@@ -75,11 +78,15 @@ function AbstractHtml({ abstract }: { abstract: string }) {
 }
 
 function ArticleBodyHtml({ body }: { body?: string }) {
-  if (!body?.trim()) return null;
-  const html = ensureManuscriptHtml(body);
+  const ref = useRef<HTMLDivElement>(null);
+  const html = body?.trim() ? ensureManuscriptHtml(body) : "";
+  useEffect(() => {
+    if (ref.current) layoutTableFigures(ref.current);
+  }, [html]);
   if (!html) return null;
   return (
     <div
+      ref={ref}
       className="nahda-article-body"
       dangerouslySetInnerHTML={{ __html: html }}
     />
@@ -178,6 +185,7 @@ export function NahdaArticleTemplate({
   wide = false,
   editable = false,
   onEditableChange,
+  supplementaryHref,
 }: Props) {
   const palette = journalArticlePalette(
     coverColor,
@@ -672,6 +680,25 @@ export function NahdaArticleTemplate({
                 </p>
               </div>
             ) : null}
+          </section>
+        ) : null}
+        {supplementaryHref ? (
+          <section className="nahda-span-all nahda-supplementary-note">
+            <h2
+              className="text-[11px] font-bold uppercase tracking-[0.14em]"
+              style={{
+                color: "var(--j-primary)",
+                fontFamily: "Helvetica, Arial, sans-serif",
+              }}
+            >
+              Supplementary material
+            </h2>
+            <p>
+              Extra tables, data, and files for this article are published with
+              the paper.{" "}
+              <a href={supplementaryHref}>Read supplementary material</a> (
+              {supplementaryHref}).
+            </p>
           </section>
         ) : null}
         <section className="nahda-end-matter nahda-span-all">

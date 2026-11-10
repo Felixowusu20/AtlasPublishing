@@ -18,6 +18,7 @@ import { deriveIssueRecords, isPlaceholderIssue, numberedIssuePlacement } from "
 import { persistNumberedIssues } from "@/lib/issue-catalog";
 import { articleDateYear, parseArticleDate } from "@/lib/article-dates";
 import { ensureManuscriptHtml, htmlToPlainText } from "@/lib/import-manuscript";
+import { parseSupplementaryFiles } from "@/lib/supplementary-files";
 import { optionalIssn } from "@/lib/issn";
 import {
   jointAuthorGreeting,
@@ -124,6 +125,16 @@ const publishSchema = z.object({
     )
     .optional(),
   pdfUrl: z.string().url().optional(),
+  supplementaryFiles: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1).max(200),
+        fileName: z.string().min(1).max(240),
+        url: z.string().url(),
+      }),
+    )
+    .optional(),
   receivedAt: z.string().optional(),
   acceptedAt: z.string().optional(),
   publishedAt: z.string().optional(),
@@ -278,6 +289,9 @@ export async function POST(request: Request) {
       abstract,
       keywords: body.keywords ?? submission.keywords,
       manuscriptUrl: publishedPdfUrl,
+      supplementaryFiles: parseSupplementaryFiles(
+        body.supplementaryFiles ?? submission.supplementaryFiles,
+      ),
       coverImageUrl:
         body.coverImageUrl || submission.journal.coverImageUrl || undefined,
       isFeatured: body.isFeatured ?? true,
@@ -353,6 +367,7 @@ export async function POST(request: Request) {
     // Refresh SEO surfaces so Google/Scholar discover the new article promptly.
     try {
       revalidatePath(`/articles/${result.slug}`);
+      revalidatePath(`/articles/${result.slug}/supplementary`);
       revalidatePath(`/journals/${result.journal.slug}`);
       revalidatePath(
         `/journals/${result.journal.slug}/issues/${issueKey(result.volume, result.issue)}`,

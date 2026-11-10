@@ -12,6 +12,7 @@ import {
   htmlToPlainText,
   sanitizeManuscriptHtml,
 } from "@/lib/import-manuscript";
+import { layoutTableFigures } from "@/lib/nahda-table-orient";
 
 type CommonProps = {
   value: string;
@@ -91,6 +92,9 @@ export function TemplateEditable({
       if (!html.trim()) html = "<p><br></p>";
       if (!seeded.current) {
         el.innerHTML = html;
+        requestAnimationFrame(() => {
+          if (ref.current) layoutTableFigures(ref.current);
+        });
         lastEmitted.current = html === "<p><br></p>" ? "" : html;
         seeded.current = true;
         if (html !== value && html !== "<p><br></p>") onChange(html);
@@ -101,6 +105,9 @@ export function TemplateEditable({
       if (document.activeElement === el) return;
       const next = ensureManuscriptHtml(value);
       el.innerHTML = next.trim() ? next : "<p><br></p>";
+      requestAnimationFrame(() => {
+        if (ref.current) layoutTableFigures(ref.current);
+      });
       lastEmitted.current = next;
       return;
     }

@@ -455,12 +455,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
       className="admin-theme-root flex h-dvh max-h-dvh overflow-hidden bg-[var(--admin-soft-bg,#f3f6f9)] text-[var(--ink)] print:block print:h-auto print:max-h-none print:min-h-0 print:overflow-visible print:bg-white"
     >
       <aside
-        className={`hidden shrink-0 border-r border-[var(--line)] bg-[#0b1f33] text-white transition-[width] duration-200 print:hidden lg:flex lg:flex-col ${
+        className={`hidden h-full min-h-0 shrink-0 overflow-hidden border-r border-[var(--line)] bg-[#0b1f33] text-white transition-[width] duration-200 print:hidden lg:flex lg:flex-col ${
           collapsed ? "w-[72px]" : "w-64"
         }`}
       >
         <div
-          className={`border-b border-white/10 ${collapsed ? "px-3 py-4" : "px-5 py-5"}`}
+          className={`shrink-0 border-b border-white/10 ${collapsed ? "px-3 py-4" : "px-5 py-5"}`}
         >
           {collapsed ? (
             <Image
@@ -491,7 +491,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
           )}
         </div>
 
-        <nav className={`flex-1 space-y-0.5 ${collapsed ? "p-2" : "p-3"}`}>
+        <nav
+          className={`min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain ${collapsed ? "p-2" : "p-3"}`}
+        >
           {links.map((item) => {
             const active =
               item.href === "/admin"
@@ -520,7 +522,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className={`border-t border-white/10 ${collapsed ? "p-2" : "p-4"}`}>
+        <div className={`shrink-0 border-t border-white/10 ${collapsed ? "p-2" : "p-4"}`}>
           <button
             type="button"
             onClick={toggleSidebar}

@@ -27,6 +27,11 @@ import {
 } from "@/lib/orcid";
 import { htmlToPlainText } from "@/lib/import-manuscript";
 import { slugify } from "@/lib/submission-utils";
+import {
+  parseSupplementaryFiles,
+  supplementaryPath,
+  type SupplementaryFile,
+} from "@/lib/supplementary-files";
 import { RichTextField } from "@/components/rich-text-field";
 import { TemplateFormatToolbar } from "@/components/template-format-toolbar";
 import { journalArticlePalette } from "@/lib/journal-colors";
@@ -61,6 +66,7 @@ type QueueItem = {
   manuscriptUrl?: string | null;
   productionBody?: string | null;
   productionFigures?: ManuscriptFigure[] | null;
+  supplementaryFiles?: SupplementaryFile[] | null;
   manuscriptReadyAt?: string | null;
   funding?: string | null;
   conflictOfInterest?: string | null;
@@ -124,6 +130,7 @@ type TemplateForm = {
   body: string;
   figures: ManuscriptFigure[];
   pdfUrl: string;
+  supplementary: SupplementaryFile[];
 };
 
 function authorEntriesFromSubmission(sub: QueueItem): AuthorEntry[] {
@@ -189,6 +196,7 @@ function emptyForm(): TemplateForm {
     body: "",
     figures: [],
     pdfUrl: "",
+    supplementary: [],
   };
 }
 
@@ -223,6 +231,7 @@ export default function PublishedArticlesPage() {
   const [publishing, setPublishing] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [uploadingSupplementary, setUploadingSupplementary] = useState(false);
   const [pdfKind, setPdfKind] = useState<"none" | "uploaded" | "generated">(
     "none",
   );
@@ -321,6 +330,7 @@ export default function PublishedArticlesPage() {
       figures: f.figures,
       done: false,
       keywords: splitList(f.keywords, ","),
+      supplementaryFiles: f.supplementary,
     };
     if (f.title.trim().length >= 2) payload.title = f.title.trim();
     if (htmlToPlainText(f.abstract).trim().length >= 10) {
@@ -348,6 +358,7 @@ export default function PublishedArticlesPage() {
                 keywords: data.submission?.keywords ?? q.keywords,
                 productionBody: f.body,
                 productionFigures: f.figures,
+                supplementaryFiles: f.supplementary,
               }
             : q,
         ),
@@ -416,6 +427,7 @@ export default function PublishedArticlesPage() {
       body: savedBody,
       figures: parseFigures(sub.productionFigures),
       pdfUrl: "",
+      supplementary: parseSupplementaryFiles(sub.supplementaryFiles),
     });
     setPdfKind("none");
     setUploadedPdfName("");
@@ -557,6 +569,42 @@ export default function PublishedArticlesPage() {
     } finally {
       setUploadingPdf(false);
       if (cleanedPdfInputRef.current) cleanedPdfInputRef.current.value = "";
+    }
+  }
+
+  async function onSupplementaryUpload(files: FileList | null) {
+    if (!files?.length || !selected) return;
+    setUploadingSupplementary(true);
+    setError("");
+    try {
+      const uploaded: SupplementaryFile[] = [];
+      for (const file of Array.from(files)) {
+        const data = await uploadFileDirect(file, {
+          folder: `nahda/supplementary/${selected.id}`,
+          resourceType: file.type.startsWith("image/") ? "image" : "raw",
+          prepare: false,
+        });
+        const label = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+        uploaded.push({
+          id: crypto.randomUUID(),
+          label: label || file.name,
+          fileName: file.name,
+          url: data.url,
+        });
+      }
+      setForm((f) => ({
+        ...f,
+        supplementary: [...f.supplementary, ...uploaded],
+      }));
+      setSuccess(
+        uploaded.length === 1
+          ? "Supplementary file attached to this paper."
+          : `${uploaded.length} supplementary files attached to this paper.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Supplementary upload failed");
+    } finally {
+      setUploadingSupplementary(false);
     }
   }
 
@@ -774,6 +822,7 @@ export default function PublishedArticlesPage() {
           caption: f.caption,
         })),
         pdfUrl,
+        supplementaryFiles: form.supplementary,
       }),
     });
     const contentType = res.headers.get("content-type") || "";
@@ -899,6 +948,11 @@ export default function PublishedArticlesPage() {
         funding={selected.funding}
         conflictOfInterest={selected.conflictOfInterest}
         body={form.body}
+        supplementaryHref={
+          form.supplementary.length
+            ? supplementaryPath(slugify(form.title) || "article")
+            : undefined
+        }
       />
     );
   }
@@ -1320,9 +1374,11 @@ export default function PublishedArticlesPage() {
                           </p>
                           <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[var(--muted)]">
                             Click in the abstract or body, then use the format
-                            toolbar (bold, lists, table, image). Image opens
-                            files from your computer. Use Article details for
-                            PDF and publish.
+                            toolbar (font, size, color, lists, table, image).
+                            Click a table caption, then Rotate, to turn a wide table
+                            on its side. Drag the edges to fit the page;
+                            double-click for rows and columns. Use Article details
+                            for PDF and publish.
                             {selected.manuscriptReadyAt
                               ? " A draft is already loaded from Full manuscripts."
                               : selected.productionBody?.trim()
@@ -1442,6 +1498,11 @@ export default function PublishedArticlesPage() {
                         }
                         funding={selected.funding}
                         conflictOfInterest={selected.conflictOfInterest}
+                        supplementaryHref={
+                          form.supplementary.length
+                            ? supplementaryPath(slugify(form.title) || "article")
+                            : undefined
+                        }
                       />
                       </div>
                     </div>
@@ -1758,6 +1819,87 @@ export default function PublishedArticlesPage() {
                             </a>
                           </p>
                         ) : null}
+                      </div>
+
+                      <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/50 p-4">
+                        <p className="text-xs font-semibold text-[var(--ink)]">
+                          Supplementary material
+                        </p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
+                          Files uploaded here stay with this paper. The article
+                          links to its own supplementary page.
+                        </p>
+                        <label className="btn-secondary mt-3 cursor-pointer !px-3 !py-2 text-center text-xs">
+                          {uploadingSupplementary
+                            ? "Uploading…"
+                            : "Upload supplementary files"}
+                          <input
+                            type="file"
+                            multiple
+                            className="hidden"
+                            disabled={uploadingSupplementary || publishing}
+                            onChange={(e) => {
+                              const input = e.currentTarget;
+                              void onSupplementaryUpload(input.files).finally(() => {
+                                input.value = "";
+                              });
+                            }}
+                          />
+                        </label>
+                        {form.supplementary.length ? (
+                          <ul className="mt-3 space-y-2">
+                            {form.supplementary.map((file) => (
+                              <li
+                                key={file.id}
+                                className="rounded-lg border border-[var(--line)] bg-white p-2"
+                              >
+                                <input
+                                  value={file.label}
+                                  onChange={(e) =>
+                                    setForm((f) => ({
+                                      ...f,
+                                      supplementary: f.supplementary.map((item) =>
+                                        item.id === file.id
+                                          ? { ...item, label: e.target.value }
+                                          : item,
+                                      ),
+                                    }))
+                                  }
+                                  className="w-full rounded border border-[var(--line)] px-2 py-1 text-xs text-[var(--ink)]"
+                                  aria-label="Supplementary file label"
+                                />
+                                <div className="mt-1 flex items-center justify-between gap-2">
+                                  <a
+                                    href={file.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="truncate text-[11px] text-[var(--accent)] underline"
+                                  >
+                                    {file.fileName}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    className="shrink-0 text-[11px] font-semibold text-rose-700"
+                                    onClick={() =>
+                                      setForm((f) => ({
+                                        ...f,
+                                        supplementary: f.supplementary.filter(
+                                          (item) => item.id !== file.id,
+                                        ),
+                                      }))
+                                    }
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-2 text-[11px] text-[var(--muted)]">
+                            No supplementary files yet.
+                          </p>
+                        )}
                       </div>
 
                       <div className="space-y-3 rounded-xl border border-[var(--line)] bg-white p-4">

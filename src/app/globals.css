@@ -756,8 +756,7 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .nahda-article-body figure:has(table),
 .nahda-article-body figure.table-full {
-  display: flex;
-  flex-direction: column;
+  display: block;
   width: 100%;
   max-width: 100%;
   margin: 0.95em 0;
@@ -1060,8 +1059,24 @@ input[type="search"]::-webkit-search-results-decoration {
   overflow: hidden;
 }
 
+.nahda-supplementary-note {
+  margin: 0.85em 0;
+  padding: 0.75em 0.9em;
+  background: var(--j-soft, #f3f6f7);
+  border: 1px solid #e8edf2;
+}
+
+.nahda-supplementary-note p {
+  margin: 0.35em 0 0;
+}
+
+.nahda-supplementary-note a {
+  font-weight: 700;
+}
+
 .nahda-span-all,
 .nahda-article-flow .nahda-end-matter,
+.nahda-article-flow .nahda-supplementary-note,
 .nahda-article-flow .nahda-supplementary,
 .nahda-article-flow figure.figure-full,
 .nahda-article-flow figure.table-full,
@@ -1113,15 +1128,30 @@ input[type="search"]::-webkit-search-results-decoration {
   min-width: 100%;
 }
 
-.nahda-article-body figure.table-rotated {
-  overflow: visible;
+.nahda-article-body figure.table-landscape table {
+  font-size: 9px;
 }
 
-.nahda-article-body figure.table-rotated > table {
-  transform: rotate(90deg);
-  transform-origin: center center;
+/* Rotated tables sit in a measured box. Do not transform the figure itself. */
+.nahda-article-body .nahda-table-rotator {
+  position: relative;
+  display: block;
   width: 100%;
-  margin-block: 5rem;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.nahda-article-body figure.table-rotated,
+.nahda-article-body figure.table-rotated > .nahda-table-rotator {
+  overflow: hidden;
+}
+
+.nahda-article-body figure.table-rotated table,
+.nahda-article-body .nahda-table-rotator table {
+  width: max-content !important;
+  max-width: none !important;
+  table-layout: auto !important;
+  margin: 0 !important;
 }
 
 /* In-place body editing needs a real box so the caret can focus (display:contents breaks that). */
@@ -1129,6 +1159,9 @@ input[type="search"]::-webkit-search-results-decoration {
 .nahda-article-flow .nahda-article-body.manuscript-wysiwyg.nahda-body-inplace {
   display: block;
   column-span: all;
+  column-count: 2;
+  column-gap: 1.15rem;
+  column-fill: balance;
   min-height: 16rem;
   width: 100%;
   max-width: 100%;
@@ -1138,7 +1171,58 @@ input[type="search"]::-webkit-search-results-decoration {
   cursor: text;
   overflow-wrap: anywhere;
   word-break: break-word;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.nahda-article-flow .nahda-article-body.nahda-body-inplace > figure,
+.nahda-article-flow .nahda-article-body.nahda-body-inplace > .nahda-table-wrap,
+.nahda-article-flow .nahda-article-body.nahda-body-inplace > .nahda-supplementary,
+.nahda-article-flow .nahda-article-body.nahda-body-inplace > .nahda-workflow {
+  column-span: all;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.nahda-article-body figure:has(table)[style*="width"],
+.nahda-article-body figure.table-full[style*="width"],
+.nahda-article-body figure.figure-full[style*="width"] {
+  box-sizing: border-box;
+  max-width: 100% !important;
+}
+
+/* Publish editor: full-width tables stay inside the article frame. */
+.manuscript-wysiwyg.nahda-body-inplace figure.table-full,
+.manuscript-wysiwyg.nahda-body-inplace figure:has(table),
+.manuscript-wysiwyg.nahda-body-inplace .nahda-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.manuscript-wysiwyg.nahda-body-inplace figure.table-full table,
+.manuscript-wysiwyg.nahda-body-inplace figure:has(table) table,
+.manuscript-wysiwyg.nahda-body-inplace .nahda-table-wrap table {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed;
+  font-size: 10px;
+}
+
+.manuscript-wysiwyg.nahda-body-inplace figure.table-full:hover,
+.manuscript-wysiwyg.nahda-body-inplace figure:has(table):hover {
+  outline: 2px solid color-mix(in srgb, var(--j-primary, var(--accent)) 40%, transparent);
+  outline-offset: 2px;
+}
+
+.manuscript-wysiwyg.nahda-body-inplace th,
+.manuscript-wysiwyg.nahda-body-inplace td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
 }
 
 .nahda-article-flow .nahda-body-inplace p,
@@ -1460,6 +1544,21 @@ input[type="search"]::-webkit-search-results-decoration {
     page-break-inside: avoid !important;
   }
 
+  .nahda-article-flow figure.table-full,
+  .nahda-article-flow figure:has(table),
+  .nahda-article-flow .nahda-table-wrap {
+    display: block !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+    max-height: none !important;
+  }
+
+  .nahda-article-flow table {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+    max-height: none !important;
+  }
+
   .nahda-article-flow p,
   .nahda-article-flow li {
     break-inside: auto;
@@ -1745,6 +1844,21 @@ input[type="search"]::-webkit-search-results-decoration {
   page-break-inside: avoid !important;
 }
 
+.nahda-pdf-print figure.table-full,
+.nahda-pdf-print figure:has(table),
+.nahda-pdf-print .nahda-table-wrap {
+  display: block !important;
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+  max-height: none !important;
+}
+
+.nahda-pdf-print table {
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+  max-height: none !important;
+}
+
 .nahda-pdf-print figure,
 .nahda-pdf-print .nahda-workflow {
   max-height: 230mm !important;
@@ -1765,8 +1879,7 @@ input[type="search"]::-webkit-search-results-decoration {
 .nahda-pdf-print table {
   width: 100% !important;
   max-width: 100% !important;
-  max-height: 220mm !important;
-  table-layout: auto !important;
+  table-layout: fixed !important;
   overflow: visible !important;
   border: 1px solid #0b1f33 !important;
   border-collapse: collapse !important;
