@@ -8,7 +8,7 @@
  */
 
 import { CLOUDINARY_MAX_UPLOAD_BYTES } from "@/lib/prepare-upload-file";
-import { clearRotatedLayout } from "@/lib/nahda-table-orient";
+import { clearRotatedLayout, readTableAngle } from "@/lib/nahda-table-orient";
 import type { jsPDF } from "jspdf";
 
 const A4_WIDTH_MM = 210;
@@ -313,11 +313,43 @@ function restoreCaptureStyles(root: HTMLElement, widthPx?: number) {
   });
 }
 
+function canvasForTableAngle(
+  shot: HTMLCanvasElement,
+  angle: 90 | 180 | 270,
+): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  const ctx = out.getContext("2d");
+  if (!ctx) return shot;
+  if (angle === 180) {
+    out.width = shot.width;
+    out.height = shot.height;
+    ctx.translate(out.width, out.height);
+    ctx.rotate(Math.PI);
+    ctx.drawImage(shot, 0, 0);
+    return out;
+  }
+  out.width = shot.height;
+  out.height = shot.width;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, out.width, out.height);
+  if (angle === 90) {
+    ctx.translate(0, out.height);
+    ctx.rotate(-Math.PI / 2);
+  } else {
+    ctx.translate(out.width, 0);
+    ctx.rotate(Math.PI / 2);
+  }
+  ctx.drawImage(shot, 0, 0);
+  return out;
+}
+
 async function bakeRotatedTables(root: HTMLElement, html2canvas: Html2CanvasFn) {
   const figures = Array.from(
-    root.querySelectorAll<HTMLElement>("figure.table-rotated"),
+    root.querySelectorAll<HTMLElement>("figure.table-rotated, figure[data-table-angle]"),
   );
   for (const figure of figures) {
+    const angle = readTableAngle(figure);
+    if (angle === 0) continue;
     try {
       clearRotatedLayout(figure);
       const table = figure.querySelector("table");
@@ -335,16 +367,7 @@ async function bakeRotatedTables(root: HTMLElement, html2canvas: Html2CanvasFn) 
         useCORS: true,
         logging: false,
       });
-      const rotated = document.createElement("canvas");
-      rotated.width = shot.height;
-      rotated.height = shot.width;
-      const ctx = rotated.getContext("2d");
-      if (!ctx) continue;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, rotated.width, rotated.height);
-      ctx.translate(0, rotated.height);
-      ctx.rotate(-Math.PI / 2);
-      ctx.drawImage(shot, 0, 0);
+      const rotated = canvasForTableAngle(shot, angle);
       const img = document.createElement("img");
       img.src = rotated.toDataURL("image/png");
       img.alt = (figure.querySelector("figcaption")?.textContent || "Table")

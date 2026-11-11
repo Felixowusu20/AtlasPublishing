@@ -25,6 +25,11 @@ import {
   sanitizeManuscriptHtml,
 } from "@/lib/import-manuscript";
 import { layoutTableFigures } from "@/lib/nahda-table-orient";
+import {
+  FONT_SIZE_SUGGESTIONS,
+  applyFontToEditor,
+  applySizeToEditor,
+} from "@/lib/rich-text-format-helpers";
 
 export type ManuscriptFigure = {
   id: string;
@@ -65,7 +70,13 @@ function ToolBtn({ title, onClick, children, disabled, active }: ToolBtnProps) {
       type="button"
       title={title}
       disabled={disabled}
-      onClick={onClick}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        if (!disabled) onClick();
+      }}
+      onClick={(e) => {
+        if (e.detail === 0 && !disabled) onClick();
+      }}
       className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
         active
           ? "bg-white text-[var(--accent)] shadow-sm ring-1 ring-[var(--accent)]/30"
@@ -126,17 +137,6 @@ const FONT_OPTIONS = [
   { value: "Arial", label: "Arial" },
   { value: "Helvetica", label: "Helvetica" },
   { value: "Calibri", label: "Calibri" },
-];
-
-const SIZE_OPTIONS = [
-  { value: "", label: "Size" },
-  { value: "10", label: "10" },
-  { value: "11", label: "11" },
-  { value: "12", label: "12" },
-  { value: "14", label: "14" },
-  { value: "16", label: "16" },
-  { value: "18", label: "18" },
-  { value: "24", label: "24" },
 ];
 
 const selectClass =
@@ -363,6 +363,7 @@ export function ManuscriptEditor({
   const lastEmitted = useRef(value);
   const seeded = useRef(false);
   const fileId = useId();
+  const sizeListId = useId();
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
@@ -480,12 +481,12 @@ export function ManuscriptEditor({
     (command: string, commandValue?: string) => {
       const el = editorRef.current;
       if (!el) return;
-      el.focus();
+      if (!restoreInsertPoint()) el.focus();
       document.execCommand("styleWithCSS", false, "true");
       document.execCommand(command, false, commandValue);
       emit();
     },
-    [emit],
+    [emit, restoreInsertPoint],
   );
 
   const insertHtml = useCallback(
@@ -524,38 +525,21 @@ export function ManuscriptEditor({
   );
 
   function applyFont(font: string) {
-    const heading = colorTargetFromSelection();
     const root = editorRef.current;
-    if (heading && root?.contains(heading)) {
-      heading.style.fontFamily = font;
-      emit();
-      return;
-    }
-    run("fontName", font);
+    if (!root) return;
+    if (!restoreInsertPoint()) root.focus();
+    applyFontToEditor(root, font);
+    emit();
   }
 
   function applySize(size: string) {
-    const heading = colorTargetFromSelection();
     const root = editorRef.current;
-    if (heading && root?.contains(heading)) {
-      heading.style.fontSize = `${size}pt`;
-      heading.style.letterSpacing = "normal";
-      emit();
+    if (!root) return;
+    if (!restoreInsertPoint()) root.focus();
+    if (!applySizeToEditor(root, size)) {
+      onError?.("Type a font size between 4 and 96 points.");
       return;
     }
-    const el = editorRef.current;
-    if (!el) return;
-    el.focus();
-    document.execCommand("styleWithCSS", false, "true");
-    document.execCommand("fontSize", false, "7");
-    el.querySelectorAll('font[size="7"], span[style*="xxx-large"]').forEach(
-      (node) => {
-        const span = document.createElement("span");
-        span.style.fontSize = `${size}pt`;
-        span.innerHTML = (node as HTMLElement).innerHTML;
-        node.replaceWith(span);
-      },
-    );
     emit();
   }
 
@@ -571,7 +555,7 @@ export function ManuscriptEditor({
   function applyColor(color: string, kind: "fore" | "back") {
     const el = editorRef.current;
     if (!el) return;
-    el.focus();
+    if (!restoreInsertPoint()) el.focus();
     document.execCommand("styleWithCSS", false, "true");
 
     const heading = kind === "fore" ? colorTargetFromSelection() : null;
@@ -1025,23 +1009,31 @@ export function ManuscriptEditor({
                   </option>
                 ))}
               </select>
-              <select
-                className={`${selectClass} max-w-[4.5rem]`}
-                defaultValue=""
-                title="Font size"
-                aria-label="Font size"
-                onChange={(e) => {
-                  const size = e.target.value;
-                  e.target.value = "";
-                  if (size) applySize(size);
-                }}
-              >
-                {SIZE_OPTIONS.map((o) => (
-                  <option key={o.label} value={o.value} disabled={!o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <label className="flex items-center gap-1" title="Font size in points">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  list={sizeListId}
+                  placeholder="Size"
+                  aria-label="Font size in points"
+                  className={`${selectClass} w-14 max-w-[3.5rem] text-center`}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    applySize(e.currentTarget.value);
+                  }}
+                  onBlur={(e) => {
+                    if (e.currentTarget.value.trim()) applySize(e.currentTarget.value);
+                  }}
+                />
+                <span className="text-[10px] font-semibold text-[var(--muted)]">pt</span>
+                <datalist id={sizeListId}>
+                  {FONT_SIZE_SUGGESTIONS.map((size) => (
+                    <option key={size} value={size} />
+                  ))}
+                </datalist>
+              </label>
             </ToolGroup>
             <Divider />
             <ToolGroup label="Style">
@@ -1237,7 +1229,7 @@ export function ManuscriptEditor({
                     ],
                     caption: "",
                     fullWidth: true,
-                    orientation: "normal",
+                    orientation: 0,
                     supplementary: false,
                   });
                   setTableEditorKey((k) => k + 1);

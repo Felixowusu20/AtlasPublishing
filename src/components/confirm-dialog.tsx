@@ -16,6 +16,8 @@ type Props = {
   onCancel: () => void;
   /** Optional meta line under the title (e.g. article name) */
   eyebrow?: string;
+  /** Stack above another overlay. Defaults to the usual dialog layer. */
+  className?: string;
 };
 
 const toneStyles: Record<
@@ -81,6 +83,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   eyebrow,
+  className = "z-[100]",
 }: Props) {
   const titleId = useId();
   const descId = useId();
@@ -106,7 +109,7 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center p-4 sm:items-center">
+    <div className={`fixed inset-0 flex items-end justify-center p-4 sm:items-center ${className}`}>
       <button
         type="button"
         aria-label="Dismiss"

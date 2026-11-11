@@ -6,7 +6,7 @@ export type ImportedFigure = {
 };
 
 const BODY_HEADING =
-  /^(?:(?:\d+|[IVXLC]+)[.)]?\s*)?(introduction|background|literature review|related work|methods?|materials and methods|methodology|results?|findings|discussion|challenges?|limitations?|implications?|recommendations?|future work|outlook|conclusion|acknowledg(?:e)?ments?|references|bibliography)\.?\s*$/i;
+  /^(?:(?:\d+(?:\.\d+)*|[IVXLC]+)[.)]?\s+)?(introduction|background|literature review|related work|methods?|materials and methods|methodology|results?|findings|discussion|challenges?|limitations?|implications?|recommendations?|future work|outlook|conclusion|acknowledg(?:e)?ments?|references|bibliography)\.?\s*$/i;
 
 const ALLOWED_TAGS = new Set([
   "p",
@@ -156,6 +156,13 @@ function sanitizeAttrs(tag: string, raw: string): string {
     if (key === "data-custom-color") {
       out.push(`data-custom-color="${escapeAttr(val || "true")}"`);
     }
+    if (
+      key === "data-table-angle" &&
+      tag === "figure" &&
+      (val === "0" || val === "90" || val === "180" || val === "270")
+    ) {
+      out.push(`data-table-angle="${val}"`);
+    }
   }
   if (tag === "a") {
     out.push('target="_blank"', 'rel="noopener noreferrer"');
@@ -274,7 +281,8 @@ function sectionHeadingLevel(text: string): "h1" | "h2" | "h3" | null {
 function promoteSectionHeadings(html: string): string {
   return html.replace(
     /<(p|h[1-4])\b([^>]*)>([\s\S]*?)<\/\1>/gi,
-    (full, tag: string, attrs: string, inner: string) => {
+    (full, tag: string, attrs: string, inner: string, offset: number) => {
+      if (isInsideTable(html, offset)) return full;
       const level = sectionHeadingLevel(htmlToPlainText(inner));
       if (!level) return full;
       if (tag.toLowerCase() === level) return full;
@@ -403,6 +411,14 @@ function looksLikeTableCaption(text: string): RegExpMatchArray | null {
 }
 
 /** Drop markdown leftovers, ChatGPT links, empty hashes, and placeholder figures. */
+/** True when `index` sits between a `<table>` and its closing tag. */
+function isInsideTable(html: string, index: number): boolean {
+  const before = html.slice(0, index);
+  const opens = before.match(/<table\b/gi)?.length ?? 0;
+  const closes = before.match(/<\/table>/gi)?.length ?? 0;
+  return opens > closes;
+}
+
 function cleanManuscriptArtifacts(html: string): string {
   let s = html;
 
@@ -426,7 +442,8 @@ function cleanManuscriptArtifacts(html: string): string {
     (full) => full.replace(/#{1,6}\s*/, ""),
   );
 
-  s = s.replace(/<(p|h[1-4])\b([^>]*)>([\s\S]*?)<\/\1>/gi, (full, tag: string, attrs: string, inner: string) => {
+  s = s.replace(/<(p|h[1-4])\b([^>]*)>([\s\S]*?)<\/\1>/gi, (full, tag: string, attrs: string, inner: string, offset: number) => {
+    if (isInsideTable(s, offset)) return full;
     const text = htmlToPlainText(inner);
     if (isJunkBlockText(text)) return "";
     const fig = looksLikeFigureCaption(text);
@@ -458,16 +475,12 @@ function cleanManuscriptArtifacts(html: string): string {
 }
 
 function finishManuscriptHtml(html: string): string {
-  const justified = html.replace(
-    /<(p|li)(\b[^>]*\bstyle="[^"]*)text-align:\s*(?:left|start)\b/gi,
-    '<$1$2text-align: justify',
-  );
   return beautifyReferences(
     wrapReferencesSection(
       stripUncustomizedTextColors(
         normalizeHeadingColors(
           demoteOversizedHeadings(
-            promoteSectionHeadings(cleanManuscriptArtifacts(justified)),
+            promoteSectionHeadings(cleanManuscriptArtifacts(html)),
           ),
         ),
       ),
@@ -529,6 +542,7 @@ export function sliceHtmlFromIntroduction(html: string): {
   const re = /<(h[1-3]|p)(\s[^>]*)?>([\s\S]*?)<\/\1>/gi;
   let match: RegExpExecArray | null;
   while ((match = re.exec(html))) {
+    if (isInsideTable(html, match.index)) continue;
     const text = htmlToPlainText(match[3]);
     if (!BODY_HEADING.test(text)) continue;
     if (match.index <= 0) {

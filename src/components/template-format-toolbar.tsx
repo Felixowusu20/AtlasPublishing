@@ -20,8 +20,8 @@ import {
 import { sanitizeManuscriptHtml } from "@/lib/import-manuscript";
 import {
   FONT_OPTIONS,
+  FONT_SIZE_SUGGESTIONS,
   HIGHLIGHT_COLORS,
-  SIZE_OPTIONS,
   TEXT_COLORS,
   TOOLBAR_SELECT_CLASS,
   applyColorToEditor,
@@ -38,7 +38,11 @@ import {
   selectResizableFigure,
   setFigureWidthPct,
 } from "@/lib/nahda-figure-chrome";
-import { layoutTableFigures, toggleTableRotation } from "@/lib/nahda-table-orient";
+import {
+  cycleTableAngle,
+  layoutTableFigures,
+  tableAngleLabel,
+} from "@/lib/nahda-table-orient";
 
 type Props = {
   scopeRef: RefObject<HTMLElement | null>;
@@ -65,8 +69,15 @@ function ToolBtn({
       type="button"
       title={title}
       disabled={disabled}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
+      onMouseDown={(e) => {
+        // Keep the article selection, and run now — some browsers drop click
+        // after preventDefault, which made the whole toolbar look dead.
+        e.preventDefault();
+        if (!disabled) onClick();
+      }}
+      onClick={(e) => {
+        if (e.detail === 0 && !disabled) onClick();
+      }}
       className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
         active
           ? "bg-white text-[var(--accent)] shadow-sm ring-1 ring-[var(--accent)]/30"
@@ -101,7 +112,7 @@ const EMPTY_TABLE: WordTableModel = {
   ],
   caption: "Table 1.",
   fullWidth: true,
-  orientation: "normal",
+  orientation: 0,
   supplementary: false,
 };
 
@@ -185,6 +196,8 @@ export function TemplateFormatToolbar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const activeEditorRef = useRef<HTMLElement | null>(null);
+  const preserveSelectionRef = useRef(false);
+  const sizeListId = useId();
   const targetFigureRef = useRef<HTMLElement | null>(null);
   const targetTableRef = useRef<HTMLElement | null>(null);
 
@@ -217,7 +230,13 @@ export function TemplateFormatToolbar({
   }, [scopeRef]);
 
   useEffect(() => {
-    const onSel = () => capture();
+    const onSel = () => {
+      // Focusing a toolbar control collapses the highlight. Keep the range
+      // captured on pointerdown so font, size, and style still hit that text.
+      if (preserveSelectionRef.current) return;
+      if (toolbarRef.current?.contains(document.activeElement)) return;
+      capture();
+    };
     document.addEventListener("selectionchange", onSel);
     return () => document.removeEventListener("selectionchange", onSel);
   }, [capture]);
@@ -226,9 +245,23 @@ export function TemplateFormatToolbar({
   useEffect(() => {
     const bar = toolbarRef.current;
     if (!bar) return;
-    const stash = () => capture();
+    const stash = () => {
+      preserveSelectionRef.current = true;
+      capture();
+    };
+    const release = () => {
+      window.setTimeout(() => {
+        preserveSelectionRef.current = false;
+      }, 0);
+    };
     bar.addEventListener("pointerdown", stash, true);
-    return () => bar.removeEventListener("pointerdown", stash, true);
+    bar.addEventListener("pointerup", release, true);
+    bar.addEventListener("pointercancel", release, true);
+    return () => {
+      bar.removeEventListener("pointerdown", stash, true);
+      bar.removeEventListener("pointerup", release, true);
+      bar.removeEventListener("pointercancel", release, true);
+    };
   }, [capture]);
 
   useEffect(() => {
@@ -436,9 +469,9 @@ export function TemplateFormatToolbar({
         scope.contains(editorForFig)
       ) {
         e.preventDefault();
-        const rotated = toggleTableRotation(figForChrome);
+        const angle = cycleTableAngle(figForChrome);
         const button = figForChrome.querySelector("[data-fig-action='rotate']");
-        if (button) button.textContent = rotated ? "Upright" : "Rotate";
+        if (button) button.textContent = tableAngleLabel(angle);
         activeEditorRef.current = editorForFig;
         notifyEditorChanged(editorForFig);
         return;
@@ -509,6 +542,29 @@ export function TemplateFormatToolbar({
     }
     runFn();
     emit();
+  }
+
+  function press(action: () => void) {
+    return {
+      onMouseDown: (e: { preventDefault: () => void }) => {
+        e.preventDefault();
+        action();
+      },
+      onClick: (e: { detail: number }) => {
+        if (e.detail === 0) action();
+      },
+    };
+  }
+
+  function commitFontSize(raw: string) {
+    const size = raw.trim();
+    if (!size) return;
+    withEditor(() => {
+      const root = activeEditorRef.current;
+      if (!root || !applySizeToEditor(root, size)) {
+        onError?.("Type a font size between 4 and 96 points.");
+      }
+    });
   }
 
   async function onPickImages(files: FileList | null) {
@@ -594,7 +650,7 @@ export function TemplateFormatToolbar({
         <span className="text-[10px] text-[var(--muted)]">
           {uploading
             ? "Uploading image…"
-            : "Highlight text, then format · click table caption/edge to resize · double-click table for rows"}
+            : "Highlight text, then format. Type any point size (including below 9) and press Enter."}
         </span>
       </div>
       <div className="-mx-1 flex flex-nowrap items-center gap-0.5 overflow-x-auto px-1 sm:flex-wrap sm:overflow-visible">
@@ -603,14 +659,13 @@ export function TemplateFormatToolbar({
           defaultValue=""
           title="Font family"
           aria-label="Font family"
-          onMouseDown={(e) => e.preventDefault()}
           onChange={(e) => {
             const font = e.target.value;
             e.target.value = "";
             if (!font) return;
             withEditor(() => {
               const root = activeEditorRef.current;
-              if (root) applyFontToEditor(root, font, run);
+              if (root) applyFontToEditor(root, font);
             });
           }}
         >
@@ -620,28 +675,28 @@ export function TemplateFormatToolbar({
             </option>
           ))}
         </select>
-        <select
-          className={`${TOOLBAR_SELECT_CLASS} max-w-[4.5rem]`}
-          defaultValue=""
-          title="Font size"
-          aria-label="Font size"
-          onMouseDown={(e) => e.preventDefault()}
-          onChange={(e) => {
-            const size = e.target.value;
-            e.target.value = "";
-            if (!size) return;
-            withEditor(() => {
-              const root = activeEditorRef.current;
-              if (root) applySizeToEditor(root, size);
-            });
-          }}
-        >
-          {SIZE_OPTIONS.map((o) => (
-            <option key={o.label} value={o.value} disabled={!o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <label className="flex items-center gap-1" title="Font size in points">
+          <input
+            type="text"
+            inputMode="decimal"
+            list={sizeListId}
+            placeholder="Size"
+            aria-label="Font size in points"
+            className={`${TOOLBAR_SELECT_CLASS} w-14 max-w-[3.5rem] text-center`}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              commitFontSize(e.currentTarget.value);
+            }}
+            onBlur={(e) => commitFontSize(e.currentTarget.value)}
+          />
+          <span className="text-[10px] font-semibold text-[var(--muted)]">pt</span>
+          <datalist id={sizeListId}>
+            {FONT_SIZE_SUGGESTIONS.map((size) => (
+              <option key={size} value={size} />
+            ))}
+          </datalist>
+        </label>
         <Divider />
         <ToolBtn title="Bold" onClick={() => run("bold")}>
           <span className="font-extrabold">B</span>
@@ -672,13 +727,12 @@ export function TemplateFormatToolbar({
           style={{
             background: journalPrimary || "var(--j-primary, var(--accent))",
           }}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() =>
+          {...press(() =>
             withEditor(() => {
               const root = activeEditorRef.current;
               if (root) applyColorToEditor(root, "", "fore");
-            })
-          }
+            }),
+          )}
         />
         {TEXT_COLORS.map((c) => (
           <button
@@ -687,13 +741,12 @@ export function TemplateFormatToolbar({
             title={`Text ${c.label}`}
             className="h-5 w-5 rounded-sm border border-black/10"
             style={{ background: c.value }}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() =>
+            {...press(() =>
               withEditor(() => {
                 const root = activeEditorRef.current;
                 if (root) applyColorToEditor(root, c.value, "fore");
-              })
-            }
+              }),
+            )}
           />
         ))}
         <span className="mx-0.5 text-[10px] text-[var(--muted)]">Hi</span>
@@ -704,13 +757,12 @@ export function TemplateFormatToolbar({
             title={`Highlight ${c.label}`}
             className="h-5 w-5 rounded-sm border border-black/10"
             style={{ background: c.value }}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() =>
+            {...press(() =>
               withEditor(() => {
                 const root = activeEditorRef.current;
                 if (root) applyColorToEditor(root, c.value, "back");
-              })
-            }
+              }),
+            )}
           />
         ))}
         <Divider />

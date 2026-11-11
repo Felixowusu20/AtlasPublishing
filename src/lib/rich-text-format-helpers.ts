@@ -28,17 +28,30 @@ export const FONT_OPTIONS = [
   { value: "Calibri", label: "Calibri" },
 ] as const;
 
-export const SIZE_OPTIONS = [
-  { value: "", label: "Size" },
-  { value: "9", label: "9 pt" },
-  { value: "10", label: "10 pt" },
-  { value: "11", label: "11 pt" },
-  { value: "12", label: "12 pt" },
-  { value: "14", label: "14 pt" },
-  { value: "16", label: "16 pt" },
-  { value: "18", label: "18 pt" },
-  { value: "24", label: "24 pt" },
+/** Suggestions only — the toolbar also accepts any typed point size. */
+export const FONT_SIZE_SUGGESTIONS = [
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
+  "11",
+  "12",
+  "14",
+  "16",
+  "18",
+  "24",
+  "28",
+  "36",
 ] as const;
+
+/** Parse a typed point size. Allows sizes below 9. */
+export function parseFontSizePt(raw: string): string | null {
+  const n = Number(String(raw).replace(/pt$/i, "").replace(",", ".").trim());
+  if (!Number.isFinite(n) || n < 4 || n > 96) return null;
+  const rounded = Math.round(n * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
 
 export const TOOLBAR_SELECT_CLASS =
   "h-7 max-w-[9.5rem] rounded-md border border-[var(--line)] bg-white px-1.5 text-[11px] font-semibold text-[var(--ink)] outline-none hover:border-[var(--accent)]/40 focus:border-[var(--accent)]";
@@ -52,17 +65,98 @@ export function colorTargetFromSelection(): HTMLElement | null {
   return el.closest("h1, h2, h3, h4, th, td") as HTMLElement | null;
 }
 
-export function applyFontToEditor(
+function editorSelection(root: HTMLElement): Range | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  const node = range.commonAncestorContainer;
+  const el = node instanceof Element ? node : node.parentElement;
+  if (!el || !root.contains(el)) return null;
+  return range;
+}
+
+/**
+ * Paint the current selection (or the caret, for the next characters).
+ * Direct DOM edits keep working after the toolbar takes focus.
+ */
+function applyStyledText(
   root: HTMLElement,
-  font: string,
-  run: (command: string, value?: string) => void,
-) {
-  const heading = colorTargetFromSelection();
-  if (heading && root.contains(heading)) {
-    heading.style.fontFamily = font;
-    return;
+  paint: (span: HTMLSpanElement) => void,
+): boolean {
+  const sel = window.getSelection();
+  const range = editorSelection(root);
+  if (!sel || !range) return false;
+
+  if (range.collapsed) {
+    const span = document.createElement("span");
+    paint(span);
+    const marker = document.createTextNode("\u200b");
+    span.appendChild(marker);
+    range.insertNode(span);
+    const caret = document.createRange();
+    caret.setStart(marker, marker.data.length);
+    caret.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(caret);
+    return true;
   }
-  run("fontName", font);
+
+  const scope =
+    range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentNode;
+  if (!scope) return false;
+
+  const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+  const slices: { text: Text; start: number; end: number }[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!(node instanceof Text) || !node.data) continue;
+    try {
+      if (!range.intersectsNode(node)) continue;
+    } catch {
+      continue;
+    }
+    const start = node === range.startContainer ? range.startOffset : 0;
+    const end =
+      node === range.endContainer ? range.endOffset : node.data.length;
+    if (end > start) slices.push({ text: node, start, end });
+  }
+  if (!slices.length) return false;
+
+  const spans: HTMLSpanElement[] = [];
+  for (const slice of slices) {
+    const piece = document.createRange();
+    const start = Math.max(0, Math.min(slice.start, slice.text.data.length));
+    const end = Math.max(start, Math.min(slice.end, slice.text.data.length));
+    if (end <= start) continue;
+    piece.setStart(slice.text, start);
+    piece.setEnd(slice.text, end);
+    const span = document.createElement("span");
+    paint(span);
+    try {
+      piece.surroundContents(span);
+    } catch {
+      span.appendChild(piece.extractContents());
+      piece.insertNode(span);
+    }
+    spans.push(span);
+  }
+  if (!spans.length) return false;
+
+  const next = document.createRange();
+  next.setStartBefore(spans[0]);
+  next.setEndAfter(spans[spans.length - 1]);
+  sel.removeAllRanges();
+  sel.addRange(next);
+  return true;
+}
+
+export function applyFontToEditor(root: HTMLElement, font: string) {
+  const family = font.trim();
+  if (!family) return false;
+  return applyStyledText(root, (span) => {
+    span.style.fontFamily = family;
+  });
 }
 
 function selectionInRoot(root: HTMLElement): boolean {
@@ -74,23 +168,31 @@ function selectionInRoot(root: HTMLElement): boolean {
 }
 
 export function applySizeToEditor(root: HTMLElement, size: string) {
+  const pt = parseFontSizePt(size);
+  if (!pt) return false;
   const heading = colorTargetFromSelection();
-  if (heading && root.contains(heading)) {
-    heading.style.fontSize = `${size}pt`;
-    heading.style.letterSpacing = "normal";
-    return;
+  const range = editorSelection(root);
+  if (
+    heading &&
+    range &&
+    root.contains(heading) &&
+    heading.contains(range.commonAncestorContainer)
+  ) {
+    const full = document.createRange();
+    full.selectNodeContents(heading);
+    const covers =
+      range.compareBoundaryPoints(Range.START_TO_START, full) <= 0 &&
+      range.compareBoundaryPoints(Range.END_TO_END, full) >= 0;
+    if (covers || range.collapsed) {
+      heading.style.fontSize = `${pt}pt`;
+      heading.style.letterSpacing = "normal";
+      return true;
+    }
   }
-  if (!selectionInRoot(root)) root.focus();
-  document.execCommand("styleWithCSS", false, "true");
-  document.execCommand("fontSize", false, "7");
-  root.querySelectorAll('font[size="7"], span[style*="xxx-large"]').forEach(
-    (node) => {
-      const span = document.createElement("span");
-      span.style.fontSize = `${size}pt`;
-      span.innerHTML = (node as HTMLElement).innerHTML;
-      node.replaceWith(span);
-    },
-  );
+  return applyStyledText(root, (span) => {
+    span.style.fontSize = `${pt}pt`;
+    span.style.letterSpacing = "normal";
+  });
 }
 
 export function applyColorToEditor(

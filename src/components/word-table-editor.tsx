@@ -7,13 +7,19 @@ import {
   useState,
   type DragEvent,
 } from "react";
+import {
+  readTableAngle,
+  TABLE_ANGLES,
+  tableAngleLabel,
+  type TableAngle,
+} from "@/lib/nahda-table-orient";
 
 export type WordTableModel = {
   headers: string[];
   rows: string[][];
   caption: string;
   fullWidth: boolean;
-  orientation: "normal" | "landscape" | "rotated";
+  orientation: TableAngle;
   supplementary: boolean;
 };
 
@@ -61,10 +67,10 @@ export function tableModelToHtml(model: WordTableModel): string {
   const caption = tableCaptionHtml(model.caption);
   const classes = [
     model.fullWidth ? "table-full" : "",
-    model.orientation !== "normal" ? `table-${model.orientation}` : "",
+    model.orientation !== 0 ? "table-rotated" : "",
     model.supplementary ? "nahda-supplementary" : "",
   ].filter(Boolean).join(" ");
-  return `<figure class="${classes}">${caption}<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></figure>`;
+  return `<figure class="${classes}" data-table-angle="${model.orientation}">${caption}<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></figure>`;
 }
 
 function cellText(el: Element): string {
@@ -94,7 +100,7 @@ export function htmlToTableModel(
       ],
       caption,
       fullWidth: true,
-      orientation: "normal",
+      orientation: 0,
       supplementary: false,
     };
   }
@@ -120,11 +126,7 @@ export function htmlToTableModel(
     rows: rows.length ? rows : [headers.map(() => "")],
     caption,
     fullWidth: true,
-    orientation: figure?.classList.contains("table-landscape")
-      ? "landscape"
-      : figure?.classList.contains("table-rotated")
-        ? "rotated"
-        : "normal",
+    orientation: readTableAngle(figure),
     supplementary: figure?.classList.contains("nahda-supplementary") ?? false,
   };
 }
@@ -137,7 +139,7 @@ function emptyGrid(rows: number, cols: number): WordTableModel {
     ),
     caption: "",
     fullWidth: true,
-    orientation: "normal",
+    orientation: 0,
     supplementary: false,
   };
 }
@@ -201,7 +203,7 @@ export function parseMarkdownTable(block: string): WordTableModel | null {
     rows,
     caption,
     fullWidth,
-    orientation: "normal",
+    orientation: 0,
     supplementary: false,
   };
 }
@@ -429,20 +431,22 @@ export function WordTableEditor({
           Span full page
         </label>
         <label className="text-[11px] text-[var(--muted)]">
-          Orientation
+          Angle
           <select
-            value={model.orientation}
+            value={String(model.orientation)}
             onChange={(e) =>
               setModel((m) => ({
                 ...m,
-                orientation: e.target.value as WordTableModel["orientation"],
+                orientation: Number(e.target.value) as TableAngle,
               }))
             }
             className="mt-0.5 block rounded border border-[var(--line)] bg-white px-2 py-1.5 text-xs text-[var(--ink)]"
           >
-            <option value="normal">Normal</option>
-            <option value="landscape">Landscape</option>
-            <option value="rotated">Rotate 90°</option>
+            {TABLE_ANGLES.map((angle) => (
+              <option key={angle} value={angle}>
+                {tableAngleLabel(angle)}
+              </option>
+            ))}
           </select>
         </label>
         <label className="flex items-center gap-1.5 pb-1.5 text-[11px] font-semibold text-[var(--ink)]">

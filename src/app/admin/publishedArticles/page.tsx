@@ -1375,8 +1375,8 @@ export default function PublishedArticlesPage() {
                           <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[var(--muted)]">
                             Click in the abstract or body, then use the format
                             toolbar (font, size, color, lists, table, image).
-                            Click a table caption, then Rotate, to turn a wide table
-                            on its side. Drag the edges to fit the page;
+                            Click a table caption, then the angle button, to cycle
+                            portrait, landscape, 180°, and 270°. Drag the edges to fit the page;
                             double-click for rows and columns. Use Article details
                             for PDF and publish.
                             {selected.manuscriptReadyAt

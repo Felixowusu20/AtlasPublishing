@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type DragEvent } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import type { ManuscriptFigure } from "@/components/manuscript-editor";
 
 type ImportResult = {
@@ -27,6 +28,18 @@ export function ManuscriptImportPanel({
   const [googleUrl, setGoogleUrl] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [note, setNote] = useState("");
+  const [pending, setPending] = useState<ImportResult | null>(null);
+
+  function applyImport(result: ImportResult) {
+    onImported(result);
+    setNote(
+      result.trimmedFrontMatter
+        ? "The body now starts at the introduction. Title, authors, abstract, and keywords are unchanged."
+        : "Imported. Check that the body starts at the introduction. Title and abstract still come from the template.",
+    );
+    setGoogleUrl("");
+    setPending(null);
+  }
 
   async function importForm(form: FormData) {
     setBusy(true);
@@ -43,25 +56,18 @@ export function ManuscriptImportPanel({
       }
       const body = String(data.body ?? "").trim();
       if (!body) throw new Error("No body text was found in that document.");
-      if (hasExistingBody) {
-        const ok = window.confirm(
-          "Replace the current Introduction–References with the imported document? Title, authors, abstract, and keywords on the template will stay as they are.",
-        );
-        if (!ok) return;
-      }
-      onImported({
+      const result: ImportResult = {
         body,
         figures: Array.isArray(data.figures) ? data.figures : [],
         trimmedFrontMatter: Boolean(data.trimmedFrontMatter),
         warnings: data.warnings,
         sourceName: data.sourceName,
-      });
-      setNote(
-        data.trimmedFrontMatter
-          ? "Imported from Introduction onward. Header, authors, abstract, and keywords stay on the journal template."
-          : "Imported. Check that the body starts at Introduction; title and abstract still come from the template.",
-      );
-      setGoogleUrl("");
+      };
+      if (hasExistingBody) {
+        setPending(result);
+        return;
+      }
+      applyImport(result);
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -163,6 +169,37 @@ export function ManuscriptImportPanel({
       {note ? (
         <p className="mt-2 text-[11px] text-emerald-800">{note}</p>
       ) : null}
+      <ConfirmDialog
+        open={pending !== null}
+        tone="accent"
+        className="z-[260]"
+        eyebrow="Import"
+        title="Replace the paper body?"
+        description={
+          <>
+            <p>
+              This document will take the place of the current introduction
+              through the references.
+            </p>
+            <ul className="mt-3 space-y-1.5 text-xs">
+              <li className="flex gap-2">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--accent)]" />
+                Title, authors, abstract, and keywords stay on the template
+              </li>
+              <li className="flex gap-2">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--accent)]" />
+                Only the paper body is replaced
+              </li>
+            </ul>
+          </>
+        }
+        confirmLabel="Replace body"
+        cancelLabel="Keep current text"
+        onConfirm={() => {
+          if (pending) applyImport(pending);
+        }}
+        onCancel={() => setPending(null)}
+      />
     </div>
   );
 }

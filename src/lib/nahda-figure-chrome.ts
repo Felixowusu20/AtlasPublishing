@@ -1,5 +1,11 @@
 /** Resize handles + width helpers for figures/tables in manuscript-wysiwyg. */
 
+import {
+  layoutRotatedFigure,
+  readTableAngle,
+  tableAngleLabel,
+} from "@/lib/nahda-table-orient";
+
 export const FIGURE_HANDLES = ["nw", "ne", "sw", "se", "e", "w"] as const;
 export type FigureHandle = (typeof FIGURE_HANDLES)[number];
 
@@ -18,9 +24,7 @@ export function setFigureWidthPct(figure: HTMLElement, pct: number) {
   figure.style.maxWidth = "100%";
   figure.style.marginInline = clamped >= 96 ? "0" : "auto";
   const hasImg = Boolean(figure.querySelector(":scope > img"));
-  const hasTable = Boolean(
-    figure.querySelector(":scope > table, :scope > .nahda-table-wrap"),
-  );
+  const hasTable = Boolean(figure.querySelector("table"));
   figure.classList.toggle("figure-full", hasImg && clamped >= 96);
   figure.classList.toggle("table-full", hasTable && clamped >= 96);
   const img = figure.querySelector(":scope > img");
@@ -29,20 +33,19 @@ export function setFigureWidthPct(figure: HTMLElement, pct: number) {
     img.style.height = "auto";
     img.style.maxWidth = "100%";
   }
-  const table = figure.querySelector(":scope > table, :scope > .nahda-table-wrap table");
-  if (table instanceof HTMLElement) {
+  const angle = readTableAngle(figure);
+  const table = figure.querySelector("table");
+  if (table instanceof HTMLElement && angle === 0) {
     table.style.width = "100%";
     table.style.maxWidth = "100%";
   }
+  if (angle !== 0) layoutRotatedFigure(figure);
 }
 
 function isResizableFigure(figure: HTMLElement): boolean {
   if (figure.tagName !== "FIGURE") return false;
   if (figure.querySelector(":scope > img")) return true;
-  if (figure.querySelector(":scope > table, :scope > .nahda-table-wrap")) {
-    return true;
-  }
-  return false;
+  return Boolean(figure.querySelector("table"));
 }
 
 /** Select a figure/table and show drag handles (publish + manuscript editors). */
@@ -64,15 +67,13 @@ export function selectResizableFigure(
 
   const bar = document.createElement("div");
   bar.className = "nahda-fig-toolbar";
-  const isTable = Boolean(
-    figure.querySelector(":scope > table, :scope > .nahda-table-wrap"),
-  );
+  const isTable = Boolean(figure.querySelector("table"));
   if (isTable) {
-    const rotated = figure.classList.contains("table-rotated");
+    const label = tableAngleLabel(readTableAngle(figure));
     bar.innerHTML =
       '<button type="button" data-fig-action="full">Full width</button>' +
-      `<button type="button" data-fig-action="rotate">${rotated ? "Upright" : "Rotate"}</button>` +
-      '<span data-fig-hint="1">Drag edges to fit · Rotate turns a wide table on its side</span>';
+      `<button type="button" data-fig-action="rotate">${label}</button>` +
+      '<span data-fig-hint="1">Click to cycle portrait, landscape, 180°, and 270°</span>';
   } else {
     bar.innerHTML =
       '<button type="button" data-fig-action="full">Full / column</button>' +
@@ -80,7 +81,10 @@ export function selectResizableFigure(
   }
   if (options?.tableHint && isTable) {
     const hint = bar.querySelector("[data-fig-hint]");
-    if (hint) hint.textContent = "Drag edges to fit preview · double-click for rows/cols";
+    if (hint) {
+      hint.textContent =
+        "Click the angle to cycle portrait, landscape, 180°, and 270°. Double-click for rows and columns.";
+    }
   }
   chrome.appendChild(bar);
 
