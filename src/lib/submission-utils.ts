@@ -41,9 +41,36 @@ export function uiStatus(status: SubmissionStatus): string {
   return map[status];
 }
 
+export function manuscriptIdPrefix(shortTitle: string) {
+  return (
+    shortTitle.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6) || "NHD"
+  );
+}
+
 export function nextManuscriptId(shortTitle: string, year: number, seq: number) {
-  const prefix = shortTitle.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6) || "NHD";
+  const prefix = manuscriptIdPrefix(shortTitle);
   return `${prefix}-${year}-${String(seq).padStart(4, "0")}`;
+}
+
+/** Highest sequence already used for PREFIX-YEAR-#### (includes soft-deleted rows). */
+export function maxManuscriptSeq(
+  manuscriptIds: string[],
+  shortTitle: string,
+  year: number,
+) {
+  const prefix = manuscriptIdPrefix(shortTitle);
+  const re = new RegExp(
+    `^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-${year}-(\\d+)$`,
+    "i",
+  );
+  let max = 0;
+  for (const id of manuscriptIds) {
+    const match = id.match(re);
+    if (!match) continue;
+    const seq = Number(match[1]);
+    if (Number.isFinite(seq) && seq > max) max = seq;
+  }
+  return max;
 }
 
 export function slugify(input: string) {

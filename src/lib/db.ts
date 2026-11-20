@@ -110,7 +110,20 @@ export function prismaFailureMessage(err: unknown, fallback: string) {
       ? String((err as { code?: string }).code)
       : "";
   if (code === "P2002") {
+    const target =
+      err && typeof err === "object" && "meta" in err
+        ? (err as { meta?: { target?: string[] | string } }).meta?.target
+        : undefined;
+    const fields = Array.isArray(target)
+      ? target.join(" ")
+      : String(target ?? "");
+    if (/manuscriptId/i.test(fields)) {
+      return "Could not assign a manuscript ID. Please try submitting again.";
+    }
     return "A record with this slug or NID already exists.";
+  }
+  if (code === "P2003") {
+    return "Your account could not be linked to this submission. Please sign out, sign in again, and retry.";
   }
   if (code === "P2028" || code === "P2024") {
     return "Database transaction timed out. Please try again.";

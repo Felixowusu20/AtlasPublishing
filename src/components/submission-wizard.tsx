@@ -144,6 +144,26 @@ export function SubmissionWizard() {
 
   async function finish() {
     if (!file) return;
+    const keywords = form.keywords
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (form.title.trim().length < 5) {
+      setError("Title must be at least 5 characters.");
+      return;
+    }
+    if (form.abstract.trim().length < 20) {
+      setError("Abstract must be at least 20 characters.");
+      return;
+    }
+    if (keywords.length < 1) {
+      setError("Add at least one keyword.");
+      return;
+    }
+    if (!form.authorEmail.trim().includes("@")) {
+      setError("Enter a valid corresponding author email.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -160,10 +180,7 @@ export function SubmissionWizard() {
           articleType: form.articleType,
           title: form.title,
           abstract: form.abstract,
-          keywords: form.keywords
-            .split(",")
-            .map((k) => k.trim())
-            .filter(Boolean),
+          keywords,
           coverLetter: form.coverLetter,
           funding: form.funding,
           conflictOfInterest: form.conflictOfInterest,
@@ -178,13 +195,12 @@ export function SubmissionWizard() {
               orcid: form.orcid.trim() || undefined,
               isCorresponding: true,
             },
-            ...form.extraAuthors.map((author, index) => ({
+            ...form.extraAuthors.map((author) => ({
               name: author.name.trim(),
               email: author.email.trim(),
               affiliation: author.affiliation.trim() || form.affiliation,
               orcid: author.orcid.trim() || undefined,
               isCorresponding: false,
-              order: index + 2,
             })),
           ],
         }),
@@ -193,12 +209,21 @@ export function SubmissionWizard() {
         error?: string;
         submission?: { id: string; manuscriptId: string };
       }>(res);
-      if (!res.ok) throw new Error(data.error ?? "Submission failed");
-      if (!data.submission) throw new Error("Submission failed");
+      if (!res.ok) {
+        throw new Error(
+          data.error ||
+            (res.status === 401
+              ? "Please sign in with your author account and try again."
+              : "Submission failed. Please try again."),
+        );
+      }
+      if (!data.submission) {
+        throw new Error("Submission failed. Please try again.");
+      }
       setSubmittedId(data.submission.id);
       setManuscriptId(data.submission.manuscriptId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Submission failed");
+      setError(err instanceof Error ? err.message : "Submission failed. Please try again.");
     } finally {
       setLoading(false);
     }
