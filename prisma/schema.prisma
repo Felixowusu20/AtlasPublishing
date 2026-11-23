@@ -88,12 +88,16 @@ model HeroSlide {
   alt       String?
   ctaLabel  String?
   ctaHref   String?
+  /// FreeNews UUID when this slide was synced from freenewsapi.io
+  externalUuid String? @unique
+  source    String?
   sortOrder Int      @default(0)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([sortOrder])
+  @@index([source])
 }
 
 /// Homepage research-area / partner advert cards (CMS-managed).
@@ -126,6 +130,9 @@ model Announcement {
   href        String?
   imageUrl    String?
   imagePublicId String?
+  /// FreeNews UUID when this row was synced from freenewsapi.io
+  externalUuid String? @unique
+  source      String?
   publishedAt DateTime @default(now())
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -133,6 +140,31 @@ model Announcement {
 
   @@index([publishedAt])
   @@index([isActive])
+  @@index([source])
+}
+
+/// Science / research news synced from FreeNewsApi for homepage + /news pages.
+model NewsStory {
+  id           String   @id @default(cuid())
+  externalUuid String   @unique
+  slug         String   @unique
+  title        String
+  summary      String
+  body         String   @db.Text
+  imageUrl     String?
+  publisher    String?
+  authors      String[] @default([])
+  topics       String[] @default([])
+  originalUrl  String?
+  publishedAt  DateTime
+  showInHero   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([publishedAt])
+  @@index([isActive])
+  @@index([showInHero])
 }
 
 model Journal {

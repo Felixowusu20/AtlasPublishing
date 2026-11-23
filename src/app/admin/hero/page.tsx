@@ -13,6 +13,8 @@ type Slide = {
   alt?: string | null;
   ctaLabel?: string | null;
   ctaHref?: string | null;
+  externalUuid?: string | null;
+  source?: string | null;
   sortOrder: number;
   isActive: boolean;
 };
@@ -43,11 +45,36 @@ export default function HeroCmsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [newsBusy, setNewsBusy] = useState(false);
 
   async function load() {
     const res = await fetch("/api/admin/hero");
     const data = await res.json();
     if (res.ok) setSlides(data.slides);
+  }
+
+  async function syncFreeNews() {
+    setNewsBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch("/api/admin/news/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Sync failed");
+      const result = data.result as {
+        upserted?: number;
+        heroSlides?: number;
+        announcements?: number;
+      };
+      setSuccess(
+        `Synced Free News into hero (${result.heroSlides ?? 0} slides), announcements (${result.announcements ?? 0}), and /news (${result.upserted ?? 0}).`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Free News sync failed");
+    } finally {
+      setNewsBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -162,13 +189,35 @@ export default function HeroCmsPage() {
           Hero CMS
         </h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Edit homepage carousel slides. Changes appear on the public site after
-          save.
+          Edit homepage carousel slides. Sync Free News to pull science stories
+          with images into the hero, announcements, and /news pages.
         </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={newsBusy}
+            onClick={() => void syncFreeNews()}
+          >
+            {newsBusy ? "Syncing…" : "Sync Free News into hero"}
+          </button>
+          <a
+            href="/news"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)]"
+          >
+            Open /news
+          </a>
+        </div>
+        {success ? (
+          <p className="mt-3 text-sm text-emerald-800">{success}</p>
+        ) : null}
+        {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
         <div className="mt-6 space-y-4">
           {slides.length === 0 && (
             <p className="rounded-2xl border border-dashed border-[var(--line)] bg-white p-6 text-sm text-[var(--muted)]">
-              No slides yet. Add one with the form.
+              No slides yet. Sync Free News or add one with the form.
             </p>
           )}
           {slides.map((slide) => (
@@ -200,6 +249,11 @@ export default function HeroCmsPage() {
                   >
                     {slide.isActive ? "Active" : "Hidden"}
                   </span>
+                  {slide.source === "freenews" ? (
+                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800">
+                      Free News
+                    </span>
+                  ) : null}
                   {editingId === slide.id ? (
                     <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-semibold text-[var(--accent)]">
                       Editing

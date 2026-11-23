@@ -393,12 +393,20 @@ function HomeCatalogInner({
                 articles across our journals.
               </p>
             </div>
-            <Link
-              href="/articles"
-              className="shrink-0 text-sm font-semibold text-[var(--accent)] hover:underline"
-            >
-              View all articles →
-            </Link>
+            <div className="flex shrink-0 flex-wrap gap-x-4 gap-y-1 text-sm font-semibold">
+              <Link
+                href="/news"
+                className="text-[var(--accent)] hover:underline"
+              >
+                View all news →
+              </Link>
+              <Link
+                href="/articles"
+                className="text-[var(--accent)] hover:underline"
+              >
+                View all articles →
+              </Link>
+            </div>
           </div>
 
           {(!needle || matchedAnnouncements.length > 0) && (

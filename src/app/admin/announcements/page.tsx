@@ -11,6 +11,8 @@ type Announcement = {
   href?: string | null;
   imageUrl?: string | null;
   imagePublicId?: string | null;
+  externalUuid?: string | null;
+  source?: string | null;
   publishedAt: string;
   isActive: boolean;
 };
@@ -43,11 +45,41 @@ export default function AnnouncementsCmsPage() {
   const [loading, setLoading] = useState(false);
   const [waPaste, setWaPaste] = useState("");
   const [waBusy, setWaBusy] = useState(false);
+  const [newsBusy, setNewsBusy] = useState(false);
 
   async function load() {
     const res = await fetch("/api/admin/announcements");
     const data = await res.json();
     if (res.ok) setItems(data.announcements);
+  }
+
+  async function syncFreeNews() {
+    setNewsBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch("/api/admin/news/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Sync failed");
+      const result = data.result as {
+        upserted?: number;
+        announcements?: number;
+        heroSlides?: number;
+        listed?: number;
+        errors?: string[];
+      };
+      setSuccess(
+        `Synced Free News: ${result.upserted ?? 0} stories, ${result.announcements ?? 0} announcements, ${result.heroSlides ?? 0} hero slides` +
+          (result.errors?.length
+            ? ` (${result.errors.length} topic warnings)`
+            : ""),
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Free News sync failed");
+    } finally {
+      setNewsBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -219,9 +251,43 @@ export default function AnnouncementsCmsPage() {
           Announcements CMS
         </h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Homepage news cards with a hero image. Import scholarship / news posts
-          from your WhatsApp channel, or add manually.
+          Homepage news cards with a hero image. Sync science research news from
+          FreeNewsApi, import WhatsApp posts, or add manually. Each synced story
+          also gets its own page under /news.
         </p>
+
+        <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+            Free News API
+          </p>
+          <h2 className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
+            Sync science & research news
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Pulls English stories in science, social sciences, higher education,
+            medicine, health, environment, space, and related topics. Fills
+            announcements, hero slides with images, and /news pages. Respects the
+            free plan (2 req/sec, 5,000/day).
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={newsBusy}
+              onClick={() => void syncFreeNews()}
+            >
+              {newsBusy ? "Syncing…" : "Sync Free News now"}
+            </button>
+            <a
+              href="/news"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)]"
+            >
+              Open /news
+            </a>
+          </div>
+        </section>
 
         <section className="mt-6 rounded-2xl border border-[var(--line)] bg-[var(--accent-soft)]/40 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
@@ -315,6 +381,11 @@ export default function AnnouncementsCmsPage() {
                   >
                     {item.isActive ? "Active" : "Hidden"}
                   </span>
+                  {item.source === "freenews" ? (
+                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800">
+                      Free News
+                    </span>
+                  ) : null}
                   {editingId === item.id ? (
                     <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-semibold text-[var(--accent)]">
                       Editing
