@@ -5,64 +5,10 @@ import {
   formatCustomerUsd,
   formatInternalGhs,
 } from "@/lib/payment-currency";
-
-type RangePreset = "daily" | "weekly" | "monthly" | "annual" | "custom";
-
-function startOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function endOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
-
-function resolveRange(
-  preset: RangePreset,
-  fromParam: string | null,
-  toParam: string | null,
-): { from: Date; to: Date; label: string; preset: RangePreset } {
-  const now = new Date();
-  const to = endOfDay(now);
-
-  if (preset === "custom" && fromParam && toParam) {
-    const from = startOfDay(new Date(fromParam));
-    const customTo = endOfDay(new Date(toParam));
-    if (!Number.isNaN(from.getTime()) && !Number.isNaN(customTo.getTime())) {
-      return {
-        from,
-        to: customTo,
-        preset,
-        label: `${from.toLocaleDateString()} – ${customTo.toLocaleDateString()}`,
-      };
-    }
-  }
-
-  if (preset === "daily") {
-    const from = startOfDay(now);
-    return { from, to, preset: "daily", label: "Today" };
-  }
-  if (preset === "weekly") {
-    const from = startOfDay(now);
-    from.setDate(from.getDate() - 6);
-    return { from, to, preset: "weekly", label: "Last 7 days" };
-  }
-  if (preset === "annual") {
-    const from = startOfDay(new Date(now.getFullYear(), 0, 1));
-    return { from, to, preset: "annual", label: String(now.getFullYear()) };
-  }
-  // monthly (default)
-  const from = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
-  return {
-    from,
-    to,
-    preset: "monthly",
-    label: now.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
-  };
-}
+import {
+  resolveDateRange,
+  type DateRangePreset,
+} from "@/lib/date-range";
 
 /**
  * Payment / APC analytics for admin overview.
@@ -79,9 +25,9 @@ export async function GET(request: Request) {
       ["daily", "weekly", "monthly", "annual", "custom"].includes(rawRange)
         ? rawRange
         : "monthly"
-    ) as RangePreset;
+    ) as DateRangePreset;
 
-    const { from, to, label, preset: activePreset } = resolveRange(
+    const { from, to, label, preset: activePreset } = resolveDateRange(
       preset,
       url.searchParams.get("from"),
       url.searchParams.get("to"),

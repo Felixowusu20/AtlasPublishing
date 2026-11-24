@@ -1,8 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 import { NahdaLoader } from "@/components/nahda-loader";
+import {
+  resolveDateRange,
+  toDateInputValue,
+  type DateRangePreset,
+} from "@/lib/date-range";
 
 type ReceiptRow = {
   id: string;
@@ -18,61 +23,110 @@ type ReceiptRow = {
   downloadPath: string;
 };
 
-function todayInput() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
-
-function monthAgoInput() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  return d.toISOString().slice(0, 10);
-}
+const PRESETS: { id: DateRangePreset; label: string }[] = [
+  { id: "daily", label: "Today" },
+  { id: "weekly", label: "Last 7 days" },
+  { id: "monthly", label: "This month" },
+  { id: "annual", label: "This year" },
+  { id: "custom", label: "Custom" },
+];
 
 export default function AdminFinancesPage() {
   const { user } = useAdminAuth();
   const [q, setQ] = useState("");
-  const [from, setFrom] = useState(monthAgoInput);
-  const [to, setTo] = useState(todayInput);
+  const [preset, setPreset] = useState<DateRangePreset>("monthly");
+  const initial = resolveDateRange("monthly");
+  const [from, setFrom] = useState(() => toDateInputValue(initial.from));
+  const [to, setTo] = useState(() => toDateInputValue(initial.to));
+  const [rangeLabel, setRangeLabel] = useState(initial.label);
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [totals, setTotals] = useState({ count: 0, amountLabel: "$0 USD" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function load(next?: { q?: string; from?: string; to?: string }) {
-    setLoading(true);
-    setError("");
-    const params = new URLSearchParams();
-    const query = (next?.q ?? q).trim();
-    const fromDate = next?.from ?? from;
-    const toDate = next?.to ?? to;
-    if (query) params.set("q", query);
-    if (fromDate) params.set("from", fromDate);
-    if (toDate) params.set("to", toDate);
-    try {
-      const res = await fetch(`/api/admin/receipts?${params.toString()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not load receipts");
-      setReceipts(data.receipts ?? []);
-      setTotals({
-        count: data.totals?.count ?? 0,
-        amountLabel: data.totals?.amountLabel ?? "$0 USD",
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load receipts");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const load = useCallback(
+    async (opts: {
+      q: string;
+      preset: DateRangePreset;
+      from: string;
+      to: string;
+    }) => {
+      setLoading(true);
+      setError("");
+      const query = opts.q.trim();
+      const params = new URLSearchParams({ range: opts.preset });
+      if (query) params.set("q", query);
+      if (opts.preset === "custom") {
+        if (!opts.from || !opts.to) {
+          setLoading(false);
+          return;
+        }
+        params.set("from", opts.from);
+        params.set("to", opts.to);
+      }
+      try {
+        const res = await fetch(`/api/admin/receipts?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Could not load receipts");
+        setReceipts(data.receipts ?? []);
+        setTotals({
+          count: data.totals?.count ?? 0,
+          amountLabel: data.totals?.amountLabel ?? "$0 USD",
+        });
+        if (data.range?.label) setRangeLabel(data.range.label);
+        else {
+          const resolved = resolveDateRange(opts.preset, opts.from, opts.to);
+          setRangeLabel(resolved.label);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load receipts");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial range only
-  }, []);
+    if (preset === "custom") return;
+    void load({ q, preset, from, to });
+    // Range presets drive the list; search text applies on submit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- preset interval only
+  }, [preset, load]);
+
+  useEffect(() => {
+    if (preset !== "custom" || !from || !to) return;
+    const timer = window.setTimeout(() => {
+      void load({ q, preset: "custom", from, to });
+    }, 200);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- custom dates only
+  }, [preset, from, to, load]);
+
+  function applyPreset(next: DateRangePreset) {
+    if (next === "custom") {
+      setPreset("custom");
+      const fallback = resolveDateRange("monthly");
+      const nextFrom = from || toDateInputValue(fallback.from);
+      const nextTo = to || toDateInputValue(fallback.to);
+      setFrom(nextFrom);
+      setTo(nextTo);
+      setRangeLabel(`${nextFrom} – ${nextTo}`);
+      void load({ q, preset: "custom", from: nextFrom, to: nextTo });
+      return;
+    }
+    const resolved = resolveDateRange(next);
+    const nextFrom = toDateInputValue(resolved.from);
+    const nextTo = toDateInputValue(resolved.to);
+    setPreset(next);
+    setFrom(nextFrom);
+    setTo(nextTo);
+    setRangeLabel(resolved.label);
+  }
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
-    void load();
+    void load({ q, preset, from, to });
   }
 
   if (user && user.role !== "SUPER_ADMIN") {
@@ -91,53 +145,83 @@ export default function AdminFinancesPage() {
             Finances
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Paid APC receipts. Search by receipt ID, author name, or email, and
-            narrow by paid date.
+            Paid APC receipts for the selected date range. Totals and the list
+            update when you change the interval or custom dates.
           </p>
         </div>
         <div className="rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-right">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-            In this range
+            {rangeLabel || "In this range"}
           </p>
           <p className="text-lg font-semibold text-[var(--accent)]">
             {totals.amountLabel}
           </p>
           <p className="text-xs text-[var(--muted)]">
             {totals.count} {totals.count === 1 ? "receipt" : "receipts"}
+            {loading ? " · updating…" : ""}
           </p>
         </div>
       </div>
 
-      <form
-        onSubmit={onSearch}
-        className="mt-6 grid gap-3 rounded-2xl border border-[var(--line)] bg-white p-4 sm:grid-cols-2 lg:grid-cols-[1fr_10rem_10rem_auto]"
-      >
-        <label className="field sm:col-span-2 lg:col-span-1">
-          <span>Receipt ID, email, or author name</span>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="NPR-…, name, or email"
-          />
-        </label>
-        <label className="field">
-          <span>From</span>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>To</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
-        <div className="flex items-end">
-          <button type="submit" className="btn-primary w-full !px-4 !py-2.5">
-            Search
-          </button>
+      <div className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-4">
+        <div className="flex flex-wrap gap-2">
+          {PRESETS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => applyPreset(item.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                preset === item.id
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)]"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
-      </form>
+
+        <form
+          onSubmit={onSearch}
+          className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_10rem_10rem_auto]"
+        >
+          <label className="field sm:col-span-2 lg:col-span-1">
+            <span>Receipt ID, email, or author name</span>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="NPR-…, name, or email"
+            />
+          </label>
+          <label className="field">
+            <span>From</span>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => {
+                setPreset("custom");
+                setFrom(e.target.value);
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>To</span>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => {
+                setPreset("custom");
+                setTo(e.target.value);
+              }}
+            />
+          </label>
+          <div className="flex items-end">
+            <button type="submit" className="btn-primary w-full !px-4 !py-2.5">
+              Search
+            </button>
+          </div>
+        </form>
+      </div>
 
       {error && (
         <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -146,11 +230,11 @@ export default function AdminFinancesPage() {
       )}
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
-        {loading ? (
+        {loading && receipts.length === 0 ? (
           <NahdaLoader variant="panel" label="Loading receipts…" />
         ) : receipts.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-[var(--muted)]">
-            No receipts match this search.
+            No receipts in {rangeLabel || "this range"}.
           </p>
         ) : (
           <div className="overflow-x-auto">

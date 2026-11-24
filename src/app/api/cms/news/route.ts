@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db";
 import { jsonOk } from "@/lib/api";
+import { ensureFreshFreeNews } from "@/lib/sync-freenews";
 
 export async function GET() {
   try {
+    await ensureFreshFreeNews({ maxAgeMinutes: 90 }).catch(() => undefined);
     const stories = await prisma.newsStory.findMany({
       where: { isActive: true },
       orderBy: { publishedAt: "desc" },

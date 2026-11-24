@@ -1,23 +1,14 @@
 import { prisma } from "@/lib/db";
-import { jsonError, jsonOk, unauthorized } from "@/lib/api";
+import { jsonOk, unauthorized } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
 import { nahdaReceiptNumber } from "@/lib/apc-checkout";
 import { formatCustomerUsd } from "@/lib/payment-currency";
 import { parseAuthorsJson } from "@/lib/author-contacts";
-
-function startOfDay(value: string) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function endOfDay(value: string) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
+import {
+  parseLocalDateInput,
+  resolveDateRange,
+  type DateRangePreset,
+} from "@/lib/date-range";
 
 export async function GET(request: Request) {
   const admin = await requireAdmin(["SUPER_ADMIN"]);
@@ -25,8 +16,36 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
-  const from = startOfDay(url.searchParams.get("from") ?? "");
-  const to = endOfDay(url.searchParams.get("to") ?? "");
+  const rawRange = (url.searchParams.get("range") ?? "").toLowerCase();
+  const fromParam = url.searchParams.get("from");
+  const toParam = url.searchParams.get("to");
+
+  let from: Date | null = null;
+  let to: Date | null = null;
+  let rangeLabel = "";
+
+  if (
+    rawRange === "daily" ||
+    rawRange === "weekly" ||
+    rawRange === "monthly" ||
+    rawRange === "annual" ||
+    rawRange === "custom"
+  ) {
+    const resolved = resolveDateRange(
+      rawRange as DateRangePreset,
+      fromParam,
+      toParam,
+    );
+    from = resolved.from;
+    to = resolved.to;
+    rangeLabel = resolved.label;
+  } else {
+    from = parseLocalDateInput(fromParam ?? "", false);
+    to = parseLocalDateInput(toParam ?? "", true);
+    if (from && to) {
+      rangeLabel = `${fromParam} – ${toParam}`;
+    }
+  }
 
   const paidAt =
     from || to
@@ -129,6 +148,11 @@ export async function GET(request: Request) {
 
   return jsonOk({
     receipts,
+    range: {
+      label: rangeLabel || null,
+      from: from?.toISOString() ?? null,
+      to: to?.toISOString() ?? null,
+    },
     totals: {
       count: receipts.length,
       amountCents: totalCents,

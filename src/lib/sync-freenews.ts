@@ -216,6 +216,34 @@ export async function syncFreeNewsForNahda(options?: {
     heroSlides += 1;
   }
 
+  // Keep editorial announcements visible: only the newest Free News cards stay live.
+  const keepIds = (
+    await prisma.announcement.findMany({
+      where: { source: SOURCE },
+      orderBy: { publishedAt: "desc" },
+      take: 8,
+      select: { id: true },
+    })
+  ).map((row) => row.id);
+  if (keepIds.length > 0) {
+    await prisma.announcement.updateMany({
+      where: { source: SOURCE, id: { notIn: keepIds } },
+      data: { isActive: false },
+    });
+  }
+
+  // Rotate hero: hide older Free News slides that are no longer in the top set.
+  const keepHero = slides.map((s) => s.externalUuid);
+  if (keepHero.length > 0) {
+    await prisma.heroSlide.updateMany({
+      where: {
+        source: SOURCE,
+        externalUuid: { notIn: keepHero },
+      },
+      data: { isActive: false },
+    });
+  }
+
   return {
     listed: byUuid.size,
     upserted,
@@ -224,4 +252,58 @@ export async function syncFreeNewsForNahda(options?: {
     topics: [...topics],
     errors,
   };
+}
+
+let freshInFlight: Promise<FreeNewsSyncResult | { skipped: true }> | null =
+  null;
+
+/** Topics rotate by hour so the feed keeps changing across the day. */
+export function rotatingNahdaTopics(count = 5) {
+  const all = [...NAHDA_NEWS_TOPICS];
+  const start = (new Date().getHours() * 2) % all.length;
+  return [...all, ...all].slice(start, start + count);
+}
+
+/**
+ * Refresh Free News when the cache is stale. Safe to call from public pages:
+ * concurrent callers share one in-flight sync.
+ */
+export async function ensureFreshFreeNews(options?: {
+  maxAgeMinutes?: number;
+  force?: boolean;
+}): Promise<FreeNewsSyncResult | { skipped: true }> {
+  const maxAgeMinutes = options?.maxAgeMinutes ?? 90;
+  if (!process.env.FREENEWS_API_KEY?.trim()) {
+    return { skipped: true };
+  }
+
+  if (!options?.force) {
+    const latest = await prisma.newsStory.findFirst({
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    });
+    if (
+      latest &&
+      Date.now() - latest.updatedAt.getTime() < maxAgeMinutes * 60_000
+    ) {
+      return { skipped: true };
+    }
+  }
+
+  if (freshInFlight) return freshInFlight;
+
+  freshInFlight = (async () => {
+    try {
+      return await syncFreeNewsForNahda({
+        topics: rotatingNahdaTopics(5),
+        perTopic: 3,
+        maxDetails: 10,
+        heroCount: 4,
+      });
+    } finally {
+      freshInFlight = null;
+    }
+  })();
+
+  return freshInFlight;
 }

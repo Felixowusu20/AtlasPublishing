@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { NahdaLoader } from "@/components/nahda-loader";
+import { toDateInputValue, type DateRangePreset } from "@/lib/date-range";
 
 const PALETTE = [
   "#1e6847",
@@ -13,8 +14,6 @@ const PALETTE = [
   "#8b4513",
   "#4a7c59",
 ];
-
-type RangePreset = "daily" | "weekly" | "monthly" | "annual" | "custom";
 
 type JournalPaymentSlice = {
   id: string;
@@ -28,7 +27,7 @@ type JournalPaymentSlice = {
 
 type PaymentAnalytics = {
   range: {
-    preset: RangePreset;
+    preset: DateRangePreset;
     label: string;
     from: string;
     to: string;
@@ -55,7 +54,7 @@ type PaymentAnalytics = {
   }>;
 };
 
-const PRESETS: { id: RangePreset; label: string }[] = [
+const PRESETS: { id: DateRangePreset; label: string }[] = [
   { id: "daily", label: "Daily" },
   { id: "weekly", label: "Weekly" },
   { id: "monthly", label: "Monthly" },
@@ -66,10 +65,7 @@ const PRESETS: { id: RangePreset; label: string }[] = [
 function toInputDate(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return toDateInputValue(d);
 }
 
 function polar(cx: number, cy: number, r: number, angleDeg: number) {
@@ -218,7 +214,7 @@ function PaymentPieChart({ slices }: { slices: JournalPaymentSlice[] }) {
 }
 
 export function PaymentAnalyticsPanel() {
-  const [preset, setPreset] = useState<RangePreset>("monthly");
+  const [preset, setPreset] = useState<DateRangePreset>("monthly");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [data, setData] = useState<PaymentAnalytics | null>(null);
@@ -226,7 +222,7 @@ export function PaymentAnalyticsPanel() {
   const [error, setError] = useState("");
 
   const fetchPayments = useCallback(
-    async (range: RangePreset, fromDate?: string, toDate?: string) => {
+    async (range: DateRangePreset, fromDate?: string, toDate?: string) => {
       setLoading(true);
       setError("");
       try {
@@ -243,6 +239,10 @@ export function PaymentAnalyticsPanel() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Could not load payments");
         setData(json as PaymentAnalytics);
+        if (range !== "custom" && json.range?.from && json.range?.to) {
+          setFrom(toInputDate(json.range.from));
+          setTo(toInputDate(json.range.to));
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
         setData(null);
@@ -258,6 +258,14 @@ export function PaymentAnalyticsPanel() {
     void fetchPayments(preset);
   }, [preset, fetchPayments]);
 
+  useEffect(() => {
+    if (preset !== "custom" || !from || !to) return;
+    const timer = window.setTimeout(() => {
+      void fetchPayments("custom", from, to);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [preset, from, to, fetchPayments]);
+
   return (
     <section className="mt-10">
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -272,6 +280,7 @@ export function PaymentAnalyticsPanel() {
         {data?.range.label ? (
           <p className="text-xs font-medium text-[var(--accent)]">
             {data.range.label}
+            {loading ? " · updating…" : ""}
           </p>
         ) : null}
       </div>
@@ -285,9 +294,14 @@ export function PaymentAnalyticsPanel() {
                 type="button"
                 onClick={() => {
                   setPreset(p.id);
-                  if (p.id === "custom" && data?.range) {
-                    setFrom(toInputDate(data.range.from));
-                    setTo(toInputDate(data.range.to));
+                  if (p.id === "custom") {
+                    const nextFrom =
+                      from ||
+                      (data?.range ? toInputDate(data.range.from) : "");
+                    const nextTo =
+                      to || (data?.range ? toInputDate(data.range.to) : "");
+                    setFrom(nextFrom);
+                    setTo(nextTo);
                   }
                 }}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
@@ -319,14 +333,6 @@ export function PaymentAnalyticsPanel() {
                   onChange={(e) => setTo(e.target.value)}
                 />
               </label>
-              <button
-                type="button"
-                className="btn-primary !px-4 !py-2 text-sm"
-                disabled={!from || !to || loading}
-                onClick={() => void fetchPayments("custom", from, to)}
-              >
-                Apply range
-              </button>
             </div>
           ) : null}
         </div>

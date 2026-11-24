@@ -6,6 +6,10 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArticleListingCard } from "@/components/article-listing-card";
 import { JournalImageCard } from "@/components/journal-image-card";
+import {
+  NewsStoryCard,
+  type NewsStoryCardData,
+} from "@/components/news-story-card";
 import { publishingWorkflow } from "@/data/mock";
 import { matchesQuery } from "@/lib/page-search";
 import {
@@ -75,7 +79,10 @@ type RemoteJournal = {
 
 type Props = {
   articles: HomeArticle[];
-  announcements: HomeAnnouncement[];
+  /** Kept for compatibility; editorial strip is currently off on the homepage. */
+  announcements?: HomeAnnouncement[];
+  /** Live Free News stories shown on the homepage. */
+  scienceNews?: NewsStoryCardData[];
   journals: HomeJournal[];
   initialQuery?: string;
   /** IDs already shown in the top “Just published” strip */
@@ -96,8 +103,8 @@ function articleHaystack(article: HomeArticle) {
   ].join(" ");
 }
 
-function announcementHaystack(item: HomeAnnouncement) {
-  return `${item.title} ${item.summary}`;
+function scienceNewsHaystack(item: NewsStoryCardData) {
+  return `${item.title} ${item.summary} ${(item.topics ?? []).join(" ")} ${item.publisher ?? ""}`;
 }
 
 function journalHaystack(journal: HomeJournal) {
@@ -126,7 +133,7 @@ function SearchParamsSync({ onQuery }: { onQuery: (value: string) => void }) {
 
 function HomeCatalogInner({
   articles,
-  announcements,
+  scienceNews = [],
   journals,
   initialQuery = "",
   excludeArticleIds = [],
@@ -163,14 +170,14 @@ function HomeCatalogInner({
     [articles, needle],
   );
 
-  const matchedAnnouncements = useMemo(
+  const matchedScienceNews = useMemo(
     () =>
       needle
-        ? announcements.filter((item) =>
-            matchesQuery(announcementHaystack(item), needle),
+        ? scienceNews.filter((item) =>
+            matchesQuery(scienceNewsHaystack(item), needle),
           )
-        : announcements,
-    [announcements, needle],
+        : scienceNews,
+    [scienceNews, needle],
   );
 
   const localJournals = useMemo(
@@ -389,8 +396,8 @@ function HomeCatalogInner({
                 News, issues, and new research
               </h2>
               <p className="mt-3 text-base leading-relaxed text-[var(--muted)]">
-                Announcements from the editorial office and the newest open
-                articles across our journals.
+                Live science and research news, plus the newest open articles
+                across our journals.
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-x-4 gap-y-1 text-sm font-semibold">
@@ -409,74 +416,34 @@ function HomeCatalogInner({
             </div>
           </div>
 
-          {(!needle || matchedAnnouncements.length > 0) && (
+          {/* Editorial announcements strip is off — homepage shows Free News only. */}
+
+          {(!needle || matchedScienceNews.length > 0) &&
+          matchedScienceNews.length > 0 ? (
             <div className="mt-10">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                Announcements
-              </h3>
-              <div className="mt-4 flex gap-4 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {matchedAnnouncements.length === 0 ? (
-                  <p className="rounded-2xl bg-white px-5 py-6 text-sm text-[var(--muted)] ring-1 ring-[var(--line)]">
-                    No announcements yet.
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Science & research news
+                  </h3>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    Live feed — refreshed through the day
                   </p>
-                ) : (
-                  matchedAnnouncements.map((item, index) => {
-                    const card = (
-                      <>
-                        {item.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={item.imageUrl}
-                            alt=""
-                            className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex aspect-[16/10] items-end bg-gradient-to-br from-[var(--accent)] to-[var(--ink)] p-4">
-                            <p className="font-[family-name:var(--font-display)] text-lg text-white">
-                              Nahda News
-                            </p>
-                          </div>
-                        )}
-                        <div className="flex flex-1 flex-col p-4">
-                          <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">
-                            {item.publishedAt}
-                          </p>
-                          <p className="mt-1.5 font-[family-name:var(--font-display)] text-base font-semibold leading-snug text-[var(--ink)] group-hover:text-[var(--accent)]">
-                            {item.title}
-                          </p>
-                          <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-[var(--muted)]">
-                            {item.summary}
-                          </p>
-                        </div>
-                      </>
-                    );
-                    const className =
-                      "group flex w-[min(78vw,300px)] shrink-0 flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--line)] transition hover:-translate-y-0.5 hover:shadow-md";
-                    const aos = {
-                      "data-aos": "fade-up",
-                      "data-aos-delay": String(Math.min(index * 90, 360)),
-                      "data-aos-duration": "750",
-                    } as const;
-                    return item.href ? (
-                      <Link
-                        key={item.id}
-                        href={item.href}
-                        className={className}
-                        {...aos}
-                      >
-                        {card}
-                      </Link>
-                    ) : (
-                      <article key={item.id} className={className} {...aos}>
-                        {card}
-                      </article>
-                    );
-                  })
-                )}
+                </div>
+                <Link
+                  href="/news"
+                  className="text-sm font-semibold text-[var(--accent)] hover:underline"
+                >
+                  Browse all news →
+                </Link>
+              </div>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {matchedScienceNews.slice(0, 6).map((item) => (
+                  <NewsStoryCard key={item.id} story={item} />
+                ))}
               </div>
             </div>
-          )}
+          ) : null}
 
           <div className="mt-12">
             <div className="flex items-end justify-between gap-3">

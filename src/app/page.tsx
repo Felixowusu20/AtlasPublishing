@@ -9,15 +9,22 @@ import { resolveArticlePreviewImage } from "@/lib/article-preview-image";
 import { prisma } from "@/lib/db";
 import { parseGoalTabLinks } from "@/lib/home-cms-defaults";
 import { resolveArticleIssue } from "@/lib/issues";
+import { ensureFreshFreeNews } from "@/lib/sync-freenews";
 import { resolvePublishedPdfUrl } from "@/lib/submission-utils";
 
 export const dynamic = "force-dynamic";
 
 async function getHomeData() {
   try {
+    // Keep the science feed moving without blocking the whole homepage.
+    void ensureFreshFreeNews({ maxAgeMinutes: 90 }).catch((err) => {
+      console.error("[home-freenews]", err);
+    });
+
     const [
       articles,
       announcements,
+      scienceNews,
       journals,
       spotlights,
       goalTabs,
@@ -41,10 +48,30 @@ async function getHomeData() {
         take: 8,
       }),
       prisma.announcement.findMany({
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          NOT: { source: "freenews" },
+        },
         orderBy: { publishedAt: "desc" },
         take: 8,
       }),
+      prisma.newsStory
+        .findMany({
+          where: { isActive: true },
+          orderBy: { publishedAt: "desc" },
+          take: 6,
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            summary: true,
+            imageUrl: true,
+            publisher: true,
+            topics: true,
+            publishedAt: true,
+          },
+        })
+        .catch(() => []),
       prisma.journal.findMany({
         where: { isActive: true },
         orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
@@ -110,6 +137,7 @@ async function getHomeData() {
     return {
       articles,
       announcements,
+      scienceNews,
       journals,
       researchCards,
       goalTabs,
@@ -121,6 +149,7 @@ async function getHomeData() {
     return {
       articles: [],
       announcements: [],
+      scienceNews: [],
       journals: [],
       researchCards: [] as ResearchSpotlightCard[],
       goalTabs: [],
@@ -139,6 +168,7 @@ export default async function HomePage({
   const {
     articles,
     announcements,
+    scienceNews,
     journals,
     researchCards,
     goalTabs,
@@ -252,6 +282,16 @@ export default async function HomePage({
           href: item.href,
           publishedAt: item.publishedAt.toISOString().slice(0, 10),
           imageUrl: item.imageUrl,
+        }))}
+        scienceNews={scienceNews.map((item) => ({
+          id: item.id,
+          slug: item.slug,
+          title: item.title,
+          summary: item.summary,
+          imageUrl: item.imageUrl,
+          publisher: item.publisher,
+          topics: item.topics,
+          publishedAt: item.publishedAt,
         }))}
         journals={journals.map((journal) => ({
           id: journal.id,

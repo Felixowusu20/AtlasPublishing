@@ -1,24 +1,41 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { NewsStoryCard } from "@/components/news-story-card";
 import { prisma } from "@/lib/db";
+import { ensureFreshFreeNews } from "@/lib/sync-freenews";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Science & research news | Nahda Publications",
   description:
-    "Curated science, education, medicine, and social-science news for the Nahda research community.",
+    "Live science, education, medicine, and social-science news for the Nahda research community.",
 };
 
-function formatDate(value: Date) {
-  return value.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+const TOPIC_FILTERS = [
+  { label: "All", value: "" },
+  { label: "Science", value: "science" },
+  { label: "Social sciences", value: "social sciences" },
+  { label: "Education", value: "education" },
+  { label: "Medicine", value: "medicine" },
+  { label: "Environment", value: "environment" },
+  { label: "Space", value: "space" },
+  { label: "Technology", value: "technology" },
+] as const;
 
-export default async function NewsIndexPage() {
+export default async function NewsIndexPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ topic?: string }>;
+}) {
+  const { topic: topicParam = "" } = await searchParams;
+  const topic = topicParam.trim().toLowerCase();
+
+  // Refresh quietly when the feed is stale so the page stays dynamic.
+  await ensureFreshFreeNews({ maxAgeMinutes: 90 }).catch((err) => {
+    console.error("[news-fresh]", err);
+  });
+
   let stories: Array<{
     id: string;
     slug: string;
@@ -32,7 +49,12 @@ export default async function NewsIndexPage() {
 
   try {
     stories = await prisma.newsStory.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(topic
+          ? { topics: { has: topic } }
+          : {}),
+      },
       orderBy: { publishedAt: "desc" },
       take: 48,
       select: {
@@ -50,69 +72,80 @@ export default async function NewsIndexPage() {
     console.error("[news-index]", err);
   }
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-        From the research world
-      </p>
-      <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl text-[var(--ink)] sm:text-4xl">
-        Science & research news
-      </h1>
-      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--muted)] sm:text-base">
-        Stories in science, education, medicine, social sciences, and related
-        fields — selected for Nahda’s scholarly audience. These also appear in
-        homepage announcements and the hero when they carry a strong image.
-      </p>
+  const featured = stories[0] ?? null;
+  const rest = stories.slice(1);
 
-      {stories.length === 0 ? (
-        <p className="mt-10 rounded-2xl border border-[var(--line)] bg-white px-5 py-8 text-sm text-[var(--muted)]">
-          No news stories yet. An editor can sync Free News from Admin →
-          Announcements or Hero.
-        </p>
-      ) : (
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {stories.map((story) => (
-            <Link
-              key={story.id}
-              href={`/news/${story.slug}`}
-              className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              {story.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={story.imageUrl}
-                  alt=""
-                  className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex aspect-[16/10] items-end bg-gradient-to-br from-[var(--accent)] to-[var(--ink)] p-4">
-                  <p className="font-[family-name:var(--font-display)] text-lg text-white">
-                    Nahda News
-                  </p>
-                </div>
-              )}
-              <div className="flex flex-1 flex-col p-4">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">
-                  {formatDate(story.publishedAt)}
-                  {story.publisher ? ` · ${story.publisher}` : ""}
-                </p>
-                <h2 className="mt-1.5 font-[family-name:var(--font-display)] text-lg font-semibold leading-snug text-[var(--ink)] group-hover:text-[var(--accent)]">
-                  {story.title}
-                </h2>
-                <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-[var(--muted)]">
-                  {story.summary}
-                </p>
-                {story.topics.length > 0 ? (
-                  <p className="mt-3 text-[11px] uppercase tracking-wide text-[var(--accent)]">
-                    {story.topics.slice(0, 3).join(" · ")}
-                  </p>
-                ) : null}
-              </div>
-            </Link>
-          ))}
+  return (
+    <div className="relative overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-[28rem] opacity-90"
+        style={{
+          background:
+            "radial-gradient(ellipse at 12% 0%, rgba(30,104,71,0.14), transparent 48%), radial-gradient(ellipse at 88% 8%, rgba(11,31,51,0.1), transparent 42%)",
+        }}
+        aria-hidden
+      />
+
+      <div className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+        <div className="max-w-3xl">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+            Live from the research world
+          </p>
+          <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl text-[var(--ink)] sm:text-5xl">
+            Science & research news
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-[var(--muted)] sm:text-base">
+            Fresh stories in science, education, medicine, social sciences, and
+            related fields — updated throughout the day for Nahda’s scholarly
+            audience. Editorial announcements stay on the homepage alongside this
+            feed.
+          </p>
         </div>
-      )}
+
+        <div className="mt-7 flex flex-wrap gap-2">
+          {TOPIC_FILTERS.map((item) => {
+            const active = topic === item.value;
+            const href = item.value ? `/news?topic=${encodeURIComponent(item.value)}` : "/news";
+            return (
+              <Link
+                key={item.label}
+                href={href}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                  active
+                    ? "bg-[var(--ink)] text-white"
+                    : "bg-white text-[var(--muted)] ring-1 ring-[var(--line)] hover:text-[var(--ink)]"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+
+        {stories.length === 0 ? (
+          <div className="mt-10 rounded-[1.35rem] border border-dashed border-[var(--line)] bg-white/80 px-6 py-12 text-center">
+            <p className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+              News is refreshing
+            </p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-[var(--muted)]">
+              New stories will appear here as soon as the live feed is available.
+              You can also open Admin → Announcements and sync Free News.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-10 space-y-8">
+            {featured && !topic ? (
+              <NewsStoryCard story={featured} featured />
+            ) : null}
+
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {(topic || !featured ? stories : rest).map((story) => (
+                <NewsStoryCard key={story.id} story={story} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
