@@ -4,21 +4,93 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { NahdaLoader } from "@/components/nahda-loader";
+import { StatusBadge } from "@/components/status-badge";
 import { SubmissionProgressBar } from "@/components/submission-progress-bar";
 import { formatArticleDate } from "@/lib/article-dates";
 import { uiStatus } from "@/lib/submission-utils";
+
+type SubmissionStatus = Parameters<typeof uiStatus>[0];
 
 type Submission = {
   id: string;
   manuscriptId: string;
   title: string;
-  status: Parameters<typeof uiStatus>[0];
+  status: SubmissionStatus;
   progress: number;
   submittedAt: string;
   updatedAt: string;
   author: { name: string; email: string };
   journal: { id: string; title: string; shortTitle?: string | null };
 };
+
+type StatusTab = {
+  id: string;
+  label: string;
+  hint: string;
+  statuses: SubmissionStatus[] | "all";
+};
+
+const STATUS_TABS: StatusTab[] = [
+  {
+    id: "all",
+    label: "All",
+    hint: "Every manuscript in the inbox",
+    statuses: "all",
+  },
+  {
+    id: "incoming",
+    label: "Incoming",
+    hint: "Submitted and technical check",
+    statuses: ["SUBMITTED", "TECHNICAL_CHECK"],
+  },
+  {
+    id: "under-review",
+    label: "Under Review",
+    hint: "With peer reviewers",
+    statuses: ["UNDER_REVIEW"],
+  },
+  {
+    id: "major-revision",
+    label: "Major Revision",
+    hint: "Authors revising substantially",
+    statuses: ["MAJOR_REVISION"],
+  },
+  {
+    id: "minor-revision",
+    label: "Minor Revision",
+    hint: "Light author revisions",
+    statuses: ["MINOR_REVISION"],
+  },
+  {
+    id: "accepted",
+    label: "Accepted",
+    hint: "Ready for APC / production",
+    statuses: ["ACCEPTED"],
+  },
+  {
+    id: "in-production",
+    label: "In Production",
+    hint: "Typesetting and publish prep",
+    statuses: ["IN_PRODUCTION"],
+  },
+  {
+    id: "published",
+    label: "Published",
+    hint: "Live on the site",
+    statuses: ["PUBLISHED"],
+  },
+  {
+    id: "rejected",
+    label: "Rejected",
+    hint: "Closed without publication",
+    statuses: ["REJECTED"],
+  },
+];
+
+function matchesTab(submission: Submission, tab: StatusTab) {
+  if (tab.statuses === "all") return true;
+  return tab.statuses.includes(submission.status);
+}
 
 export default function AdminSubmissionsPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -28,19 +100,35 @@ export default function AdminSubmissionsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pending, setPending] = useState<Submission | null>(null);
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("all");
   const [collapsedJournals, setCollapsedJournals] = useState<Set<string>>(
     () => new Set(),
   );
 
+  const tab = STATUS_TABS.find((item) => item.id === activeTab) ?? STATUS_TABS[0];
+
+  const tabCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const item of STATUS_TABS) {
+      counts[item.id] =
+        item.statuses === "all"
+          ? submissions.length
+          : submissions.filter((s) => item.statuses.includes(s.status)).length;
+    }
+    return counts;
+  }, [submissions]);
+
   const filteredSubmissions = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return submissions;
     const words = q.split(/\s+/).filter(Boolean);
     return submissions.filter((s) => {
+      if (!matchesTab(s, tab)) return false;
+      if (!words.length) return true;
       const haystack = [
         s.title,
         s.manuscriptId,
         s.status,
+        uiStatus(s.status),
         s.author.name,
         s.author.email,
         s.journal.title,
@@ -50,7 +138,7 @@ export default function AdminSubmissionsPage() {
         .toLowerCase();
       return words.every((word) => haystack.includes(word));
     });
-  }, [submissions, query]);
+  }, [submissions, query, tab]);
 
   const journalGroups = useMemo(() => {
     const groups = new Map<
@@ -166,35 +254,42 @@ export default function AdminSubmissionsPage() {
         onConfirm={() => void confirmDelete()}
       />
 
-      <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl">
-        Submission inbox
-      </h1>
-      <p className="mt-2 text-sm text-[var(--muted)]">
-        Submissions are grouped by the journal selected by each author, making
-        editorial review and assignment easier. After acceptance, write the
-        full article in{" "}
-        <Link
-          href="/admin/manuscripts"
-          className="font-semibold text-[var(--accent)]"
-        >
-          Full manuscripts
-        </Link>
-        , then go live from{" "}
-        <Link
-          href="/admin/publishedArticles"
-          className="font-semibold text-[var(--accent)]"
-        >
-          Publish papers
-        </Link>
-        . Deleted items go to the{" "}
-        <Link
-          href="/admin/recycle-bin"
-          className="font-semibold text-[var(--accent)]"
-        >
-          recycle bin
-        </Link>
-        .
-      </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl">
+            Submission inbox
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
+            Browse manuscripts by review stage, then by journal. After
+            acceptance, continue in{" "}
+            <Link
+              href="/admin/manuscripts"
+              className="font-semibold text-[var(--accent)]"
+            >
+              Full manuscripts
+            </Link>{" "}
+            and{" "}
+            <Link
+              href="/admin/publishedArticles"
+              className="font-semibold text-[var(--accent)]"
+            >
+              Publish papers
+            </Link>
+            .
+          </p>
+        </div>
+        {!loading ? (
+          <div className="rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-right shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+              {tab.label}
+            </p>
+            <p className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--ink)]">
+              {filteredSubmissions.length}
+            </p>
+            <p className="text-xs text-[var(--muted)]">{tab.hint}</p>
+          </div>
+        ) : null}
+      </div>
 
       {error && (
         <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -208,37 +303,78 @@ export default function AdminSubmissionsPage() {
       )}
 
       {!loading && submissions.length > 0 && (
-        <div className="mt-6 space-y-3">
-          <label className="field max-w-xl">
-            <span className="sr-only">Search submissions</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by journal, title, manuscript ID, author…"
-              className="w-full"
-              autoComplete="off"
-            />
-          </label>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-              {journalGroups.length}{" "}
-              {journalGroups.length === 1 ? "journal" : "journals"}
-            </span>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--muted)] ring-1 ring-[var(--line)]">
-              {filteredSubmissions.length}
-              {searching ? ` of ${submissions.length}` : ""}{" "}
-              {filteredSubmissions.length === 1 ? "submission" : "submissions"}
-            </span>
-            {searching ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                className="text-xs font-semibold text-[var(--accent)] hover:underline"
-              >
-                Clear search
-              </button>
-            ) : null}
+        <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-sm">
+          <div className="border-b border-[var(--line)] px-3 pt-3 sm:px-4">
+            <div
+              className="flex gap-1 overflow-x-auto pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              role="tablist"
+              aria-label="Submission status"
+            >
+              {STATUS_TABS.map((item) => {
+                const selected = item.id === tab.id;
+                const count = tabCounts[item.id] ?? 0;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
+                      selected
+                        ? "bg-[var(--ink)] text-white shadow-sm"
+                        : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                    }`}
+                  >
+                    {item.label}
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                        selected
+                          ? "bg-white/15 text-white"
+                          : "bg-white text-[var(--ink)] ring-1 ring-[var(--line)]"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-3 p-4">
+            <label className="field max-w-xl !mb-0">
+              <span className="sr-only">Search submissions</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={`Search in ${tab.label.toLowerCase()}… journal, title, ID, author`}
+                className="w-full"
+                autoComplete="off"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                {journalGroups.length}{" "}
+                {journalGroups.length === 1 ? "journal" : "journals"}
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--muted)] ring-1 ring-[var(--line)]">
+                {filteredSubmissions.length}
+                {searching || tab.id !== "all"
+                  ? ` shown · ${submissions.length} total`
+                  : " submissions"}
+              </span>
+              {searching ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="text-xs font-semibold text-[var(--accent)] hover:underline"
+                >
+                  Clear search
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       )}
@@ -250,12 +386,30 @@ export default function AdminSubmissionsPage() {
             No submissions yet.
           </p>
         )}
-        {!loading && submissions.length > 0 && filteredSubmissions.length === 0 && (
-          <p className="rounded-xl border border-dashed border-[var(--line)] bg-white p-8 text-center text-sm text-[var(--muted)]">
-            No submissions match “{query.trim()}”. Try a journal name, part of
-            the title, manuscript ID, or author.
-          </p>
-        )}
+        {!loading &&
+          submissions.length > 0 &&
+          filteredSubmissions.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-[var(--line)] bg-white px-6 py-12 text-center">
+              <p className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+                No manuscripts in {tab.label}
+              </p>
+              <p className="mx-auto mt-2 max-w-md text-sm text-[var(--muted)]">
+                {searching
+                  ? `Nothing matched “${query.trim()}” in this stage.`
+                  : tab.hint}
+              </p>
+              {tab.id !== "all" ? (
+                <button
+                  type="button"
+                  className="mt-5 text-sm font-semibold text-[var(--accent)] hover:underline"
+                  onClick={() => setActiveTab("all")}
+                >
+                  View all submissions
+                </button>
+              ) : null}
+            </div>
+          )}
+
         {journalGroups.map((group) => {
           const collapsed = searching
             ? false
@@ -343,9 +497,7 @@ export default function AdminSubmissionsPage() {
                             className="min-w-0 flex-1"
                           >
                             <div className="flex flex-wrap items-center gap-2 text-xs">
-                              <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent)]">
-                                {uiStatus(sub.status)}
-                              </span>
+                              <StatusBadge status={uiStatus(sub.status)} />
                               <span className="font-mono text-[var(--muted)]">
                                 {sub.manuscriptId}
                               </span>
